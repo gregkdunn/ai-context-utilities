@@ -1,0 +1,41 @@
+diff --git a/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts b/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts
+index e91061f44a..7198d90b39 100644
+--- a/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts
++++ b/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts
+@@ -107,6 +107,23 @@ export class CallerIntakeSettingsTransformer {
+     return formData.map(mark);
+   }
+ 
++  /**
++   * Update custom question labels to remove underscores
++   */
++  static updateCustomQuestionLabels(
++    customQuestions: CallerIntakeCustomQuestion[]
++  ): CallerIntakeCustomQuestion[] {
++    return (
++      customQuestions.map((question) => {
++        const updatedLabel = question.label.replace(/_/g, ' ');
++        return {
++          ...question,
++          label: updatedLabel,
++        };
++      }) || ([] as CallerIntakeCustomQuestion[])
++    );
++  }
++
+   /**
+    * Returns a CallerIntakeFormData object from a payload.
+    */
+@@ -118,8 +135,10 @@ export class CallerIntakeSettingsTransformer {
+         CallerIntakeSettingsTransformer.markFormDataWithPayloadValues(
+           intake_payload
+         ) as CallerIntakeQuestionData[],
+-      custom_questions: (intake_payload?.caller_intake_settings
+-        ?.custom_questions || []) as CallerIntakeCustomQuestion[],
++      custom_questions:
++        CallerIntakeSettingsTransformer.updateCustomQuestionLabels(
++          intake_payload?.caller_intake_settings?.custom_questions
++        ),
+     };
+   }
+ 

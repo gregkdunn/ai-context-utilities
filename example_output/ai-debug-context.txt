@@ -1,0 +1,360 @@
+=================================================================
+📋 DEBUGGING CONTEXT FOR AI ASSISTANT
+=================================================================
+
+I'm seeing test failures in my Angular NX monorepo project. Can you help debug these issues?
+
+Context:
+- The test results and code changes are provided below
+- Looking for a clear fix and explanation of what's breaking
+
+Please provide:
+1. An analysis of what's breaking the tests
+2. A clear fix for each failing test
+3. Any additional tests needed for the new functionality
+
+=================================================================
+🧪 TEST RESULTS
+=================================================================
+Running: yarn nx test settings-voice-assist-feature
+yarn run v1.22.22
+$ node --max_old_space_size=5120 node_modules/nx/bin/nx test settings-voice-assist-feature --verbose
+[NX CLOUD] Verifying current cloud bundle
+[NX CLOUD] A local bundle currently exists:  {
+  version: '2507.07.4',
+  fullPath: '/Users/gregdunn/src/looky/.nx/cache/cloud/2507.07.4'
+}
+[NX CLOUD] Last verification was within the past 30 minutes, will not verify this time
+[NX CLOUD] Done:  /Users/gregdunn/src/looky/.nx/cache/cloud/2507.07.4
+Was not able to require.resolve module nx/src/utils/app-root from the following paths: /Users/gregdunn/src/looky/node_modules/nx/node_modules,/Users/gregdunn/src/looky/node_modules. This may be expected.
+Was not able to require.resolve module nx/src/utils/app-root from the following paths: /Users/gregdunn/src/looky/node_modules/nx/node_modules,/Users/gregdunn/src/looky/node_modules. This may be expected.
+Was not able to require.resolve module nx/src/project-graph/plugins/tasks-execution-hooks from the following paths: /Users/gregdunn/src/looky/node_modules/nx/node_modules,/Users/gregdunn/src/looky/node_modules. This may be expected.
+[NX CLOUD] Verifying current cloud bundle
+[NX CLOUD] A local bundle currently exists:  {
+  version: '2507.07.4',
+  fullPath: '/Users/gregdunn/src/looky/.nx/cache/cloud/2507.07.4'
+}
+[NX CLOUD] Last verification was within the past 30 minutes, will not verify this time
+[NX CLOUD] Done:  /Users/gregdunn/src/looky/.nx/cache/cloud/2507.07.4
+[Nx Cloud Debug] Attempting to acquire filesystem lock with path:  /var/folders/xp/c9f7jrl50_jctlx4jsjhc2bc0000gn/T/client-instance-id.lock
+[Nx Cloud Debug] Failed to create folder lock at path: /var/folders/xp/c9f7jrl50_jctlx4jsjhc2bc0000gn/T/client-instance-id.lock
+[Nx Cloud] Unable to detect a VCS context from the environment.
+
+ NX   RunStart
+
+
+{
+  "branch": null,
+  "runGroup": "7722615de219b056cfd863fb3cc7f9d1bb486658",
+  "ciExecutionId": null,
+  "ciExecutionEnv": "",
+  "hashes": [
+    "272071141988473710"
+  ],
+  "machineInfo": {
+    "machineId": "5zCgDh1RGAY8SOekUzOjQQ==",
+    "platform": "darwin",
+    "version": "Darwin Kernel Version 24.5.0: Tue Apr 22 19:54:29 PDT 2025; root:xnu-11417.121.6~2/RELEASE_ARM64_T6030",
+    "cpuCores": 12
+  },
+  "vcsContext": null,
+  "clientInstanceSource": "CLOUD_RUNNER",
+  "clientInstanceId": "01cfde2e-74c4-4323-8c39-a358eb69b25a"
+}
+
+RunStart duration: 50
+
+> nx run settings-voice-assist-feature:test  [existing outputs match the cache, left as is]
+
+(node:99260) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/validators/character/character.validator.spec.ts
+  characterValidator
+    ✓ should return null if the value is null (20 ms)
+    ✓ should return null if the value is empty (1 ms)
+    ✓ should return an error if the value contains only special characters (1 ms)
+    ✓ should return an error if the value contains only digits (1 ms)
+    ✓ should return an error if the value contains only special characters and digits
+    ✓ should return null if the value contains alphabetical characters
+    ✓ should return null if the value contains alphabetical characters and special characters
+    ✓ should return null if the value contains alphabetical characters, digits, and special characters
+
+(node:99259) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/voice-assist-settings/call-flow-card/call-flow-card.component.spec.ts
+  CallFlowCardComponent
+    ✓ should create (62 ms)
+    ✓ should compute voice_assist_enabled_count and total_count correctly (7 ms)
+    ✓ should compute voice_assist_enabled_count and total_count correctly when call_flow_data is null (8 ms)
+    ✓ should compute percentage correctly (5 ms)
+    ✓ should compute percentage when total is 0 (5 ms)
+    ✓ should compute percentage when call_flow_data is null (5 ms)
+    ✓ should return correct percentage text description  for 0% (5 ms)
+    ✓ should return correct percentage text description  for 100% (6 ms)
+    ✓ should return correct CTA for partial coverage (6 ms)
+    ✓ should return correct CTA for 100% (4 ms)
+    ✓ should navigate to call flows on navigateToCallFlows (4 ms)
+    ✓ should render the correct numbers and text in the template (4 ms)
+    ✓ should call navigateToCallFlows when the button is clicked (7 ms)
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/validators/email-preference/email-preference.validator.spec.ts
+  emailPreferenceValidator
+    ✓ should return null if email is not selected (2 ms)
+    ✓ should return null if email is selected and email address is enabled
+    ✓ should return error if email is selected but email address is not enabled (1 ms)
+    ✓ should return null if form controls are not found
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/validators/child-toggle/child-toggle.validator.spec.ts
+  toggleChildOptionsValidator
+    ✓ should enable and set sub-controls to stored values if control is truthy and any stored value is true (2 ms)
+    ✓ should enable and set sub-controls to true if control is truthy and all stored values are false
+    ✓ should disable sub-controls if control is falsy (1 ms)
+    ✓ should do nothing if subGroup is not present
+    ✓ should do nothing if subControl is not present
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/onboarding-voice-assist/onboarding-voice-assist.component.spec.ts
+  OnboardingVoiceAssistComponent
+    ✓ should create (46 ms)
+    showCallFlowActivation
+      ✓ should be false if steps do not include call_flow_activation task (4 ms)
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/onboarding-voice-assist/onboarding-progress-card/onboarding-progress-card.component.spec.ts
+  OnboardingProgressCardComponent
+    ✓ should create (1 ms)
+    ✓ should navigate to the provided link
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/circular-progress-bar/circular-progress-bar.component.spec.ts
+  CircularProgressBarComponent
+    ✓ should create (16 ms)
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/validators/child-min-selection-count/child-min-selection-count.validator.spec.ts
+  minimumSelectedChildFormControls
+    ✓ should set error if parent is selected and fewer than min sub-controls are selected (1 ms)
+    ✓ should not set error if parent is not selected
+    ✓ should not set error if enough sub-controls are selected
+    ✓ should not throw if childFormGroups is missing or empty
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.spec.ts
+  CallerIntakeMapping
+    ✓ should transform fullPayload to callerIntakeQuestionData with correct value (1 ms)
+    ✓ should transform the fullFormValues into fullPayload (1 ms)
+    ✓ should allow passing a custom options array
+    ✓ should handle empty payload (1 ms)
+    ✓ should handle only one company sub-option
+    ✓ should handle only one contact preference
+    ✓ should handle no options selected
+    ✓ should handle all options selected (1 ms)
+    ✓ should convert payload to CallerIntakeFormData with correct questionData and custom_questions (1 ms)
+
+(node:99258) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/custom-questions-modal.component/custom-questions-modal.component.spec.ts (10.473 s)
+  VoiceAssistCustomQuestionModalComponent
+    ✓ should create (391 ms)
+    ✓ should initialize the form with empty values by default (23 ms)
+    ✓ should patch form values when customQuestion input changes (23 ms)
+    ✓ should set prompt when setPrompt is called (15 ms)
+    ✓ should set label when setLabel is called (18 ms)
+    ✓ should emit submitted event and reset form on submit (21 ms)
+    ✓ should emit dismissModal and reset form on cancel (21 ms)
+    ✓ should emit dismissModal on closeModal (18 ms)
+    ✓ should render example prompts and set prompt on click (25 ms)
+    ✓ should render example labels and set label on click (20 ms)
+    ✓ should disable Save button if form is invalid (16 ms)
+    ✓ should enable Save button if form is valid (13 ms)
+
+(node:99257) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/voice-assist-test-call/voice-assist-test-call.component.spec.ts (12.643 s)
+  VoiceAssistTestCallComponent
+    ✓ should create (747 ms)
+
+(node:99252) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/services/voice-assist-onboarding-service/voice-assist-onboarding.service.spec.ts (12.664 s)
+  VoiceAssistOnboardingService
+    ✓ should be created (658 ms)
+    #get
+      ✓ gets the company data and business profile (2 ms)
+
+(node:99255) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/services/voice-assist-api-service/voice-assist-api.service.spec.ts (12.65 s)
+  VoiceAssistSettingsApiService
+    ✓ should call getAIVoiceSettings with the correct URL (695 ms)
+    ✓ should call updateAIVoiceSettings with the correct URL and payload (1 ms)
+    ✓ should call getPreviewGreeting with the correct payload and return the URL
+    ✓ should call getCallerIntakeSettings with the correct URL
+    ✓ should call updateCallerIntakeSettings with the correct URL and payload
+
+(node:99256) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/services/voice-assist-sms-service/voice-assist-sms.service.spec.ts (12.719 s)
+  VoiceAssistSmsService
+    ✓ should be created (733 ms)
+    #get
+      ✓ gets the company data and business profile (2 ms)
+    #update
+      ✓ updates the company data and business profile (1 ms)
+
+(node:99254) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/ai-voice-settings/ai-voice-settings.component.spec.ts (12.761 s)
+  AIVoiceSettingsPageComponent
+    ✓ should initialize the form on setupForm (3 ms)
+    ✓ should call updateVoiceSettings on submit (5 ms)
+    ✓ routes to Voice Assist page on cancel (3 ms)
+    ✓ pauses greetingAudio when company changes (3 ms)
+    ✓ pauses audio when vaigating to a different page (2 ms)
+    ✓ should clear subpage and unsubscribe from router events on destroy (2 ms)
+    ngOnInit
+      ✓ should set the active subpage on ngOnInit (37 ms)
+      ✓ initializes greetingAudio (5 ms)
+    selectOption
+      ✓ updates aiPersonaForm values (4 ms)
+      ✓ updates aiPersonaForm values (1 ms)
+      ✓ updates aiPersonaForm values (4 ms)
+    previewGreeting
+      ✓ is disabled when aiPersonaForm has errors (6 ms)
+      ✓ plays greetingAudio when audio is paused (3 ms)
+      ✓ pauses greetingAudio when audio is playing (3 ms)
+
+(node:99253) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/services/voice-assist-settings.service.spec.ts (12.903 s)
+  VoiceAssistSettingsService
+    retrievePersonaSettings
+      ✓ should return persona settings from API (777 ms)
+      ✓ should return defaultPersonaSettings on error (1 ms)
+    updatePersonaSettings
+      ✓ should call API and return updated persona settings (1 ms)
+      ✓ should return error object on API error
+    previewGreetingUrl
+      ✓ should call apiService.previewGreeting with payload
+    getCallFlowData
+      ✓ should call callFlowService.callFlows and map to CallFlowData (1 ms)
+      ✓ should return defaultCallFlowData on error
+
+(node:99251) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/voice-assist-settings/voice-assist-settings.component.spec.ts (13.163 s)
+  VoiceAssistSettingsPageComponent
+    ✓ should create (443 ms)
+    #ngOnInit
+      ✓ should set taskComplete to true for achieved tasks (3 ms)
+      ✓ should call clearSubPage on ngOnInit (1 ms)
+      ✓ should set company and showGuide on init (1 ms)
+      ✓ should get onboarding progress for VA (1 ms)
+      ✓ should set the onboarding progress correctly
+      ✓ should hide the onboarding guide (1 ms)
+    #ngOnDestroy
+      ✓ unsubscribes from subscriptions
+    #navigateTo
+      ✓ should navigate to the correct URL
+    closeModalAndNavigate
+      ✓ should close modal and navigate to url
+    #dismissGuide
+      ✓ should set showGuide to false and set value in local storage
+
+(node:99250) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/sms-settings/sms-settings.component.spec.ts (13.163 s)
+  SMSSettingsPageComponent
+    ✓ should create (428 ms)
+    #ngOnInit
+      ✓ should call setActiveSubPage on ngOnInit (5 ms)
+      ✓ should successfully setup the form (1 ms)
+    #cancel
+      ✓ should navigate back to voice settings page (1 ms)
+    #save
+      ✓ should navigate back to voice settings page on success (1 ms)
+      ✓ should not navigate and throw a flash alert on error (1 ms)
+    #toggle
+      ✓ should enable bookingUrl validation if toggle is enabled (1 ms)
+      ✓ should disable bookingUrl validation if toggle is disabled
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/components/caller-intake-settings/caller-intake-settings.component.spec.ts (8.764 s)
+  CallerIntakeSettingsPageComponent
+    ✓ should create (4 ms)
+    ✓ should set the active subpage and setup form on ngOnInit (4 ms)
+    ✓ should patch value on toggle (1 ms)
+    ✓ should update subOptionGroups validity on toggle (1 ms)
+    ✓ should submit and handle success (2 ms)
+    ✓ should handle error on submit (1 ms)
+    ✓ should call navigate on cancel (1 ms)
+    ✓ should clean up on ngOnDestroy (1 ms)
+    ✓ should add a new custom question to the form array (1 ms)
+    ✓ should edit a custom question (1 ms)
+    ✓ should delete a custom question by index (1 ms)
+    ✓ should patch custom questions from form data (2 ms)
+    ✓ should open and close the custom question modal (3 ms)
+    ✓ should not throw if deleting a non-existent custom question index (1 ms)
+
+ PASS   settings-voice-assist-feature  libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.service.spec.ts (9.878 s)
+  CallerIntakeSettingsService
+    ✓ should call getCallerIntakeSettings and transform the result (244 ms)
+    ✓ should return defaultCallerIntakePayload on error (1 ms)
+    ✓ should call updateCallerIntakeSettings with transformed payload
+
+Test Suites: 20 passed, 20 total
+Tests:       128 passed, 128 total
+Snapshots:   0 total
+Time:        17.652 s
+Ran all test suites.
+
+————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+ NX   Successfully ran target test for project settings-voice-assist-feature
+
+Nx read the output from the cache instead of running the command for 1 out of 1 tasks.
+
+View logs and run details at https://nx.app/runs/HMYkSDxkB7
+
+✨  Done in 1.46s.
+Raw test output captured successfully (    3674 lines)
+Clean test output processed successfully (       0 lines)
+
+=================================================================
+📄 CODE CHANGES (GIT DIFF)
+=================================================================
+diff --git a/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts b/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts
+index e91061f44a..7198d90b39 100644
+--- a/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts
++++ b/libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.ts
+@@ -107,6 +107,23 @@ export class CallerIntakeSettingsTransformer {
+     return formData.map(mark);
+   }
+ 
++  /**
++   * Update custom question labels to remove underscores
++   */
++  static updateCustomQuestionLabels(
++    customQuestions: CallerIntakeCustomQuestion[]
++  ): CallerIntakeCustomQuestion[] {
++    return (
++      customQuestions.map((question) => {
++        const updatedLabel = question.label.replace(/_/g, ' ');
++        return {
++          ...question,
++          label: updatedLabel,
++        };
++      }) || ([] as CallerIntakeCustomQuestion[])
++    );
++  }
++
+   /**
+    * Returns a CallerIntakeFormData object from a payload.
+    */
+@@ -118,8 +135,10 @@ export class CallerIntakeSettingsTransformer {
+         CallerIntakeSettingsTransformer.markFormDataWithPayloadValues(
+           intake_payload
+         ) as CallerIntakeQuestionData[],
+-      custom_questions: (intake_payload?.caller_intake_settings
+-        ?.custom_questions || []) as CallerIntakeCustomQuestion[],
++      custom_questions:
++        CallerIntakeSettingsTransformer.updateCustomQuestionLabels(
++          intake_payload?.caller_intake_settings?.custom_questions
++        ),
+     };
+   }
+ 
