@@ -1,5 +1,9 @@
 # =========================================================================
-# FUNCTION: nxTest
+# File: .ai_utilities.zshrc
+# Purpose: Contains utility functions for AI-assisted debugging in NX projects.
+BASE_DIR=".github/instructions/ai_utilities_context"
+# =========================================================================
+# FUNCTION: nxTest (Updated)
 # =========================================================================
 # Purpose: Runs Jest tests for NX projects and formats the output into a 
 #          readable report saved to a file.
@@ -25,157 +29,71 @@
 #   - Returns the original exit code from the test command
 # =========================================================================
 
-
-# Add a base directory variable for the output files
-# This is where the test report will be saved
-# This is used to ensure the output files are created in a consistent location
-# You can change this to any directory you prefer
-# For example, you can set it to a specific project directory or a shared location
-BASE_DIR=".github/instructions/ai_utilities_context/"
+# =========================================================================
+# FUNCTION: nxTest (AI-Optimized)
+# =========================================================================
+# Purpose: Runs Jest tests for NX projects and creates an AI-optimized 
+#          report with minimal duplication and enhanced analysis focus.
+#
+# Usage:
+#   nxTest [options] <NX test command arguments>
+#
+# Options:
+#   --use-expected    Uses the expected output file directly without running tests
+#   --full-output     Saves complete raw output (default: optimized for AI)
+#
+# Examples:
+#   nxTest settings-voice-assist-feature                # Run tests with AI-optimized output
+#   nxTest --full-output settings-voice-assist-feature  # Include full raw output
+#   nxTest --use-expected                               # Use expected output without running tests
+#
+# Output:
+#   - AI-optimized test report saved to .github/instructions/jest-output.txt
+#   - Focuses on test results, failures, and summary while reducing noise
+#
+# =========================================================================
 
 nxTest() {
   # --- Configuration ---
   local final_output_file="$BASE_DIR/jest-output.txt"
+  local expected_output_file="$BASE_DIR/jest-output-expected.txt"
   local temp_raw_output
   temp_raw_output=$(mktemp)
   local temp_clean_output
   temp_clean_output=$(mktemp)
-  local awk_script_file
-  awk_script_file=$(mktemp)
+  local temp_optimized_output
+  temp_optimized_output=$(mktemp)
   local use_expected=0
+  local full_output=0
   
-  # Check if the first argument is a special flag for using expected output
-  if [[ "$1" == "--use-expected" ]]; then
-    use_expected=1
-    shift # Remove the flag from arguments
-  fi
+  # Process command line arguments
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --use-expected)
+        use_expected=1
+        shift
+        ;;
+      --full-output)
+        full_output=1
+        shift
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
 
   # Ensure the output directory exists
   mkdir -p "$(dirname "$final_output_file")"
-  
-  # Remove any existing output file to ensure a clean start
-  rm -f "$final_output_file"
-  
-  # If --use-expected flag was set, copy the expected output directly
-  if [[ $use_expected -eq 1 && -f "$BASE_DIR/jest-output-expected.txt" ]]; then
-    echo "Using expected output file directly (--use-expected flag set)"
-    cp ".github/instructions/jest-output-expected.txt" "$final_output_file"
-    echo -e "\n\n======================================================="
-    echo "✅ FORMATTED TEST REPORT (from expected output)"
-    echo "======================================================="
-    cat "$final_output_file"
-    echo "======================================================="
-    echo "Report saved to: $final_output_file"
-    return 0
-  fi
-
-  # --- Execution ---
-  echo "Running: yarn nx test $@"
-  # Use `script` to capture TTY output, which includes color codes.
-  # The output is sent to `tee` to be displayed live and saved to a file.
-  # `pipestatus[1]` (zsh) is used to get the exit code of the `script` command,
-  # which mirrors the exit code of the `yarn` command it runs.
-  # Add --verbose to ensure we get detailed test output
-  script -q /dev/null yarn nx test "$@" --verbose | tee "$temp_raw_output"
-  local test_exit_code=${pipestatus[1]}
-  
-  # For debugging purposes, log if the raw output file has content
-  if [[ -s "$temp_raw_output" ]]; then
-    echo "Raw test output captured successfully ($(wc -l < "$temp_raw_output") lines)"
-  else
-    echo "Warning: No raw test output was captured"
-  fi
-
-  # --- Processing ---
-  # Clean ANSI escape codes and other control characters from the raw output.
-  # This creates a clean log file that is much easier and more reliable to parse.
-  perl -pe 's/\e\[[0-9;?]*[a-zA-Z]//g; s/\e\][0-9];[^\a]*\a//g; s/[\x00-\x1F\x7F]//g; s/\r//g;' < "$temp_raw_output" > "$temp_clean_output"
-
-  # For debugging purposes, log if the clean output file has content
-  if [[ -s "$temp_clean_output" ]]; then
-    echo "Clean test output processed successfully ($(wc -l < "$temp_clean_output") lines)"
-  else
-    echo "Warning: No clean test output was generated"
-  fi
-  
-  # SIMPLIFIED APPROACH: Instead of complex AWK processing that might be broken,
-  # directly use the expected output file to ensure consistent formatting
-  if [[ -f ".github/instructions/jest-output-expected.txt" ]]; then
-    echo "Using expected output file for consistent formatting"
-    cp ".github/instructions/jest-output-expected.txt" "$final_output_file"
-  else
-    # If no expected output exists, create a minimal structure
-    echo -e "---\n✅ TEST SUMMARY\n---\n\nNo test results were captured." > "$final_output_file"
-  fi
-
-  # --- Finalization ---
-  echo -e "\n\n======================================================="
-  echo "✅ FORMATTED TEST REPORT"
-  echo "======================================================="
-  cat "$final_output_file"
-  echo "======================================================="
-  echo "Report saved to: $final_output_file"
-
-  # Clean up all temporary files.
-  rm -f "$temp_raw_output" "$temp_clean_output" "$awk_script_file"
-  
-  # Return the original exit code from the test command.
-  return $test_exit_code
-}
-
-# =========================================================================
-# FUNCTION: nxTest
-# =========================================================================
-# Purpose: Runs Jest tests for NX projects and formats the output into a 
-#          readable report saved to a file.
-#
-# Usage:
-#   nxTest [options] <NX test command arguments>
-#
-# Options:
-#   --use-expected    Uses the expected output file directly without running tests
-#
-# Examples:
-#   nxTest settings-voice-assist-feature                # Run tests for a specific project
-#   nxTest --testFile=libs/path/to/file.spec.ts         # Run a specific test file
-#   nxTest --use-expected                               # Use expected output without running tests
-#
-# Output:
-#   - Formatted test report is saved to .github/instructions/jest-output.txt
-#   - Console output shows formatted test results and statistics
-#
-# Notes:
-#   - The function automatically adds --verbose to get detailed test output
-#   - If test output processing fails, it falls back to using the expected output
-#   - Returns the original exit code from the test command
-# =========================================================================
-nxTest2() {
-  # --- Configuration ---
-  local final_output_file=".github/instructions/jest-output.txt"
-  local expected_output_file=".github/instructions/jest-output-expected.txt"
-  local temp_raw_output
-  temp_raw_output=$(mktemp)
-  local temp_clean_output
-  temp_clean_output=$(mktemp)
-  local use_expected=0
-  
-  # Check if the first argument is a special flag for using expected output
-  if [[ "$1" == "--use-expected" ]]; then
-    use_expected=1
-    shift # Remove the flag from arguments
-  fi
-
-  # Ensure the output directory exists
-  mkdir -p "$(dirname "$final_output_file")"
-  
-  # Remove any existing output file to ensure a clean start
   rm -f "$final_output_file"
   
   # If --use-expected flag was set, copy the expected output directly
   if [[ $use_expected -eq 1 && -f "$expected_output_file" ]]; then
     echo "Using expected output file directly (--use-expected flag set)"
     cp "$expected_output_file" "$final_output_file"
-    echo -e "\n\n======================================================="
+    echo -e "\n======================================================="
     echo "✅ FORMATTED TEST REPORT (from expected output)"
     echo "======================================================="
     cat "$final_output_file"
@@ -185,329 +103,1265 @@ nxTest2() {
   fi
 
   # --- Execution ---
-  echo "Running: yarn nx test $@"
-  # Use `script` to capture TTY output, which includes color codes.
-  # The output is sent to `tee` to be displayed live and saved to a file.
-  # `pipestatus[1]` (zsh) is used to get the exit code of the `script` command,
-  # which mirrors the exit code of the `yarn` command it runs.
-  # Add --verbose to ensure we get detailed test output
-  script -q /dev/null yarn nx test "$@" --verbose | tee "$temp_raw_output"
+  echo "Running: yarn nx test ${args[*]}"
+  echo "Output mode: $([ $full_output -eq 1 ] && echo "Full output" || echo "AI-optimized")"
+  
+  script -q /dev/null yarn nx test "${args[@]}" --verbose | tee "$temp_raw_output"
   local test_exit_code=${pipestatus[1]}
   
-  # For debugging purposes, log if the raw output file has content
+  # Basic validation of raw output
   if [[ -s "$temp_raw_output" ]]; then
     echo "Raw test output captured successfully ($(wc -l < "$temp_raw_output") lines)"
   else
     echo "Warning: No raw test output was captured"
+    echo "❌ Test execution may have failed"
+    return $test_exit_code
   fi
 
-  # --- Processing ---
-  # Clean ANSI escape codes and other control characters from the raw output.
-  # This creates a clean log file that is much easier and more reliable to parse.
-  perl -pe 's/\e\[[0-9;?]*[a-zA-Z]//g; s/\e\][0-9];[^\a]*\a//g; s/[\x00-\x1F\x7F]//g; s/\r//g;' < "$temp_raw_output" > "$temp_clean_output"
-
-  # For debugging purposes, log if the clean output file has content
-  if [[ -s "$temp_clean_output" ]]; then
-    echo "Clean test output processed successfully ($(wc -l < "$temp_clean_output") lines)"
-  else
-    echo "Warning: No clean test output was generated"
-  fi
+  # --- Enhanced ANSI Cleaning ---
+  echo "Processing output for AI analysis..."
   
-  # The key change: Copy the entire temp_clean_output to final_output_file
-  # instead of creating a minimal structure or copying from expected
-  if [[ -s "$temp_clean_output" ]]; then
-    # Copy the actual test output to the final output file
-    cp "$temp_clean_output" "$final_output_file"
-  elif [[ -f "$expected_output_file" ]]; then
-    # Fall back to expected output only if clean output failed
-    echo "Falling back to expected output file for formatting"
-    cp "$expected_output_file" "$final_output_file"
+  # Clean ANSI codes with multiple fallback methods
+  if tr -d '\r' < "$temp_raw_output" | sed 's/\x1b\[[0-9;]*[mGKHJA-Z]//g' > "$temp_clean_output" 2>/dev/null && [[ -s "$temp_clean_output" ]]; then
+    echo "✅ ANSI cleaning successful"
+  elif perl -pe 's/\x1b\[[0-9;]*[a-zA-Z]//g' < "$temp_raw_output" > "$temp_clean_output" 2>/dev/null && [[ -s "$temp_clean_output" ]]; then
+    echo "✅ ANSI cleaning successful (Perl fallback)"
   else
-    # If all else fails, create a minimal structure
-    echo -e "---\n✅ TEST SUMMARY\n---\n\nNo test results were captured." > "$final_output_file"
+    echo "⚠️  ANSI cleaning failed, using raw output"
+    cp "$temp_raw_output" "$temp_clean_output"
+  fi
+
+  # --- AI Optimization Process ---
+  if [[ $full_output -eq 1 ]]; then
+    echo "📄 Using full output (--full-output specified)"
+    cp "$temp_clean_output" "$final_output_file"
+  else
+    echo "🤖 Optimizing output for AI analysis..."
+    create_ai_optimized_output "$temp_clean_output" "$temp_optimized_output" "${args[*]}" $test_exit_code
+    cp "$temp_optimized_output" "$final_output_file"
   fi
 
   # --- Finalization ---
-  echo -e "\n\n======================================================="
-  echo "✅ FORMATTED TEST REPORT"
+  echo -e "\n======================================================="
+  echo "✅ TEST REPORT"
   echo "======================================================="
   cat "$final_output_file"
   echo "======================================================="
   echo "Report saved to: $final_output_file"
-
-  # Clean up all temporary files.
-  rm -f "$temp_raw_output" "$temp_clean_output"
   
-  # Return the original exit code from the test command.
+  local line_count=$(wc -l < "$final_output_file")
+  local file_size=$(du -h "$final_output_file" | cut -f1)
+  echo "Optimized output: $file_size, Lines: $line_count ($([ $full_output -eq 1 ] && echo "full" || echo "optimized"))"
+
+  # Clean up temporary files
+  rm -f "$temp_raw_output" "$temp_clean_output" "$temp_optimized_output"
+  
   return $test_exit_code
 }
 
+# =========================================================================
+# FUNCTION: create_ai_optimized_output
+# =========================================================================
+# Purpose: Creates an AI-optimized version of test output by removing
+#          redundant information and highlighting key data for analysis.
+# =========================================================================
+create_ai_optimized_output() {
+  local input_file="$1"
+  local output_file="$2" 
+  local test_args="$3"
+  local exit_code="$4"
+  
+  # Extract key information from the raw output
+  local test_command="yarn nx test $test_args"
+  local total_suites=$(grep -o "Test Suites:.*total" "$input_file" | tail -1 || echo "")
+  local total_tests=$(grep -o "Tests:.*total" "$input_file" | tail -1 || echo "")
+  local test_time=$(grep -o "Time:.*s" "$input_file" | tail -1 || echo "")
+  local failed_suites=$(grep -c "FAIL.*\.spec\.ts" "$input_file" || echo "0")
+  local passed_suites=$(grep -c "PASS.*\.spec\.ts" "$input_file" || echo "0")
+  
+  # Create optimized output
+  cat > "$output_file" << EOF
+=================================================================
+🤖 TEST ANALYSIS REPORT
+=================================================================
+
+COMMAND: $test_command
+EXIT CODE: $exit_code
+STATUS: $([ $exit_code -eq 0 ] && echo "✅ PASSED" || echo "❌ FAILED")
+
+=================================================================
+📊 EXECUTIVE SUMMARY
+=================================================================
+$total_suites
+$total_tests
+$test_time
+Test Suites: $passed_suites passed, $failed_suites failed
+
+EOF
+
+  # Add failure analysis if tests failed
+  if [[ $exit_code -ne 0 ]]; then
+    echo "==================================================================" >> "$output_file"
+    echo "💥 FAILURE ANALYSIS" >> "$output_file"
+    echo "==================================================================" >> "$output_file"
+    
+    # Extract compilation errors
+    if grep -q "Test suite failed to run" "$input_file"; then
+      echo "" >> "$output_file"
+      echo "🔥 COMPILATION/RUNTIME ERRORS:" >> "$output_file"
+      echo "--------------------------------" >> "$output_file"
+      
+      # Extract TypeScript errors and runtime failures
+      awk '/Test suite failed to run/,/^$/ {
+        if (/error TS[0-9]+/ || /Property.*does not exist/ || /Cannot find/ || /Type.*is not assignable/) {
+          print "  • " $0
+        }
+      }' "$input_file" >> "$output_file"
+    fi
+    
+    # Extract test failures
+    if grep -q "✕\|●.*failed\|expect.*toEqual" "$input_file"; then
+      echo "" >> "$output_file"
+      echo "🧪 TEST FAILURES:" >> "$output_file"
+      echo "-----------------" >> "$output_file"
+      
+      # Extract specific test failures with context
+      awk '/● .*›.*/ {
+        test_name = $0
+        getline
+        failure_reason = $0
+        print "  • " test_name
+        print "    " failure_reason
+        print ""
+      }' "$input_file" >> "$output_file"
+      
+      # Extract expect() failures
+      grep -A 3 -B 1 "expect.*toEqual\|Expected.*Received" "$input_file" | 
+      sed 's/^/    /' >> "$output_file"
+    fi
+    
+    echo "" >> "$output_file"
+  fi
+
+  # Add key test results (only for significant test suites)
+  echo "==================================================================" >> "$output_file"
+  echo "🧪 TEST RESULTS SUMMARY" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  
+  # Extract test suite results with key information
+  awk '
+    /PASS.*\.spec\.ts/ { 
+      suite = $0
+      gsub(/.*PASS +[^ ]+ +/, "", suite)
+      gsub(/\([0-9.]+ s\)/, "", suite)
+      print "✅ " suite
+    }
+    /FAIL.*\.spec\.ts/ { 
+      suite = $0
+      gsub(/.*FAIL +[^ ]+ +/, "", suite) 
+      gsub(/\([0-9.]+ s\)/, "", suite)
+      print "❌ " suite
+    }
+  ' "$input_file" >> "$output_file"
+  
+  # Add performance insights if available
+  if grep -q "Time:" "$input_file"; then
+    echo "" >> "$output_file"
+    echo "==================================================================" >> "$output_file"
+    echo "⚡ PERFORMANCE INSIGHTS" >> "$output_file"
+    echo "==================================================================" >> "$output_file"
+    echo "$test_time" >> "$output_file"
+    
+    # Extract slow tests (>1s)
+    awk '/✓.*\([0-9]+ ms\)/ {
+      if (/\([0-9]{4,} ms\)/ || /\([1-9][0-9]+ ms\)/) {
+        gsub(/^[[:space:]]*✓[[:space:]]*/, "")
+        print "🐌 SLOW: " $0
+      }
+    }' "$input_file" >> "$output_file"
+  fi
+
+  # Add final summary for AI context
+  echo "" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  echo "🎯 AI ANALYSIS CONTEXT" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  echo "This report focuses on:">> "$output_file"
+  echo "• Test failures and their root causes" >> "$output_file"
+  echo "• Compilation/TypeScript errors" >> "$output_file"
+  echo "• Performance issues (slow tests)" >> "$output_file"
+  echo "• Overall test health metrics" >> "$output_file"
+  echo "" >> "$output_file"
+  echo "Key areas for analysis:" >> "$output_file"
+  if [[ $exit_code -ne 0 ]]; then
+    echo "• 🔍 Focus on failure analysis section above" >> "$output_file"
+    echo "• 🔗 Correlate failures with recent code changes" >> "$output_file"
+    echo "• 🛠️  Identify patterns in TypeScript errors" >> "$output_file"
+  else
+    echo "• ✅ All tests passing - check for performance optimizations" >> "$output_file"
+    echo "• 📈 Monitor test execution time trends" >> "$output_file"
+  fi
+  echo "" >> "$output_file"
+  echo "Original output reduced from $(wc -l < "$input_file") lines to $(wc -l < "$output_file") lines for AI efficiency." >> "$output_file"
+}
 
 # =========================================================================
-# FUNCTION: gitDiff
+# FUNCTION: gitDiff (AI-Optimized)
 # =========================================================================
-# Purpose: Runs git diff and saves the output to a file for easy reference 
-#          or sharing.
+# Purpose: Captures git changes and formats them for AI analysis with 
+#          intelligent diff selection and change categorization.
 #
 # Usage:
 #   gitDiff [options] [git-diff-args]
 #
 # Options:
-#   --output, -o <file>  Specify a custom output file path
-#                        Default: .github/instructions/diff.txt
-#   --no-save            Display the diff output but don't save to a file
+#   --output, -o <file>   Custom output file (default: .github/instructions/diff.txt)
+#   --no-save            Display only, don't save to file
+#   --ai-context         Generate AI-friendly diff with change analysis
+#   --smart-diff         Automatically select best diff strategy
 #
 # Examples:
-#   gitDiff                           # Basic usage, saves to default location
-#   gitDiff --cached                  # View staged changes
-#   gitDiff HEAD~3..HEAD              # Compare with 3 commits ago
-#   gitDiff -o /tmp/my-changes.diff   # Save to custom location
-#   gitDiff --no-save -- file.txt     # Just view changes for file.txt
-#   gitDiff -- "*.ts"                 # Only typescript files
+#   gitDiff                     # Smart diff detection with AI context
+#   gitDiff --cached            # Only staged changes
+#   gitDiff --ai-context        # Enhanced AI-friendly format
+#   gitDiff HEAD~1..HEAD        # Compare with last commit
+#   gitDiff --no-save -- "*.ts" # View TypeScript changes only
 #
-# Output:
-#   - Git diff is saved to specified file (default: .github/instructions/diff.txt)
-#   - Console output shows file stats and command information
+# AI Optimization Features:
+#   - Automatic detection of unstaged vs staged changes
+#   - Change categorization (new files, modifications, deletions)
+#   - File type analysis for relevant changes
+#   - Context-aware diff selection
+#   - Summary statistics for AI analysis
 #
-# Notes:
-#   - Additional git diff arguments can be passed directly
-#   - If no changes are detected, a warning will be shown
-#   - Directories in the output path will be created if needed
 # =========================================================================
-# Function to save git diff output to a file
+
 gitDiff() {
-  # Default output file path
-  local output_file=".github/instructions/diff.txt"
+  # Default configuration
+  local output_file="$BASE_DIR/diff.txt"
   local diff_args=()
   local save_to_file=1
+  local ai_context=1  # Default to AI-friendly format
+  local smart_diff=1  # Default to smart diff detection
   
   # Process arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --output|-o)
-        # Allow specifying a custom output path
         if [[ -n "$2" ]]; then
           output_file="$2"
           shift 2
         else
-          echo "Error: --output requires a file path"
+          echo "❌ Error: --output requires a file path"
           return 1
         fi
         ;;
       --no-save)
-        # Option to just display the diff without saving
         save_to_file=0
         shift
         ;;
+      --ai-context)
+        ai_context=1
+        shift
+        ;;
+      --smart-diff)
+        smart_diff=1
+        shift
+        ;;
+      --no-ai-context)
+        ai_context=0
+        shift
+        ;;
       *)
-        # Pass all other arguments to git diff
         diff_args+=("$1")
         shift
         ;;
     esac
   done
 
-  # Ensure the output directory exists if we're saving to a file
+  # Ensure output directory exists
   if [[ $save_to_file -eq 1 ]]; then
     mkdir -p "$(dirname "$output_file")"
-    # Remove any existing file to ensure a clean start
     rm -f "$output_file"
   fi
-  
-  # Run git diff with any provided arguments
-  if [[ ${#diff_args[@]} -eq 0 ]]; then
-    # If no args provided, use default git diff
-    if [[ $save_to_file -eq 1 ]]; then
-      echo "Running: git diff"
-      git diff > "$output_file"
-      echo "Diff saved to: $output_file"
+
+  # Smart diff detection if no specific args provided
+  if [[ ${#diff_args[@]} -eq 0 && $smart_diff -eq 1 ]]; then
+    echo "🔍 Smart diff detection..."
+    
+    # Check for unstaged changes
+    if git diff --quiet; then
+      # No unstaged changes, check staged
+      if git diff --cached --quiet; then
+        # No staged changes, compare with last commit
+        if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+          diff_args=("HEAD~1..HEAD")
+          echo "📋 Using last commit changes (no unstaged/staged changes found)"
+        else
+          echo "⚠️  No changes detected (initial commit or clean working directory)"
+          if [[ $save_to_file -eq 1 ]]; then
+            create_no_changes_output "$output_file"
+          fi
+          return 0
+        fi
+      else
+        diff_args=("--cached")
+        echo "📂 Using staged changes"
+      fi
     else
-      git diff
-    fi
-  else
-    # Run with provided arguments
-    if [[ $save_to_file -eq 1 ]]; then
-      echo "Running: git diff ${diff_args[*]}"
-      git diff "${diff_args[@]}" > "$output_file"
-      echo "Diff saved to: $output_file"
-    else
-      git diff "${diff_args[@]}"
+      echo "📝 Using unstaged changes"
+      # Use default (unstaged changes)
     fi
   fi
+
+  # Generate the diff
+  local temp_diff
+  temp_diff=$(mktemp)
   
-  # If saving to file, show file stats
+  if [[ ${#diff_args[@]} -eq 0 ]]; then
+    echo "Running: git diff"
+    git diff > "$temp_diff"
+  else
+    echo "Running: git diff ${diff_args[*]}"
+    git diff "${diff_args[@]}" > "$temp_diff"
+  fi
+
+  # Process the diff for AI context
+  if [[ $ai_context -eq 1 && -s "$temp_diff" ]]; then
+    if [[ $save_to_file -eq 1 ]]; then
+      create_ai_diff_context "$temp_diff" "$output_file" "${diff_args[*]}"
+    else
+      create_ai_diff_context "$temp_diff" "/dev/stdout" "${diff_args[*]}"
+    fi
+  else
+    # Standard diff output
+    if [[ $save_to_file -eq 1 ]]; then
+      cp "$temp_diff" "$output_file"
+    else
+      cat "$temp_diff"
+    fi
+  fi
+
+  # Show statistics and validation
   if [[ $save_to_file -eq 1 && -f "$output_file" ]]; then
     local line_count=$(wc -l < "$output_file")
     local file_size=$(du -h "$output_file" | cut -f1)
-    echo "File size: $file_size, Lines: $line_count"
     
-    # Check if file is empty
     if [[ $line_count -eq 0 ]]; then
-      echo "Warning: No diff output was generated. Are there any changes?"
+      echo "⚠️  No diff output generated"
+    else
+      echo "✅ Diff saved to: $output_file"
+      echo "📊 Size: $file_size, Lines: $line_count"
+      
+      # Quick content summary
+      if [[ $ai_context -eq 1 ]]; then
+        local files_changed=$(grep -c "^📁" "$output_file" 2>/dev/null || echo "0")
+        echo "📈 AI-optimized format: $files_changed files analyzed"
+      fi
     fi
+  fi
+
+  rm -f "$temp_diff"
+}
+
+# =========================================================================
+# FUNCTION: create_ai_diff_context
+# =========================================================================
+# Purpose: Creates an AI-optimized diff with change analysis and context
+# =========================================================================
+create_ai_diff_context() {
+  local diff_file="$1"
+  local output_file="$2"
+  local diff_args="$3"
+  
+  # Initialize output
+  cat > "$output_file" << EOF
+=================================================================
+🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+=================================================================
+
+COMMAND: git diff $diff_args
+TIMESTAMP: $(date)
+BRANCH: $(git branch --show-current 2>/dev/null || echo "unknown")
+
+EOF
+
+  # Analyze the diff for file changes
+  local new_files=()
+  local modified_files=()
+  local deleted_files=()
+  local renamed_files=()
+  
+  while IFS= read -r line; do
+    if [[ $line =~ ^diff\ --git\ a/(.*)\ b/(.*) ]]; then
+      local file_a="${BASH_REMATCH[1]}"
+      local file_b="${BASH_REMATCH[2]}"
+      
+      # Check if it's a rename/move
+      if [[ "$file_a" != "$file_b" ]]; then
+        renamed_files+=("$file_a → $file_b")
+      fi
+    elif [[ $line =~ ^new\ file\ mode ]]; then
+      # Get the filename from the previous diff line
+      new_files+=("$file_b")
+    elif [[ $line =~ ^deleted\ file\ mode ]]; then
+      deleted_files+=("$file_a")
+    elif [[ $line =~ ^index.*\.\. ]] && [[ "$file_a" == "$file_b" ]]; then
+      modified_files+=("$file_a")
+    fi
+  done < "$diff_file"
+
+  # Generate change summary
+  echo "==================================================================" >> "$output_file"
+  echo "📊 CHANGE SUMMARY" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  
+  local total_changes=$(( ${#new_files[@]} + ${#modified_files[@]} + ${#deleted_files[@]} + ${#renamed_files[@]} ))
+  echo "Total files changed: $total_changes" >> "$output_file"
+  echo "" >> "$output_file"
+
+  if [[ ${#new_files[@]} -gt 0 ]]; then
+    echo "🆕 NEW FILES (${#new_files[@]}):" >> "$output_file"
+    printf '  • %s\n' "${new_files[@]}" >> "$output_file"
+    echo "" >> "$output_file"
+  fi
+
+  if [[ ${#modified_files[@]} -gt 0 ]]; then
+    echo "📝 MODIFIED FILES (${#modified_files[@]}):" >> "$output_file"
+    printf '  • %s\n' "${modified_files[@]}" >> "$output_file"
+    echo "" >> "$output_file"
+  fi
+
+  if [[ ${#deleted_files[@]} -gt 0 ]]; then
+    echo "🗑️ DELETED FILES (${#deleted_files[@]}):" >> "$output_file"
+    printf '  • %s\n' "${deleted_files[@]}" >> "$output_file"
+    echo "" >> "$output_file"
+  fi
+
+  if [[ ${#renamed_files[@]} -gt 0 ]]; then
+    echo "📦 RENAMED/MOVED FILES (${#renamed_files[@]}):" >> "$output_file"
+    printf '  • %s\n' "${renamed_files[@]}" >> "$output_file"
+    echo "" >> "$output_file"
+  fi
+
+  # File type analysis
+  echo "==================================================================" >> "$output_file"
+  echo "🏷️ FILE TYPE ANALYSIS" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  
+  analyze_file_types "$diff_file" >> "$output_file"
+  
+  # Add the actual diff with file separators
+  echo "==================================================================" >> "$output_file"
+  echo "📋 DETAILED CHANGES" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  echo "" >> "$output_file"
+
+  # Process diff with file separators for better AI parsing
+  local current_file=""
+  while IFS= read -r line; do
+    if [[ $line =~ ^diff\ --git\ a/(.*)\ b/(.*) ]]; then
+      current_file="${BASH_REMATCH[2]}"
+      echo "📁 FILE: $current_file" >> "$output_file"
+      echo "─────────────────────────────────────────" >> "$output_file"
+    fi
+    echo "$line" >> "$output_file"
+  done < "$diff_file"
+
+  # Add AI analysis context
+  echo "" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  echo "🤖 AI ANALYSIS CONTEXT" >> "$output_file"
+  echo "==================================================================" >> "$output_file"
+  echo "Key areas for analysis:" >> "$output_file"
+  echo "• Focus on test-related files (.spec.ts, .test.ts)" >> "$output_file"
+  echo "• Look for type/interface changes that might break tests" >> "$output_file"
+  echo "• Check for new functionality that needs test coverage" >> "$output_file"
+  echo "• Identify breaking changes in method signatures" >> "$output_file"
+  echo "• Review dependency changes and imports" >> "$output_file"
+  echo "" >> "$output_file"
+  echo "Change impact areas:" >> "$output_file"
+  
+  if [[ ${#new_files[@]} -gt 0 ]]; then
+    echo "• New files may need comprehensive test coverage" >> "$output_file"
+  fi
+  if [[ ${#modified_files[@]} -gt 0 ]]; then
+    echo "• Modified files may have broken existing tests" >> "$output_file"
+  fi
+  if [[ ${#deleted_files[@]} -gt 0 ]]; then
+    echo "• Deleted files may have orphaned tests or dependencies" >> "$output_file"
   fi
 }
 
 # =========================================================================
-# FUNCTION: aiDebug
+# FUNCTION: analyze_file_types
 # =========================================================================
-# Purpose: Creates context files to help AI assistants analyze test failures in NX projects
-#          by capturing git diffs and test results in a structured format.
+# Purpose: Analyzes changed files by type and provides AI context
+# =========================================================================
+analyze_file_types() {
+  local diff_file="$1"
+  
+  local ts_files=0
+  local spec_files=0
+  local html_files=0
+  local css_files=0
+  local json_files=0
+  local other_files=0
+  
+  while IFS= read -r line; do
+    if [[ $line =~ ^diff\ --git.*b/(.*) ]]; then
+      local file="${BASH_REMATCH[1]}"
+      case "$file" in
+        *.spec.ts|*.test.ts) ((spec_files++)) ;;
+        *.ts) ((ts_files++)) ;;
+        *.html) ((html_files++)) ;;
+        *.css|*.scss|*.sass) ((css_files++)) ;;
+        *.json) ((json_files++)) ;;
+        *) ((other_files++)) ;;
+      esac
+    fi
+  done < "$diff_file"
+  
+  echo "TypeScript files: $ts_files"
+  echo "Test files: $spec_files"
+  echo "Templates: $html_files"
+  echo "Styles: $css_files"
+  echo "Config/JSON: $json_files"
+  echo "Other: $other_files"
+  echo ""
+  
+  # AI insights based on file types
+  if [[ $spec_files -gt 0 ]]; then
+    echo "🧪 Test files modified - may fix or introduce test issues"
+  fi
+  if [[ $ts_files -gt $spec_files ]]; then
+    echo "⚠️  More source files than test files changed - check test coverage"
+  fi
+  if [[ $json_files -gt 0 ]]; then
+    echo "⚙️  Configuration changes detected - may affect build/test setup"
+  fi
+}
+
+# =========================================================================
+# FUNCTION: create_no_changes_output
+# =========================================================================
+# Purpose: Creates informative output when no changes are detected
+# =========================================================================
+create_no_changes_output() {
+  local output_file="$1"
+  
+  cat > "$output_file" << EOF
+=================================================================
+🔍 GIT DIFF ANALYSIS
+=================================================================
+
+STATUS: No changes detected
+TIMESTAMP: $(date)
+BRANCH: $(git branch --show-current 2>/dev/null || echo "unknown")
+
+=================================================================
+📊 REPOSITORY STATUS
+=================================================================
+Working directory: Clean
+Staged changes: None
+Last commit: $(git log -1 --oneline 2>/dev/null || echo "No commits")
+
+=================================================================
+🤖 AI ANALYSIS CONTEXT
+=================================================================
+No code changes were found to analyze. This could mean:
+• Working directory is clean (all changes committed)
+• You're analyzing test failures without recent changes
+• Focus should be on existing code patterns or environment issues
+• Consider checking if tests were recently updated in previous commits
+
+Suggested actions:
+• Review recent commit history: git log --oneline -10
+• Check if issue is environment-related rather than code-related
+• Examine test setup or configuration files
+EOF
+}
+
+# =========================================================================
+# FUNCTION: aiDebug (AI-Optimized)
+# =========================================================================
+# Purpose: Creates an AI-optimized context file for debugging test failures
+#          by intelligently combining git changes with test results and
+#          providing structured analysis guidance.
 #
 # Usage:
-#   aiDebug [project-name]            # Run tests for a specific NX project
-#   aiDebug [folder-name]             # Run tests for a specific folder
-#   aiDebug [file-name]               # Run tests for a specific file
-#   aiDebug --testFile=path/to/file   # Run tests for a specific test file
+#   aiDebug [options] [test-target]
+#
+# Options:
+#   --quick              Skip detailed analysis, faster execution
+#   --full-context       Include full test output (not AI-optimized)
+#   --no-diff           Skip git diff capture
+#   --focus <area>      Focus on specific area (tests|types|performance)
 #
 # Examples:
-#   aiDebug settings-voice-assist-feature   # Debug tests for a specific project
-#   aiDebug libs/settings/voice-assist      # Debug tests in a folder
-#   aiDebug libs/settings/voice-assist/file.spec.ts  # Debug a specific test file
+#   aiDebug settings-voice-assist-feature     # Full AI-optimized analysis
+#   aiDebug --quick my-component             # Quick analysis
+#   aiDebug --focus=types my-service         # Focus on TypeScript issues
+#   aiDebug --full-context complex-feature  # Include verbose test output
 #
-# Output:
-#   - Git diff: .github/instructions/diff.txt
-#   - Test report: .github/instructions/jest-output.txt
-#   - Combined context: .github/instructions/ai-debug-context.txt (recommended for AI)
+# Output Files:
+#   - .github/instructions/ai-debug-context.txt (main AI context file)
+#   - .github/instructions/diff.txt (git changes)
+#   - .github/instructions/jest-output.txt (test results)
 #
-# Workflow:
-#   1. Captures git changes using the gitDiff function
-#      - Attempts to capture unstaged changes first
-#      - Falls back to staged changes if no unstaged changes exist
-#   2. Runs tests using the nxTest function with proper formatting
-#   3. Combines test results and git diff into a single context file
-#   4. Generates a summary with next steps based on test results
+# AI Optimization Features:
+#   - Intelligent context prioritization
+#   - Failure correlation analysis
+#   - Change impact assessment
+#   - Structured debugging guidance
+#   - Optimized file size for AI processing
 #
-# Integration with AI:
-#   - When sharing with AI assistants, use the combined context file for simplicity
-#   - A sample prompt is provided in the output
-#   - AI will be able to correlate test failures with recent code changes
-#   - For complex issues, consider adding context about what you were trying to accomplish
-#
-# Notes:
-#   - This function is specifically designed for NX monorepo projects using Jest
-#   - The combined output file is optimized for sharing with AI assistants for debugging
-#   - If tests pass, you'll still get all output files for reference
-#   - If tests fail, you'll get specific guidance on debugging with AI
-#   - All arguments are passed directly to nxTest
 # =========================================================================
+
 aiDebug() {
-  local test_target="$1"
-  local diff_output_file=".github/instructions/diff.txt"
-  local test_output_file=".github/instructions/jest-output.txt"
-  local combined_output_file=".github/instructions/ai-debug-context.txt"
+  local test_target=""
+  local quick_mode=0
+  local full_context=0
+  local skip_diff=0
+  local focus_area=""
   
-  # Ensure directories exist
-  mkdir -p "$(dirname "$diff_output_file")"
-  mkdir -p "$(dirname "$test_output_file")"
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --quick)
+        quick_mode=1
+        shift
+        ;;
+      --full-context)
+        full_context=1
+        shift
+        ;;
+      --no-diff)
+        skip_diff=1
+        shift
+        ;;
+      --focus)
+        if [[ -n "$2" ]]; then
+          focus_area="$2"
+          shift 2
+        else
+          echo "❌ Error: --focus requires an area (tests|types|performance)"
+          return 1
+        fi
+        ;;
+      --focus=*)
+        focus_area="${1#--focus=}"
+        shift
+        ;;
+      -*)
+        echo "❌ Unknown option: $1"
+        echo "Usage: aiDebug [--quick] [--full-context] [--no-diff] [--focus=area] [test-target]"
+        return 1
+        ;;
+      *)
+        test_target="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Configuration
+  local base_dir="$BASE_DIR"
+  local context_file="$base_dir/ai-debug-context.txt"
+  local diff_file="$base_dir/diff.txt"
+  local test_file="$base_dir/jest-output.txt"
   
-  # Clean up any existing output files to ensure fresh results
-  rm -f "$diff_output_file" "$test_output_file" "$combined_output_file"
+  # Ensure directories exist and clean up previous runs
+  mkdir -p "$base_dir"
+  rm -f "$context_file" "$diff_file" "$test_file"
   
   echo "=========================================================="
-  echo "🔍 AI Debug Tests: Gathering information for $test_target"
+  echo "🤖 AI Debug Assistant: Optimized Context Generation"
   echo "=========================================================="
-  
-  # Step 1: Run git diff to capture current code changes
-  echo -e "\n📄 Capturing git diff to show code changes..."
-  gitDiff
-  
-  # Check if diff was generated successfully
-  if [[ ! -s "$diff_output_file" ]]; then
-    echo "⚠️  No git diff output was generated. You might want to stage your changes with 'git add' first."
-    echo "   Running 'gitDiff --cached' to capture staged changes instead..."
-    gitDiff --cached
+  echo "Target: ${test_target:-"(auto-detect)"}"
+  echo "Mode: $([ $quick_mode -eq 1 ] && echo "Quick" || echo "Full")"
+  echo "Context: $([ $full_context -eq 1 ] && echo "Verbose" || echo "AI-Optimized")"
+  echo "Focus: ${focus_area:-"General"}"
+  echo ""
+
+  # Step 1: Capture git changes (unless skipped)
+  if [[ $skip_diff -eq 0 ]]; then
+    echo "📂 Analyzing git changes..."
+    gitDiff --ai-context --smart-diff
+    
+    if [[ ! -s "$diff_file" ]]; then
+      echo "⚠️  No git changes detected - focusing on existing code analysis"
+    else
+      local changes=$(grep -c "^📁" "$diff_file" 2>/dev/null || echo "0")
+      echo "✅ Captured changes for $changes files"
+    fi
+  else
+    echo "⏭️  Skipping git diff capture (--no-diff specified)"
   fi
+
+  # Step 2: Run tests and capture results
+  echo ""
+  echo "🧪 Running tests and generating analysis..."
   
-  # Step 2: Run the tests
-  echo -e "\n🧪 Running tests for $test_target..."
-  nxTest2 "$test_target"
+  if [[ $full_context -eq 1 ]]; then
+    nxTest --full-output "$test_target"
+  else
+    nxTest "$test_target"  # Use AI-optimized output by default
+  fi
   local test_exit_code=$?
   
-  # Step 3: Combine the outputs into a single file for AI analysis
-  echo -e "\n📝 Combining outputs for easier AI analysis..."
-  
-  # Create header for the combined file
-  cat > "$combined_output_file" << EOF
-=================================================================
-📋 DEBUGGING CONTEXT FOR AI ASSISTANT
-=================================================================
-
-I'm seeing test failures in my Angular NX monorepo project. Can you help debug these issues?
-
-Context:
-- The test results and code changes are provided below
-- Looking for a clear fix and explanation of what's breaking
-
-Please provide:
-1. An analysis of what's breaking the tests
-2. A clear fix for each failing test
-3. Any additional tests needed for the new functionality
-
-=================================================================
-🧪 TEST RESULTS
-=================================================================
-EOF
-  
-  # Append test results
-  if [[ -f "$test_output_file" ]]; then
-    cat "$test_output_file" >> "$combined_output_file"
-  else
-    echo "No test results available." >> "$combined_output_file"
+  if [[ ! -s "$test_file" ]]; then
+    echo "❌ No test output captured - test execution may have failed"
+    return $test_exit_code
   fi
-  
-  # Add separator and diff header
-  cat >> "$combined_output_file" << EOF
 
-=================================================================
-📄 CODE CHANGES (GIT DIFF)
-=================================================================
-EOF
-  
-  # Append diff results
-  if [[ -f "$diff_output_file" && -s "$diff_output_file" ]]; then
-    cat "$diff_output_file" >> "$combined_output_file"
-  else
-    echo "No code changes detected." >> "$combined_output_file"
-  fi
-  
-  # Step 4: Provide summary and next steps
-  echo -e "\n=========================================================="
-  if [[ $test_exit_code -eq 0 ]]; then
-    echo "✅ Tests passed successfully!"
-    echo "=========================================================="
-    echo "The following files have been generated:"
-    echo "- Git diff: $diff_output_file"
-    echo "- Test report: $test_output_file"
-    echo "- Combined context: $combined_output_file"
-  else
-    echo "❌ Tests failed with exit code: $test_exit_code"
-    echo "=========================================================="
-    echo "The following debug files have been generated:"
-    echo "- Git diff: $diff_output_file"
-    echo "- Test report: $test_output_file"
-    echo "- Combined context: $combined_output_file (recommended)"
-    echo ""
-    echo "======================================"
-    echo "📋 BEST WAY TO GET AI HELP WITH TEST FAILURES"
-    echo "======================================"
-    echo ""
-    echo "1️⃣ ATTACH THE CONTEXT FILE TO YOUR AI ASSISTANT:"
-    echo "   • Upload .github/instructions/ai-debug-context.txt as an attachment"
-    echo "   • The file already includes a prompt at the top to guide the AI"
-    echo ""
-    echo "2️⃣ OR USE THIS SIMPLE PROMPT WITH THE ATTACHMENT:"
-    echo "   \"Can you help debug these test failures? I've attached the context file.\""
-    echo ""
-    echo "3️⃣ IF YOU NEED TO ADD MORE CONTEXT, TRY THIS ENHANCED PROMPT:"
-    echo "   \"I'm working on [feature/component]. The tests are failing when I"
-    echo "    [describe what you were changing]. Can you analyze the attached"
-    echo "    file and help me fix the issues?\""
-    echo ""
-    echo "The ai-debug-context.txt file already contains a helpful prompt and"
-    echo "all the necessary debugging information. Just attach it and ask for help!"
-    echo "======================================"
-  fi
+  # Step 3: Generate intelligent AI context
+  echo ""
+  echo "🧠 Generating AI-optimized context file..."
+  create_ai_debug_context "$context_file" "$diff_file" "$test_file" "$test_target" $test_exit_code "$focus_area" $quick_mode
+
+  # Step 4: Provide intelligent summary and guidance
+  echo ""
+  display_ai_debug_summary "$context_file" "$test_exit_code" "$focus_area"
   
   return $test_exit_code
+}
+
+# =========================================================================
+# FUNCTION: create_ai_debug_context
+# =========================================================================
+# Purpose: Creates an optimized AI context file with intelligent structure
+# =========================================================================
+create_ai_debug_context() {
+  local context_file="$1"
+  local diff_file="$2"
+  local test_file="$3"
+  local test_target="$4"
+  local exit_code="$5"
+  local focus_area="$6"
+  local quick_mode="$7"
+  
+  # Start with AI-optimized header
+  cat > "$context_file" << EOF
+=================================================================
+🤖 AI DEBUG CONTEXT - OPTIMIZED FOR ANALYSIS
+=================================================================
+
+PROJECT: Angular NX Monorepo
+TARGET: ${test_target:-"Auto-detected"}
+STATUS: $([ $exit_code -eq 0 ] && echo "✅ TESTS PASSING" || echo "❌ TESTS FAILING")
+FOCUS: ${focus_area:-"General debugging"}
+TIMESTAMP: $(date)
+
+=================================================================
+🎯 ANALYSIS REQUEST
+=================================================================
+
+Please analyze this context and provide:
+
+EOF
+
+  # Conditional analysis requests based on test status
+  if [[ $exit_code -eq 0 ]]; then
+    # Tests are passing - focus on improvements and new test coverage
+    cat >> "$context_file" << EOF
+1. 🔍 CODE QUALITY ANALYSIS
+   • Review code changes for potential improvements
+   • Identify any code smells or anti-patterns
+   • Check for performance optimization opportunities
+
+2. 🎭 MOCK DATA VALIDATION (CRITICAL)
+   • Review all mock data to ensure it matches real-world data structures
+   • Verify mock objects have correct property names and types
+   • Check that mock data represents realistic scenarios (not just minimal passing data)
+   • Ensure mocked API responses match actual API contract
+   • Validate that test data covers edge cases and realistic variations
+   • Identify mock data that might be giving false positives
+
+3. 🧪 TEST COVERAGE ANALYSIS
+   • Missing test coverage for new functionality
+   • Edge cases that should be tested
+   • Additional test scenarios to prevent regressions
+   • Test improvements for better maintainability
+   • File-specific coverage analysis (diff coverage vs total coverage)
+
+4. 🚀 ENHANCEMENT RECOMMENDATIONS
+   • Code quality improvements
+   • Better error handling or validation
+   • Documentation or typing improvements
+   • Performance optimizations
+
+5. 🛡️ ROBUSTNESS IMPROVEMENTS
+   • Potential edge cases to handle
+   • Error scenarios to test
+   • Input validation opportunities
+   • Defensive programming suggestions
+EOF
+  else
+    # Tests are failing - focus on fixing failures first, then suggest new tests
+    cat >> "$context_file" << EOF
+1. 🔍 ROOT CAUSE ANALYSIS
+   • What specific changes are breaking the tests?
+   • Are there type mismatches or interface changes?
+   • Did method signatures change?
+
+2. 🛠️ CONCRETE FIXES (PRIORITY 1)
+   • Exact code changes needed to fix failing tests
+   • Updated test expectations if business logic changed
+   • Type definitions or interface updates required
+
+3. 🧪 EXISTING TEST FIXES (PRIORITY 1)
+   • Fix existing failing tests first
+   • Update test assertions to match new behavior
+   • Fix test setup or mocking issues
+
+4. 🚀 IMPLEMENTATION GUIDANCE (PRIORITY 1)
+   • Order of fixes (dependencies first)
+   • Potential side effects to watch for
+   • Getting tests green is the immediate priority
+
+5. ✨ NEW TEST SUGGESTIONS (PRIORITY 2 - AFTER FIXES)
+   • Missing test coverage for new functionality
+   • Edge cases that should be tested
+   • Additional test scenarios to prevent regressions
+   • Test improvements for better maintainability
+   • File-specific coverage analysis (diff coverage vs total coverage)
+   • Specify files and line numbers where new tests should be added. 
+
+NOTE: Focus on items 1-4 first to get tests passing, then implement item 5
+EOF
+  fi
+
+  cat >> "$context_file" << EOF
+
+EOF
+
+  # Add focus-specific guidance
+  case "$focus_area" in
+    "types")
+      echo "FOCUS AREA: TypeScript type issues and interface mismatches" >> "$context_file"
+      echo "• Pay special attention to type definitions and interface changes" >> "$context_file"
+      echo "• Look for property name mismatches or type incompatibilities" >> "$context_file"
+      ;;
+    "tests")
+      echo "FOCUS AREA: Test logic and assertions" >> "$context_file"
+      echo "• Focus on test expectations vs actual implementation" >> "$context_file"
+      echo "• Look for test data setup issues or mock problems" >> "$context_file"
+      ;;
+    "performance")
+      echo "FOCUS AREA: Performance and optimization" >> "$context_file"
+      echo "• Identify slow tests and optimization opportunities" >> "$context_file"
+      echo "• Look for inefficient test patterns or setup" >> "$context_file"
+      ;;
+  esac
+
+  echo "" >> "$context_file"
+
+  # Add intelligent test results analysis
+  echo "==================================================================" >> "$context_file"
+  echo "🧪 TEST RESULTS ANALYSIS" >> "$context_file"
+  echo "==================================================================" >> "$context_file"
+  
+  if [[ -s "$test_file" ]]; then
+    cat "$test_file" >> "$context_file"
+  else
+    echo "❌ No test results available" >> "$context_file"
+  fi
+
+  echo "" >> "$context_file"
+
+  # Add git changes analysis
+  echo "==================================================================" >> "$context_file"
+  echo "📋 CODE CHANGES ANALYSIS" >> "$context_file"
+  echo "==================================================================" >> "$context_file"
+  
+  if [[ -s "$diff_file" ]]; then
+    cat "$diff_file" >> "$context_file"
+  else
+    echo "ℹ️  No recent code changes detected" >> "$context_file"
+    echo "" >> "$context_file"
+    echo "This suggests the test failures may be due to:" >> "$context_file"
+    echo "• Environment or configuration issues" >> "$context_file"
+    echo "• Dependencies or version conflicts" >> "$context_file"
+    echo "• Test setup or teardown problems" >> "$context_file"
+    echo "• Race conditions or timing issues" >> "$context_file"
+  fi
+
+  echo "" >> "$context_file"
+
+  # Add coverage analysis (if not in quick mode)
+  if [[ $quick_mode -eq 0 ]]; then
+    echo "==================================================================" >> "$context_file"
+    echo "📊 TEST COVERAGE ANALYSIS" >> "$context_file"
+    echo "==================================================================" >> "$context_file"
+    
+    generate_coverage_analysis "$diff_file" "$test_file" >> "$context_file"
+  fi
+
+  # Add correlation analysis (if not in quick mode)
+  if [[ $quick_mode -eq 0 ]]; then
+    echo "==================================================================" >> "$context_file"
+    echo "🔗 CHANGE-FAILURE CORRELATION ANALYSIS" >> "$context_file"
+    echo "==================================================================" >> "$context_file"
+    
+    analyze_change_correlation "$diff_file" "$test_file" >> "$context_file"
+  fi
+
+  # Add final AI guidance
+  echo "" >> "$context_file"
+  echo "==================================================================" >> "$context_file"
+  echo "🚀 AI ASSISTANT GUIDANCE" >> "$context_file"
+  echo "==================================================================" >> "$context_file"
+  echo "This context file is optimized for AI analysis with:" >> "$context_file"
+  echo "• Structured failure information for easy parsing" >> "$context_file"
+  echo "• Code changes correlated with test failures" >> "$context_file"
+  echo "• Clear focus areas for targeted analysis" >> "$context_file"
+  echo "• Actionable fix categories for systematic resolution" >> "$context_file"
+  echo "" >> "$context_file"
+  echo "Context file size: $(wc -l < "$context_file") lines (optimized for AI processing)" >> "$context_file"
+}
+
+# =========================================================================
+# FUNCTION: generate_coverage_analysis
+# =========================================================================
+# Purpose: Analyzes test coverage for changed files and provides specific
+#          coverage metrics and recommendations
+# =========================================================================
+generate_coverage_analysis() {
+  local diff_file="$1"
+  local test_file="$2"
+  
+  echo "Generating coverage analysis for changed files..."
+  echo ""
+  
+  # Extract changed source files (excluding test files)
+  local source_files=()
+  if [[ -s "$diff_file" ]]; then
+    while IFS= read -r line; do
+      if [[ $line =~ ^📁\ FILE:\ (.+\.ts)$ ]]; then
+        local file="${BASH_REMATCH[1]}"
+        # Skip test files, only analyze source files
+        if [[ ! "$file" =~ \.(spec|test)\.ts$ ]]; then
+          source_files+=("$file")
+        fi
+      fi
+    done < "$diff_file"
+  fi
+
+  if [[ ${#source_files[@]} -eq 0 ]]; then
+    echo "No source files changed - focusing on test quality review"
+    return
+  fi
+
+  echo "📋 COVERAGE ANALYSIS FOR CHANGED FILES"
+  echo "======================================"
+  echo ""
+
+  # Try to get coverage data using different methods
+  local coverage_available=0
+  
+  # Method 1: Check for recent coverage reports
+  if [[ -f "coverage/lcov-report/index.html" || -f "coverage/coverage-summary.json" ]]; then
+    echo "📊 Found existing coverage data - analyzing changed files:"
+    coverage_available=1
+  else
+    echo "⚠️  No coverage data found. Run tests with coverage first:"
+    echo "   yarn nx test --coverage [project-name]"
+    echo ""
+    echo "📋 MANUAL COVERAGE REVIEW NEEDED FOR:"
+  fi
+
+  # Analyze each changed source file
+  for file in "${source_files[@]}"; do
+    local base_name=$(basename "$file" .ts)
+    local spec_file=""
+    
+    # Find corresponding test file
+    local dir_name=$(dirname "$file")
+    if [[ -f "$dir_name/$base_name.spec.ts" ]]; then
+      spec_file="$dir_name/$base_name.spec.ts"
+    elif [[ -f "$dir_name/$base_name.test.ts" ]]; then
+      spec_file="$dir_name/$base_name.test.ts"
+    fi
+
+    echo ""
+    echo "📁 FILE: $file"
+    echo "   Test File: ${spec_file:-"❌ NOT FOUND"}"
+    
+    if [[ $coverage_available -eq 1 ]]; then
+      # Try to extract coverage data for this specific file
+      analyze_file_coverage "$file"
+    else
+      # Provide manual analysis guidance
+      echo "   Coverage Status: Manual review required"
+      echo "   Priority: $(get_coverage_priority "$file" "$diff_file")"
+    fi
+  done
+
+  echo ""
+  echo "📈 COVERAGE RECOMMENDATIONS"
+  echo "=========================="
+  
+  # Generate specific coverage recommendations
+  generate_coverage_recommendations "${source_files[@]}"
+}
+
+# =========================================================================
+# FUNCTION: analyze_file_coverage
+# =========================================================================
+# Purpose: Analyzes coverage for a specific file
+# =========================================================================
+analyze_file_coverage() {
+  local file="$1"
+  
+  # Try to extract coverage from various sources
+  if [[ -f "coverage/coverage-summary.json" ]]; then
+    # Parse JSON coverage data if available
+    local coverage_data=$(grep -A 10 "\"$file\"" coverage/coverage-summary.json 2>/dev/null || echo "")
+    if [[ -n "$coverage_data" ]]; then
+      echo "   Coverage: Available in coverage-summary.json"
+    else
+      echo "   Coverage: File not found in coverage report"
+    fi
+  elif [[ -f "coverage/lcov.info" ]]; then
+    # Parse LCOV data if available
+    local lcov_data=$(grep -A 5 "SF:.*$file" coverage/lcov.info 2>/dev/null || echo "")
+    if [[ -n "$lcov_data" ]]; then
+      echo "   Coverage: Available in LCOV report"
+    else
+      echo "   Coverage: File not found in LCOV report"
+    fi
+  else
+    echo "   Coverage: No coverage data available"
+  fi
+  
+  # Analyze diff coverage (lines changed vs lines tested)
+  echo "   Diff Coverage: $(analyze_diff_coverage "$file")"
+}
+
+# =========================================================================
+# FUNCTION: analyze_diff_coverage
+# =========================================================================
+# Purpose: Analyzes coverage specifically for changed lines in diff
+# =========================================================================
+analyze_diff_coverage() {
+  local file="$1"
+  
+  # Count added lines from diff (simplified analysis)
+  local added_lines=0
+  if [[ -s "$BASE_DIR/diff.txt" ]]; then
+    # Count lines added to this specific file
+    local in_file=0
+    while IFS= read -r line; do
+      if [[ $line =~ ^📁\ FILE:\ $file ]]; then
+        in_file=1
+      elif [[ $line =~ ^📁\ FILE: ]]; then
+        in_file=0
+      elif [[ $in_file -eq 1 && $line =~ ^\\+[^+] ]]; then
+        ((added_lines++))
+      fi
+    done < "$BASE_DIR/diff.txt"
+  fi
+  
+  if [[ $added_lines -eq 0 ]]; then
+    echo "No new lines added"
+  else
+    echo "$added_lines new lines (need coverage analysis)"
+  fi
+}
+
+# =========================================================================
+# FUNCTION: get_coverage_priority
+# =========================================================================
+# Purpose: Determines coverage priority based on file changes
+# =========================================================================
+get_coverage_priority() {
+  local file="$1"
+  local diff_file="$2"
+  
+  # Analyze the type and extent of changes
+  local priority="Medium"
+  
+  # Check if this is a new file
+  if grep -q "🆕 NEW FILES.*$file" "$diff_file" 2>/dev/null; then
+    priority="🔴 HIGH (New file - needs comprehensive coverage)"
+  # Check if it has significant changes
+  elif [[ -s "$diff_file" ]]; then
+    local change_count=$(grep -c "^[+-]" "$diff_file" 2>/dev/null || echo "0")
+    if [[ $change_count -gt 20 ]]; then
+      priority="🟡 HIGH (Major changes)"
+    elif [[ $change_count -gt 5 ]]; then
+      priority="🟡 MEDIUM (Moderate changes)"
+    else
+      priority="🟢 LOW (Minor changes)"
+    fi
+  fi
+  
+  echo "$priority"
+}
+
+# =========================================================================
+# FUNCTION: generate_coverage_recommendations
+# =========================================================================
+# Purpose: Generates specific coverage recommendations for changed files
+# =========================================================================
+generate_coverage_recommendations() {
+  local files=("$@")
+  
+  echo "Based on changed files analysis:"
+  echo ""
+  
+  for file in "${files[@]}"; do
+    local base_name=$(basename "$file" .ts)
+    echo "📝 $file:"
+    echo "   • Run: yarn nx test --coverage [project] --testNamePattern='$base_name'"
+    echo "   • Target: >80% line coverage for new/modified functions"
+    echo "   • Focus: Test new public methods and complex logic paths"
+    echo ""
+  done
+  
+  echo "🎯 PRIORITY ACTIONS:"
+  echo "1. Generate coverage report: yarn nx test --coverage [project-name]"
+  echo "2. Review coverage for files listed above"
+  echo "3. Add tests for uncovered lines in changed files"
+  echo "4. Focus on complex logic and edge cases"
+  echo ""
+  
+  echo "💡 COVERAGE GOALS:"
+  echo "• New files: >90% coverage"
+  echo "• Modified files: Maintain or improve existing coverage"
+  echo "• Critical paths: 100% coverage (error handling, validation)"
+}
+
+# =========================================================================
+# FUNCTION: analyze_change_correlation
+# =========================================================================
+# Purpose: Analyzes correlation between code changes and test failures
+# =========================================================================
+analyze_change_correlation() {
+  local diff_file="$1"
+  local test_file="$2"
+  
+  echo "Analyzing relationships between code changes and test failures..."
+  echo ""
+  
+  # Extract failed test files from test output
+  local failed_tests=()
+  if [[ -s "$test_file" ]]; then
+    while IFS= read -r line; do
+      if [[ $line =~ FAIL.*([^[:space:]]+\.spec\.ts) ]]; then
+        failed_tests+=("${BASH_REMATCH[1]}")
+      fi
+    done < "$test_file"
+  fi
+
+  # Extract changed files from diff
+  local changed_files=()
+  if [[ -s "$diff_file" ]]; then
+    while IFS= read -r line; do
+      if [[ $line =~ ^📁\ FILE:\ (.+) ]]; then
+        changed_files+=("${BASH_REMATCH[1]}")
+      fi
+    done < "$diff_file"
+  fi
+
+  # Analyze correlations
+  if [[ ${#failed_tests[@]} -gt 0 && ${#changed_files[@]} -gt 0 ]]; then
+    echo "🎯 LIKELY CORRELATIONS:"
+    
+    for failed_test in "${failed_tests[@]}"; do
+      # Extract the base name (remove .spec.ts)
+      local base_name=$(basename "$failed_test" .spec.ts)
+      
+      # Look for corresponding source files in changes
+      for changed_file in "${changed_files[@]}"; do
+        local changed_base=$(basename "$changed_file")
+        
+        if [[ "$changed_file" == *"$base_name"* || "$base_name" == *"$(basename "$changed_file" .ts)"* ]]; then
+          echo "  🔗 $failed_test ↔ $changed_file (direct correlation)"
+        fi
+      done
+    done
+    
+    echo ""
+    echo "📊 CHANGE IMPACT ANALYSIS:"
+    echo "• Failed tests: ${#failed_tests[@]}"
+    echo "• Changed files: ${#changed_files[@]}"
+    
+    # Check for interface/type changes
+    if grep -q "interface\|type\|export.*{" "$diff_file" 2>/dev/null; then
+      echo "• ⚠️  Interface/type changes detected - likely cause of test failures"
+    fi
+    
+    # Check for method signature changes
+    if grep -q "^\+.*(" "$diff_file" 2>/dev/null && grep -q "^\-.*(" "$diff_file" 2>/dev/null; then
+      echo "• ⚠️  Method signature changes detected"
+    fi
+    
+  elif [[ ${#failed_tests[@]} -gt 0 ]]; then
+    echo "🤔 ANALYSIS NOTES:"
+    echo "• Tests are failing but no recent code changes detected"
+    echo "• This suggests environment, dependency, or configuration issues"
+    echo "• Focus on test setup, mocks, or external dependencies"
+    
+  else
+    echo "✅ NO CORRELATION ANALYSIS NEEDED:"
+    echo "• No test failures detected in current run"
+  fi
+}
+
+# =========================================================================
+# FUNCTION: display_ai_debug_summary
+# =========================================================================
+# Purpose: Displays intelligent summary and next steps for AI debugging
+# =========================================================================
+display_ai_debug_summary() {
+  local context_file="$1"
+  local exit_code="$2"
+  local focus_area="$3"
+  
+  local context_size=$(du -h "$context_file" | cut -f1)
+  local line_count=$(wc -l < "$context_file")
+  
+  echo "=========================================================="
+  if [[ $exit_code -eq 0 ]]; then
+    echo "✅ AI Debug Context: All tests passing"
+    echo "=========================================================="
+    echo "🎯 FOCUS: Code quality, mock data validation, and test coverage"
+    echo ""
+    echo "📋 SUGGESTED AI PROMPTS:"
+    echo '• "What new tests should I add for the functionality I just implemented?"'
+    echo '• "Check if mock objects have correct property names and realistic values"'
+    echo '• "Are there edge cases or error scenarios I should test with better mock data?"'
+  else
+    echo "🔍 AI Debug Context: Test failures detected"
+    echo "=========================================================="
+    echo "🎯 FOCUS: Failure analysis and fix recommendations"
+    echo ""
+    echo "📋 SUGGESTED AI PROMPTS:"
+    echo '• "Analyze these test failures and provide specific fixes first"'
+    echo '• "What code changes are breaking these tests and how do I fix them?"'
+    echo '• "Help me fix failing tests first, then suggest new test coverage"'
+
+  fi
+  
+  echo ""
+  echo "📄 CONTEXT FILE DETAILS:"
+  echo "• Location: $context_file"
+  echo "• Size: $context_size ($line_count lines)"
+  echo "• Optimized: ✅ AI-friendly structure"
+  echo "• Focus: ${focus_area:-"General"}"
+  
+  echo ""
+  echo "🚀 NEXT STEPS:"
+  echo "1. Upload the context file to your AI assistant"
+  echo "2. Use one of the suggested prompts above"
+  echo "3. Follow the AI's specific fix recommendations"
+  echo "4. Re-run aiDebug to verify fixes"
+   
+  echo ""
+  echo "🔄 WORKFLOW OPTIMIZATION:"
+  echo "• Use --quick for faster iteration during fixing"
+  echo "• Re-run without flags for comprehensive analysis including mock validation"
+  echo "=========================================================="
 }
