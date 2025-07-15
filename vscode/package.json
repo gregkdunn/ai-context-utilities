@@ -1,0 +1,168 @@
+{
+  "name": "ai-debug-utilities",
+  "displayName": "AI Debug Utilities",
+  "description": "AI-powered debugging and code quality tools for Angular NX monorepos",
+  "version": "0.1.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Debuggers",
+    "Other"
+  ],
+  "keywords": [
+    "nx",
+    "angular",
+    "testing",
+    "jest",
+    "ai",
+    "debugging",
+    "copilot"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/nx.json",
+    "workspaceContains:**/angular.json"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiDebugUtilities.openPanel",
+        "title": "Open AI Debug Panel",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runAiDebug",
+        "title": "Run AI Debug Analysis",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runNxTest",
+        "title": "Run NX Tests (AI Optimized)",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runGitDiff",
+        "title": "Analyze Git Changes",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runPrepareToPush",
+        "title": "Prepare to Push (Lint + Format)",
+        "category": "AI Debug"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "aiDebugUtilities",
+          "name": "AI Debug Assistant",
+          "when": "workspaceHasNxProject"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiDebugUtilities",
+          "title": "AI Debug Utilities",
+          "icon": "$(debug-alt)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Debug Utilities",
+      "properties": {
+        "aiDebugUtilities.outputDirectory": {
+          "type": "string",
+          "default": ".github/instructions/ai_utilities_context",
+          "description": "Directory where AI debug output files are saved"
+        },
+        "aiDebugUtilities.autoDetectProject": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect the current NX project"
+        },
+        "aiDebugUtilities.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications when commands complete"
+        },
+        "aiDebugUtilities.terminalIntegration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show command output in integrated terminal"
+        },
+        "aiDebugUtilities.copilot.autoAnalyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically trigger Copilot analysis when tests fail"
+        },
+        "aiDebugUtilities.copilot.analyzeOnFailure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-analyze with Copilot when tests fail"
+        },
+        "aiDebugUtilities.copilot.generatePR": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable PR description generation with Copilot"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "aiDebugUtilities.openPanel",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "workspaceHasNxProject"
+      },
+      {
+        "command": "aiDebugUtilities.runAiDebug",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "workspaceHasNxProject"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "aiDebugUtilities.runAiDebug",
+          "when": "resourceExtname == .ts || resourceExtname == .spec.ts",
+          "group": "aiDebug@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "aiDebugUtilities.openPanel",
+          "when": "workspaceHasNxProject"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "deploy": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "chokidar": "^3.5.3"
+  }
+}
