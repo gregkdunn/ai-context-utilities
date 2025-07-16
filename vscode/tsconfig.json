@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "Node16",
+    "module": "CommonJS",
     "target": "ES2022",
     "outDir": "out",
     "lib": [
@@ -9,7 +9,8 @@
     "sourceMap": true,
     "rootDir": "src",
     "strict": true,
-    "moduleResolution": "Node16",
+    "moduleResolution": "node",
+    "isolatedModules": true,
     "baseUrl": "./",
     "paths": {
       "@/*": ["src/*"]
@@ -21,6 +22,10 @@
   },
   "exclude": [
     "node_modules",
-    ".vscode-test"
+    ".vscode-test",
+    "out",
+    "coverage",
+    "**/*.bak",
+    "**/*.backup"
   ]
 }

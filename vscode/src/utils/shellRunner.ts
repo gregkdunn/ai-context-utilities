@@ -1,80 +1,68 @@
 import * as vscode from 'vscode';
 import { spawn, ChildProcess } from 'child_process';
 import { CommandOptions, CommandResult } from '../types';
+import { AiDebugCommand } from '../commands/aiDebug';
+import { NxTestCommand } from '../commands/nxTest';
+import { GitDiffCommand } from '../commands/gitDiff';
+import { PrepareToPushCommand } from '../commands/prepareToPush';
 
 export class CommandRunner {
     private workspaceRoot: string;
     private currentProcess?: ChildProcess;
+    private aiDebugCommand: AiDebugCommand;
+    private nxTestCommand: NxTestCommand;
+    private gitDiffCommand: GitDiffCommand;
+    private prepareToPushCommand: PrepareToPushCommand;
 
     constructor() {
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+        this.aiDebugCommand = new AiDebugCommand();
+        this.nxTestCommand = new NxTestCommand();
+        this.gitDiffCommand = new GitDiffCommand();
+        this.prepareToPushCommand = new PrepareToPushCommand();
     }
 
     /**
      * Run AI Debug command
      */
     async runAiDebug(project: string, options: CommandOptions = {}): Promise<CommandResult> {
-        const args = [project];
-        
-        if (options.quick) args.push('--quick');
-        if (options.fullContext) args.push('--full-context');
-        if (options.noDiff) args.push('--no-diff');
-        if (options.focus) args.push(`--focus=${options.focus}`);
-
-        return this.executeShellFunction('aiDebug', args);
+        return this.aiDebugCommand.run(project, options);
     }
 
     /**
      * Run NX Test command
      */
     async runNxTest(project: string, options: CommandOptions = {}): Promise<CommandResult> {
-        const args = [project];
-        
-        if (options.useExpected) args.push('--use-expected');
-        if (options.fullOutput) args.push('--full-output');
-
-        return this.executeShellFunction('nxTest', args);
+        return this.nxTestCommand.run(project, options);
     }
 
     /**
      * Run Git Diff command
      */
     async runGitDiff(options: CommandOptions = {}): Promise<CommandResult> {
-        const args: string[] = [];
-        
-        // Add any git diff specific options here
-        
-        return this.executeShellFunction('gitDiff', args);
+        return this.gitDiffCommand.run(options);
     }
 
     /**
      * Run Prepare to Push command
      */
     async runPrepareToPush(project: string): Promise<CommandResult> {
-        return this.executeShellFunction('prepareToPush', [project]);
+        return this.prepareToPushCommand.run(project);
     }
 
     /**
-     * Execute a shell function (simulating the zsh functions)
+     * Execute a generic shell command (used by legacy methods)
      */
-    private async executeShellFunction(functionName: string, args: string[]): Promise<CommandResult> {
+    private async executeShellCommand(command: string, args: string[]): Promise<CommandResult> {
         const startTime = Date.now();
         
         return new Promise((resolve) => {
             let output = '';
             let errorOutput = '';
-
-            // For now, we'll simulate the shell functions by running yarn nx commands directly
-            // In a real implementation, you'd want to either:
-            // 1. Call the actual shell functions if available
-            // 2. Port the shell logic to TypeScript
-            // 3. Use a hybrid approach
             
-            const { command, commandArgs } = this.mapToYarnCommands(functionName, args);
+            console.log(`Running: ${command} ${args.join(' ')}`);
             
-            console.log(`Running: ${command} ${commandArgs.join(' ')}`);
-            
-            this.currentProcess = spawn(command, commandArgs, {
+            this.currentProcess = spawn(command, args, {
                 cwd: this.workspaceRoot,
                 shell: true
             });
@@ -98,8 +86,7 @@ export class CommandRunner {
                     exitCode: code || 0,
                     output,
                     error: errorOutput || undefined,
-                    duration,
-                    outputFiles: this.getExpectedOutputFiles(functionName)
+                    duration
                 };
                 
                 this.currentProcess = undefined;
@@ -122,74 +109,9 @@ export class CommandRunner {
         });
     }
 
-    /**
-     * Map shell functions to yarn commands (temporary implementation)
-     */
-    private mapToYarnCommands(functionName: string, args: string[]): { command: string; commandArgs: string[] } {
-        const project = args[0];
-        
-        switch (functionName) {
-            case 'aiDebug':
-                // For now, just run tests - we'll enhance this later
-                return {
-                    command: 'yarn',
-                    commandArgs: ['nx', 'test', project, '--verbose']
-                };
-            
-            case 'nxTest':
-                return {
-                    command: 'yarn',
-                    commandArgs: ['nx', 'test', project, '--verbose']
-                };
-            
-            case 'gitDiff':
-                return {
-                    command: 'git',
-                    commandArgs: ['diff']
-                };
-            
-            case 'prepareToPush':
-                return {
-                    command: 'yarn',
-                    commandArgs: ['nx', 'lint', project]
-                };
-            
-            default:
-                return {
-                    command: 'echo',
-                    commandArgs: [`Unknown command: ${functionName}`]
-                };
-        }
-    }
 
-    /**
-     * Get expected output files for a command
-     */
-    private getExpectedOutputFiles(functionName: string): string[] {
-        const config = vscode.workspace.getConfiguration('aiDebugUtilities');
-        const outputDir = config.get<string>('outputDirectory') || '.github/instructions/ai_utilities_context';
-        
-        switch (functionName) {
-            case 'aiDebug':
-                return [
-                    `${outputDir}/ai-debug-context.txt`,
-                    `${outputDir}/jest-output.txt`,
-                    `${outputDir}/diff.txt`
-                ];
-            
-            case 'nxTest':
-                return [`${outputDir}/jest-output.txt`];
-            
-            case 'gitDiff':
-                return [`${outputDir}/diff.txt`];
-            
-            case 'prepareToPush':
-                return [];
-            
-            default:
-                return [];
-        }
-    }
+
+
 
     /**
      * Send output to VSCode terminal

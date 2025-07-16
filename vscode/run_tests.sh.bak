@@ -1,0 +1,11 @@
+#!/bin/bash
+
+cd /Users/gregdunn/src/test/ai_debug_context/vscode
+
+echo "=== Running TypeScript compilation ==="
+npx tsc --noEmit
+
+echo "=== Running Jest tests ==="
+npx jest --passWithNoTests --verbose
+
+echo "=== Test run complete ==="

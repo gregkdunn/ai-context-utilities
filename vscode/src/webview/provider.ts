@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import { ProjectDetector } from '../utils/projectDetector';
 import { CommandRunner } from '../utils/shellRunner';
 import { FileManager } from '../utils/fileManager';
-import { WebviewMessage, WebviewState, ActionButton, CommandOptions } from '../types';
+import { StatusTracker } from '../utils/statusTracker';
+import { CommandCoordinator } from '../utils/commandCoordinator';
+import { WebviewMessage, WebviewState, ActionButton, CommandOptions, StreamingMessage } from '../types';
 
 export class WebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'aiDebugUtilities';
@@ -13,21 +15,31 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         private readonly _extensionUri: vscode.Uri,
         private readonly projectDetector: ProjectDetector,
         private readonly commandRunner: CommandRunner,
-        private readonly fileManager: FileManager
+        private readonly fileManager: FileManager,
+        private readonly statusTracker: StatusTracker,
+        private readonly commandCoordinator: CommandCoordinator
     ) {
         this._state = {
             projects: [],
             actions: this.initializeActions(),
-            outputFiles: {}
+            outputFiles: {},
+            isStreaming: false,
+            currentOutput: ''
         };
 
-        // Initialize projects
+        // Initialize projects (but don't await in constructor)
         this.initializeProjects();
 
         // Watch for file changes
         this.fileManager.watchFiles((type, path) => {
             this.updateOutputFile(type, path);
         });
+
+        // Set up status tracking event handlers
+        this.setupStatusTracking();
+        
+        // Set up streaming event handlers
+        this.setupStreamingHandlers();
     }
 
     public resolveWebviewView(
@@ -67,74 +79,93 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Update action status to running
-        this.updateActionStatus(action, 'running');
-
         try {
-            let result;
             const project = options.project || this._state.currentProject;
+            
+            // Remove project from options to avoid passing it twice
+            const { project: _, ...cleanOptions } = options;
 
+            // Start streaming mode
+            this._state.isStreaming = true;
+            this._state.currentAction = action;
+            this._state.currentOutput = '';
+            this.updateWebview();
+
+            let args: string[] = [];
+            let commandOptions = {
+                project,
+                commandOptions: cleanOptions,
+                cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+            };
+
+            // Prepare command arguments based on action type
             switch (action) {
                 case 'aiDebug':
                     if (!project) {
                         throw new Error('No project selected');
                     }
-                    result = await this.commandRunner.runAiDebug(project, options);
+                    // Use the existing aiDebug implementation through command coordinator
+                    args = [project];
                     break;
 
                 case 'nxTest':
                     if (!project) {
                         throw new Error('No project selected');
                     }
-                    result = await this.commandRunner.runNxTest(project, options);
+                    args = [project];
+                    if (cleanOptions.quick) args.push('--quick');
+                    if (cleanOptions.focus) args.push(`--focus=${cleanOptions.focus}`);
                     break;
 
                 case 'gitDiff':
-                    result = await this.commandRunner.runGitDiff(options);
+                    args = [];
+                    if (cleanOptions.noDiff) args.push('--no-diff');
                     break;
 
                 case 'prepareToPush':
                     if (!project) {
                         throw new Error('No project selected');
                     }
-                    result = await this.commandRunner.runPrepareToPush(project);
+                    args = [project];
                     break;
 
                 default:
                     throw new Error(`Unknown action: ${action}`);
             }
 
-            // Update action status based on result
-            this.updateActionStatus(action, result.success ? 'success' : 'error');
+            // Execute command through coordinator with streaming
+            const result = await this.commandCoordinator.executeCommand(
+                action as any,
+                args,
+                commandOptions
+            );
+
+            // Update last run info
             this._state.lastRun = {
                 action,
                 timestamp: new Date(),
                 success: result.success
             };
 
-            // Show notification if enabled
-            const config = vscode.workspace.getConfiguration('aiDebugUtilities');
-            if (config.get('showNotifications')) {
-                if (result.success) {
-                    vscode.window.showInformationMessage(`${action} completed successfully`);
-                } else {
-                    vscode.window.showErrorMessage(`${action} failed: ${result.error || 'Unknown error'}`);
-                }
-            }
-
         } catch (error) {
-            this.updateActionStatus(action, 'error');
             vscode.window.showErrorMessage(`${action} failed: ${error}`);
+        } finally {
+            // End streaming mode
+            this._state.isStreaming = false;
+            this._state.currentAction = undefined;
+            this.updateWebview();
         }
-
-        this.updateWebview();
     }
 
     private async handleMessage(message: WebviewMessage) {
         switch (message.command) {
             case 'runCommand':
                 if (message.data.action) {
-                    await this.runCommand(message.data.action, message.data.options || {});
+                    const options = {
+                        ...message.data.options,
+                        project: message.data.project
+                    };
+                    await this.runCommand(message.data.action, options);
                 }
                 break;
 
@@ -159,6 +190,22 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     this.updateWebview();
                 }
                 break;
+
+            case 'cancelCommand':
+                if (message.data.action) {
+                    // Find and cancel the running command
+                    const runningCommands = this.statusTracker.getRunningCommands();
+                    const commandToCancel = runningCommands.find(cmd => cmd.command === message.data.action);
+                    if (commandToCancel) {
+                        this.commandCoordinator.cancelCommand(commandToCancel.id);
+                    }
+                }
+                break;
+
+            case 'clearOutput':
+                this._state.currentOutput = '';
+                this.updateWebview();
+                break;
         }
     }
 
@@ -177,43 +224,70 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private initializeActions(): Record<string, ActionButton> {
-        return {
-            aiDebug: {
-                id: 'aiDebug',
-                label: 'AI Debug Analysis',
-                icon: 'debug-alt',
-                status: 'idle',
-                enabled: true
-            },
-            nxTest: {
-                id: 'nxTest',
-                label: 'Run Tests',
-                icon: 'beaker',
-                status: 'idle',
-                enabled: true
-            },
-            gitDiff: {
-                id: 'gitDiff',
-                label: 'Analyze Changes',
-                icon: 'git-compare',
-                status: 'idle',
-                enabled: true
-            },
-            prepareToPush: {
-                id: 'prepareToPush',
-                label: 'Prepare to Push',
-                icon: 'rocket',
-                status: 'idle',
-                enabled: true
-            }
-        };
+        // Get initial action states from status tracker
+        return this.statusTracker.toActionButtons();
     }
 
-    private updateActionStatus(actionId: string, status: ActionButton['status']) {
-        const action = this._state.actions[actionId];
-        if (action) {
-            action.status = status;
-            action.lastRun = new Date();
+    private setupStatusTracking(): void {
+        // Listen for status changes and update action buttons
+        this.statusTracker.on('status_change', (event) => {
+            this._state.actions = this.statusTracker.toActionButtons();
+            this.updateWebview();
+        });
+
+        // Listen for history updates
+        this.statusTracker.on('history_updated', (entry) => {
+            // Could show notifications or update UI
+            this.updateWebview();
+        });
+    }
+
+    private setupStreamingHandlers(): void {
+        // Listen for streaming messages from command coordinator
+        this.commandCoordinator.on('streaming_message', (message: StreamingMessage) => {
+            this.handleStreamingMessage(message);
+        });
+
+        // Listen for queue updates
+        this.commandCoordinator.on('queue_update', (data) => {
+            // Could update UI to show queue status
+            this.updateWebview();
+        });
+    }
+
+    private handleStreamingMessage(message: StreamingMessage): void {
+        switch (message.type) {
+            case 'output':
+                if (message.data.text) {
+                    this._state.currentOutput += message.data.text;
+                }
+                break;
+
+            case 'error':
+                if (message.data.text) {
+                    this._state.currentOutput += `ERROR: ${message.data.text}`;
+                }
+                break;
+
+            case 'progress':
+                // Progress is handled by status tracker
+                break;
+
+            case 'status':
+                // Status updates are handled by status tracker
+                break;
+
+            case 'complete':
+                // Command completion is handled by status tracker
+                break;
+        }
+
+        // Send streaming update to webview
+        if (this._view) {
+            this._view.webview.postMessage({
+                command: 'streamingUpdate',
+                message
+            });
         }
     }
 
@@ -269,6 +343,34 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                         </div>
                     </div>
 
+                    <!-- Real-time output section -->
+                    <div class="streaming-output" id="streaming-section" style="display: none;">
+                        <div class="output-header">
+                            <h3>🔄 Live Output</h3>
+                            <div class="output-controls">
+                                <button id="cancel-command" class="cancel-button">❌ Cancel</button>
+                                <button id="clear-output" class="clear-button">🗑️ Clear</button>
+                            </div>
+                        </div>
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div id="progress-fill" class="progress-fill"></div>
+                            </div>
+                            <div id="progress-text" class="progress-text">Initializing...</div>
+                        </div>
+                        <div class="live-output" id="live-output">
+                            <!-- Real-time output will appear here -->
+                        </div>
+                    </div>
+
+                    <!-- Status tracking section -->
+                    <div class="status-section">
+                        <div class="status-summary">
+                            <span id="status-indicator" class="status-idle">⚪ Ready</span>
+                            <span id="queue-status" style="display: none;">Queue: 0</span>
+                        </div>
+                    </div>
+
                     <div class="results">
                         <div class="tabs">
                             <button class="tab-button active" data-tab="output">Output</button>
@@ -292,7 +394,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                             <div id="help-tab" class="tab-pane">
                                 <div class="help-content">
                                     <h3>AI Debug Utilities</h3>
-                                    <p>This extension provides AI-optimized debugging tools for Angular NX projects.</p>
+                                    <p>This extension provides AI-optimized debugging tools for Angular NX projects with advanced status tracking and real-time streaming.</p>
                                     
                                     <h4>Commands:</h4>
                                     <ul>
@@ -302,12 +404,44 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                                         <li><strong>Prepare to Push:</strong> Lint and format code</li>
                                     </ul>
                                     
+                                    <h4>Status Tracking Features:</h4>
+                                    <ul>
+                                        <li><strong>Real-time Progress:</strong> See command progress with visual indicators</li>
+                                        <li><strong>Command History:</strong> Track execution history and success rates</li>
+                                        <li><strong>Concurrent Execution:</strong> Run multiple commands simultaneously</li>
+                                        <li><strong>Queue Management:</strong> Commands are queued when at capacity</li>
+                                        <li><strong>Status Bar Integration:</strong> See active commands in VS Code status bar</li>
+                                        <li><strong>Cancellation Support:</strong> Stop long-running operations anytime</li>
+                                    </ul>
+                                    
+                                    <h4>Streaming Features:</h4>
+                                    <ul>
+                                        <li><strong>Live Output:</strong> See command output in real-time</li>
+                                        <li><strong>Progress Tracking:</strong> Visual progress bars with status messages</li>
+                                        <li><strong>Error Highlighting:</strong> Immediate feedback on errors</li>
+                                        <li><strong>Output Management:</strong> Clear output, cancel commands</li>
+                                    </ul>
+                                    
                                     <h4>Tips:</h4>
                                     <ul>
                                         <li>Select a project before running commands</li>
                                         <li>Use Ctrl+Shift+D to open this panel</li>
+                                        <li>Watch the live output for real-time feedback</li>
+                                        <li>Cancel commands anytime if they take too long</li>
+                                        <li>Check status bar for active command count</li>
                                         <li>Output files are saved to your configured directory</li>
                                         <li>Click on file names to open them in the editor</li>
+                                        <li>Multiple commands can run concurrently (up to 3 by default)</li>
+                                        <li>Commands are queued when hitting the concurrent limit</li>
+                                    </ul>
+                                    
+                                    <h4>Status Indicators:</h4>
+                                    <ul>
+                                        <li><strong>⚪ Ready:</strong> No commands running</li>
+                                        <li><strong>🔄 Running:</strong> Commands actively executing</li>
+                                        <li><strong>✅ Success:</strong> Last command completed successfully</li>
+                                        <li><strong>❌ Error:</strong> Last command failed</li>
+                                        <li><strong>🟡 Queued:</strong> Commands waiting to execute</li>
                                     </ul>
                                 </div>
                             </div>

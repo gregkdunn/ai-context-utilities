@@ -9,6 +9,7 @@ export class FileManager {
 
     constructor() {
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+        this.outputDirectory = ''; // Initialize with empty string
         this.updateOutputDirectory();
         
         // Listen for configuration changes
@@ -194,6 +195,106 @@ export class FileManager {
         return watcher;
     }
 
+    /**
+     * Initialize output files and return file paths
+     */
+    async initializeOutputFiles(types: string[]): Promise<Record<string, string>> {
+        this.ensureOutputDirectory();
+        const filePaths: Record<string, string> = {};
+        
+        for (const type of types) {
+            const fileName = this.getFileNameFromType(type);
+            filePaths[type] = path.join(this.outputDirectory, fileName);
+        }
+        
+        return filePaths;
+    }
+
+    /**
+     * Get output file path by filename
+     */
+    async getOutputFilePath(fileName: string): Promise<string> {
+        this.ensureOutputDirectory();
+        return path.join(this.outputDirectory, fileName);
+    }
+
+    /**
+     * Ensure a directory exists
+     */
+    async ensureDirectoryExists(dirPath: string): Promise<void> {
+        if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+        }
+    }
+
+    /**
+     * Delete a file if it exists
+     */
+    async deleteFile(filePath: string): Promise<void> {
+        try {
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        } catch (error) {
+            // Ignore errors when deleting files
+        }
+    }
+
+    /**
+     * Write content to a file
+     */
+    async writeFile(filePath: string, content: string): Promise<void> {
+        const dir = path.dirname(filePath);
+        await this.ensureDirectoryExists(dir);
+        fs.writeFileSync(filePath, content, 'utf8');
+    }
+
+    /**
+     * Read content from a file
+     */
+    async readFile(filePath: string): Promise<string> {
+        return fs.readFileSync(filePath, 'utf8');
+    }
+
+    /**
+     * Get file statistics
+     */
+    async getFileStats(filePath: string): Promise<{ size: string; lines: number }> {
+        try {
+            const stats = fs.statSync(filePath);
+            const content = fs.readFileSync(filePath, 'utf8');
+            const lines = content.split('\n').length;
+            const sizeKB = Math.round(stats.size / 1024);
+            
+            return {
+                size: `${sizeKB}KB`,
+                lines
+            };
+        } catch (error) {
+            return {
+                size: '0KB',
+                lines: 0
+            };
+        }
+    }
+
+    /**
+     * Get file name from type string
+     */
+    private getFileNameFromType(type: string): string {
+        switch (type) {
+            case 'ai-debug-context':
+                return 'ai-debug-context.txt';
+            case 'jest-output':
+                return 'jest-output.txt';
+            case 'diff':
+                return 'diff.txt';
+            case 'pr-description-prompt':
+                return 'pr-description-prompt.txt';
+            default:
+                return `${type}.txt`;
+        }
+    }
     /**
      * Get file name for output type
      */
