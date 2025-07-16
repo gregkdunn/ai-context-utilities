@@ -1,3 +1,5 @@
+// Enhanced types for real-time streaming functionality
+
 export interface NxProject {
     name: string;
     root: string;
@@ -31,10 +33,24 @@ export interface ActionButton {
     status: 'idle' | 'running' | 'success' | 'error';
     lastRun?: Date;
     enabled: boolean;
+    progress?: number; // 0-100 for progress indication
+}
+
+// New streaming-related types
+export interface StreamingMessage {
+    type: 'output' | 'error' | 'progress' | 'status' | 'complete';
+    data: {
+        text?: string;
+        progress?: number;
+        status?: string;
+        result?: CommandResult;
+        actionId?: string;
+    };
+    timestamp: Date;
 }
 
 export interface WebviewMessage {
-    command: 'runCommand' | 'getStatus' | 'openFile' | 'getProjects' | 'setProject';
+    command: 'runCommand' | 'getStatus' | 'openFile' | 'getProjects' | 'setProject' | 'cancelCommand' | 'clearOutput';
     data: {
         action?: 'aiDebug' | 'nxTest' | 'gitDiff' | 'prepareToPush';
         project?: string;
@@ -53,6 +69,10 @@ export interface WebviewState {
         timestamp: Date;
         success: boolean;
     };
+    // New streaming state
+    isStreaming: boolean;
+    currentOutput: string;
+    currentAction?: string;
 }
 
 export type OutputType = 'ai-debug-context' | 'jest-output' | 'diff' | 'pr-description';
@@ -71,4 +91,15 @@ export interface PRContext {
     formatApplied: boolean;
     changedFiles: string[];
     projectName: string;
+}
+
+// Event emitter interface for streaming
+export interface StreamingEventEmitter {
+    on(event: 'output', listener: (data: string) => void): void;
+    on(event: 'error', listener: (data: string) => void): void;
+    on(event: 'progress', listener: (progress: number) => void): void;
+    on(event: 'status', listener: (status: string) => void): void;
+    on(event: 'complete', listener: (result: CommandResult) => void): void;
+    emit(event: string, ...args: any[]): boolean;
+    removeAllListeners(): void;
 }

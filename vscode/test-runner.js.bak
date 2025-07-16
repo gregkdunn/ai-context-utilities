@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+
+const { execSync } = require('child_process');
+const path = require('path');
+
+const projectPath = '/Users/gregdunn/src/test/ai_debug_context/vscode';
+
+console.log('=== Testing TypeScript compilation ===');
+try {
+  process.chdir(projectPath);
+  execSync('npx tsc --noEmit', { stdio: 'inherit' });
+  console.log('✅ TypeScript compilation successful');
+} catch (error) {
+  console.error('❌ TypeScript compilation failed');
+  process.exit(1);
+}
+
+console.log('\n=== Running Jest tests ===');
+try {
+  execSync('npx jest --passWithNoTests', { stdio: 'inherit' });
+  console.log('✅ Jest tests passed');
+} catch (error) {
+  console.error('❌ Jest tests failed');
+  process.exit(1);
+}
+
+console.log('\n🎉 All tests passed!');
