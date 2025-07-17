@@ -421,3 +421,437 @@ export interface TestStatus {
     lastRun: Date;
     failingTests: TestResult[];
 }
+
+// Phase 4.4: Advanced Analytics Types
+
+// Analytics Engine Types
+export interface AnalyticsEvent {
+  id?: string;
+  type: string;
+  timestamp: Date;
+  userId: string;
+  sessionId?: string;
+  metadata: Record<string, any>;
+}
+
+export interface AnalyticsEngineConfig {
+  bufferSize?: number;
+  flushInterval?: number;
+  retentionDays?: number;
+  enablePredictiveAnalytics?: boolean;
+  enableRealTimeMonitoring?: boolean;
+}
+
+export interface Metrics {
+  timeRange: TimeRange;
+  commandExecutions: ExecutionMetrics;
+  performance: PerformanceMetrics;
+  errors: ErrorMetrics;
+  usage: UsageMetrics;
+  trends: TrendAnalysis;
+  predictions?: PredictionResult[];
+}
+
+export interface ExecutionMetrics {
+  total: number;
+  successful: number;
+  failed: number;
+  successRate: number;
+  averageExecutionTime: number;
+  mostUsedCommands: Array<{ command: string; count: number }>;
+  failurePatterns: Array<{ pattern: string; count: number }>;
+}
+
+export interface PerformanceMetrics {
+  averageResponseTime: number;
+  throughput: number;
+  errorRate: number;
+  memoryUsage: number;
+  cpuUsage: number;
+  slowestOperations: any[];
+}
+
+export interface ErrorMetrics {
+  total: number;
+  byType: Map<string, number>;
+  byComponent: Map<string, number>;
+  topErrors: Array<{ error: string; count: number }>;
+  resolutionRate: number;
+}
+
+export interface UsageMetrics {
+  activeUsers: number;
+  totalSessions: number;
+  averageSessionDuration: number;
+  featureUsage: Map<string, number>;
+  userJourney: Array<{ userId: string; actions: string[] }>;
+}
+
+export interface TrendAnalysis {
+  usage: any;
+  performance: any;
+  errors: any;
+  predictions: any[];
+}
+
+export interface MetricsSnapshot {
+  id: string;
+  timestamp: Date;
+  metrics: Map<string, MetricValue[]>;
+  systemMetrics: SystemMetrics;
+  collectionStats: any;
+  bufferStats: any;
+}
+
+export interface AnalyticsExportData {
+  metrics: Metrics;
+  events: AnalyticsEvent[];
+  dashboards: Dashboard[];
+  exportedAt: Date;
+  timeRange: TimeRange;
+  format: ReportFormat;
+}
+
+export type ReportFormat = 'json' | 'csv' | 'pdf';
+
+// Dashboard Types
+export interface Dashboard {
+  id: string;
+  name: string;
+  description?: string;
+  layout: DashboardLayout;
+  widgets: DashboardWidget[];
+  filters: DashboardFilter[];
+  theme?: string;
+  refreshInterval: number;
+  createdAt: Date;
+  updatedAt: Date;
+  isRealTime: boolean;
+  permissions?: DashboardPermission;
+  createdBy?: string;
+  tags?: string[];
+  isPublic?: boolean;
+}
+
+export interface DashboardConfig {
+  id?: string;
+  name: string;
+  description?: string;
+  layout?: DashboardLayout;
+  widgets?: WidgetConfig[];
+  filters?: DashboardFilter[];
+  theme?: string;
+  refreshInterval?: number;
+  isRealTime?: boolean;
+  permissions?: DashboardPermission;
+  createdBy?: string;
+  tags?: string[];
+  isPublic?: boolean;
+}
+
+export interface DashboardLayout {
+  type: 'grid' | 'flex' | 'masonry';
+  columns: number;
+  rows: number | 'auto';
+  gap: string;
+  padding: string;
+}
+
+export interface DashboardWidget {
+  id: string;
+  type: string;
+  title: string;
+  description?: string;
+  position: WidgetPosition;
+  configuration: Record<string, any>;
+  dataSource?: WidgetDataSource;
+  filters: DashboardFilter[];
+  refreshInterval: number;
+  isVisible: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  style: Record<string, any>;
+  interactions: Record<string, any>;
+}
+
+export interface WidgetConfig {
+  id?: string;
+  type: string;
+  title: string;
+  description?: string;
+  position?: WidgetPosition;
+  configuration?: Record<string, any>;
+  dataSource?: WidgetDataSource;
+  filters?: DashboardFilter[];
+  refreshInterval?: number;
+  isVisible?: boolean;
+  style?: Record<string, any>;
+  interactions?: Record<string, any>;
+}
+
+export interface WidgetPosition {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WidgetDataSource {
+  type: string;
+  query?: string;
+  parameters?: Record<string, any>;
+  url?: string;
+  headers?: Record<string, string>;
+}
+
+export interface DashboardFilter {
+  id: string;
+  type: 'text' | 'select' | 'multi-select' | 'date-range' | 'number-range';
+  label: string;
+  value: any;
+  options?: any[];
+  required?: boolean;
+}
+
+export interface DashboardPermission {
+  read: string[];
+  write: string[];
+}
+
+export interface WidgetData {
+  id: string;
+  type: string;
+  data: any;
+  metadata: {
+    lastUpdated: Date;
+    dataPoints: number;
+    source: string;
+    filters: DashboardFilter[];
+  };
+}
+
+export interface DashboardTheme {
+  id: string;
+  name: string;
+  colors: {
+    primary: string;
+    secondary: string;
+    success: string;
+    warning: string;
+    error: string;
+    background: string;
+    surface: string;
+    text: string;
+  };
+  fonts: {
+    body: string;
+    heading: string;
+    monospace: string;
+  };
+  spacing: {
+    small: string;
+    medium: string;
+    large: string;
+  };
+}
+
+export interface WidgetType {
+  id: string;
+  name: string;
+  category: string;
+}
+
+export interface RealTimeUpdate {
+  widgetId: string;
+  data: WidgetData;
+  timestamp: Date;
+}
+
+export interface DashboardExport {
+  dashboard: Dashboard;
+  format: 'json' | 'pdf' | 'png' | 'svg';
+  exportedAt: Date;
+  data: any;
+}
+
+export interface ChartConfiguration {
+  chartType: 'line' | 'bar' | 'pie' | 'scatter' | 'area';
+  xAxis?: string;
+  yAxis?: string;
+  series?: string[];
+  colors?: string[];
+  legend?: boolean;
+  animation?: boolean;
+}
+
+// Predictive Analytics Types
+export interface PredictiveConfig {
+  enableAnomalyDetection?: boolean;
+  enableTrendForecasting?: boolean;
+  enableRiskAssessment?: boolean;
+  modelUpdateInterval?: number;
+  anomalyThreshold?: number;
+  predictionHorizon?: number;
+  minTrainingDataSize?: number;
+  confidenceThreshold?: number;
+}
+
+export interface PredictionModel {
+  id: string;
+  name: string;
+  type: 'classification' | 'regression' | 'time_series' | 'unsupervised';
+  algorithm: string;
+  accuracy: number;
+  lastTrained: Date;
+  features: string[];
+  isActive: boolean;
+}
+
+export interface ModelTrainingData {
+  id: string;
+  timestamp: Date;
+  features: Record<string, number>;
+  label: number;
+  metadata: Record<string, any>;
+}
+
+export interface AnomalyDetectionResult {
+  id: string;
+  metric: string;
+  currentValue: number;
+  baseline: number;
+  deviation: number;
+  confidence: number;
+  severity: 'low' | 'medium' | 'high';
+  component: string;
+  detectedAt: Date;
+  description: string;
+}
+
+export interface ForecastResult {
+  id: string;
+  metric: string;
+  currentValue: number;
+  forecastValue: number;
+  trend: 'increasing' | 'decreasing' | 'stable';
+  confidence: number;
+  timeHorizon: number;
+  generatedAt: Date;
+  dataPoints: number;
+}
+
+export interface RiskAssessment {
+  overallRiskScore: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  criticalFactors: string[];
+  recommendations: string[];
+  predictions: PredictionResult[];
+  anomalies: AnomalyDetectionResult[];
+  assessedAt: Date;
+}
+
+// Metrics Collection Types
+export interface MetricsCollectionConfig {
+  bufferSize?: number;
+  flushInterval?: number;
+  enableSystemMetrics?: boolean;
+  systemMetricsInterval?: number;
+  enableCustomMetrics?: boolean;
+  maxMetricDefinitions?: number;
+  aggregationPeriods?: AggregationPeriod[];
+  retentionPeriod?: number;
+  enableMetricValidation?: boolean;
+  compressionEnabled?: boolean;
+}
+
+export interface MetricDefinition {
+  name: string;
+  type: 'counter' | 'gauge' | 'histogram' | 'summary';
+  unit: string;
+  description: string;
+  tags: string[];
+}
+
+export interface MetricValue {
+  name: string;
+  value: number;
+  timestamp: Date;
+  tags: Record<string, string>;
+  unit: string;
+  type: string;
+}
+
+export interface MetricAggregation {
+  metricName: string;
+  period: AggregationPeriod;
+  timestamp: Date;
+  count: number;
+  sum: number;
+  avg: number;
+  min: number;
+  max: number;
+  p50: number;
+  p90: number;
+  p95: number;
+  p99: number;
+}
+
+export interface CollectionRule {
+  id: string;
+  name: string;
+  condition: string;
+  action: 'sample' | 'throttle' | 'filter';
+  parameters?: Record<string, any>;
+  isActive: boolean;
+}
+
+export interface SystemMetrics {
+  timestamp: Date;
+  cpu: {
+    usage: number;
+    cores: number;
+    loadAverage: number[];
+  };
+  memory: {
+    total: number;
+    used: number;
+    free: number;
+    percentage: number;
+  };
+  disk: {
+    total: number;
+    used: number;
+    free: number;
+    percentage: number;
+  };
+  network: {
+    rx: number;
+    tx: number;
+    rxPackets: number;
+    txPackets: number;
+  };
+  processes: number;
+  uptime: number;
+}
+
+export interface CustomMetric {
+  name: string;
+  value: number;
+  tags: Record<string, string>;
+  timestamp: Date;
+}
+
+export interface MetricFilter {
+  name?: string;
+  tags?: Record<string, string>;
+  timeRange?: TimeRange;
+  valueRange?: {
+    min?: number;
+    max?: number;
+  };
+}
+
+export type AggregationPeriod = '1m' | '5m' | '1h' | '1d';
+
+// Export plugin types
+export * from './plugin';

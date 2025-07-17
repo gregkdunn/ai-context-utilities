@@ -5,10 +5,16 @@ import { CommandRunner } from './utils/shellRunner';
 import { FileManager } from './utils/fileManager';
 import { StatusTracker } from './utils/statusTracker';
 import { CommandCoordinator } from './utils/commandCoordinator';
+import { PluginManager } from './services/plugins/pluginManager';
+import { PluginMarketplaceService } from './services/plugins/pluginMarketplace';
+import { PluginDiscoveryService } from './services/plugins/pluginDiscovery';
 
 let webviewProvider: WebviewProvider;
 let statusTracker: StatusTracker;
 let commandCoordinator: CommandCoordinator;
+let pluginManager: PluginManager;
+let pluginMarketplace: PluginMarketplaceService;
+let pluginDiscovery: PluginDiscoveryService;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('AI Debug Utilities extension is now active');
@@ -22,6 +28,12 @@ export async function activate(context: vscode.ExtensionContext) {
         // Initialize status tracking and coordination
         statusTracker = new StatusTracker(context);
         commandCoordinator = new CommandCoordinator(statusTracker, context);
+
+        // Initialize plugin system
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+        pluginManager = new PluginManager(context, workspaceRoot);
+        pluginMarketplace = new PluginMarketplaceService(context);
+        pluginDiscovery = new PluginDiscoveryService(context);
 
         // Check if this is an NX workspace
         const isNxWorkspace = await projectDetector.findNxWorkspace();
@@ -46,7 +58,7 @@ export async function activate(context: vscode.ExtensionContext) {
             );
 
             // Register commands
-            registerCommands(context, webviewProvider, projectDetector, commandRunner, fileManager, statusTracker, commandCoordinator);
+            registerCommands(context, webviewProvider, projectDetector, commandRunner, fileManager, statusTracker, commandCoordinator, pluginManager, pluginMarketplace);
             
             console.log('AI Debug Utilities: NX workspace detected, extension fully activated');
             
@@ -79,7 +91,9 @@ function registerCommands(
     commandRunner: CommandRunner,
     fileManager: FileManager,
     statusTracker: StatusTracker,
-    commandCoordinator: CommandCoordinator
+    commandCoordinator: CommandCoordinator,
+    pluginManager: PluginManager,
+    pluginMarketplace: PluginMarketplaceService
 ) {
     // Open panel command
     const openPanelCommand = vscode.commands.registerCommand('aiDebugUtilities.openPanel', () => {
@@ -144,7 +158,164 @@ function registerCommands(
                 <div class="report">${report.replace(/\n/g, '<br>')}</div>
             </body>
             </html>
-        `;
+        `;  
+        });
+
+    // Plugin management commands
+    const pluginManagerCommand = vscode.commands.registerCommand('aiDebugUtilities.pluginManager', async () => {
+        const plugins = pluginManager.getAll();
+        const items = plugins.map(plugin => ({
+            label: plugin.metadata.name,
+            description: plugin.metadata.description,
+            detail: `v${plugin.metadata.version} - ${plugin.metadata.author}`,
+            plugin
+        }));
+        
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a plugin to manage',
+            canPickMany: false
+        });
+        
+        if (selected) {
+            const actions = [
+                { label: 'Enable/Disable', action: 'toggle' },
+                { label: 'View Details', action: 'details' },
+                { label: 'Uninstall', action: 'uninstall' }
+            ];
+            
+            const action = await vscode.window.showQuickPick(actions, {
+                placeHolder: `What would you like to do with ${selected.plugin.metadata.name}?`
+            });
+            
+            if (action) {
+                switch (action.action) {
+                    case 'toggle':
+                        if (pluginManager.isEnabled(selected.plugin.metadata.id)) {
+                            await pluginManager.disable(selected.plugin.metadata.id);
+                            vscode.window.showInformationMessage(`${selected.plugin.metadata.name} disabled`);
+                        } else {
+                            await pluginManager.enable(selected.plugin.metadata.id);
+                            vscode.window.showInformationMessage(`${selected.plugin.metadata.name} enabled`);
+                        }
+                        break;
+                    case 'details':
+                        const details = `# ${selected.plugin.metadata.name}\n\n` +
+                            `**Version:** ${selected.plugin.metadata.version}\n` +
+                            `**Author:** ${selected.plugin.metadata.author}\n` +
+                            `**Description:** ${selected.plugin.metadata.description}\n\n` +
+                            `**Capabilities:**\n` +
+                            selected.plugin.metadata.capabilities.map(cap => `- ${cap.name}: ${cap.description}`).join('\n');
+                        
+                        const doc = await vscode.workspace.openTextDocument({
+                            content: details,
+                            language: 'markdown'
+                        });
+                        await vscode.window.showTextDocument(doc);
+                        break;
+                    case 'uninstall':
+                        const confirm = await vscode.window.showWarningMessage(
+                            `Are you sure you want to uninstall ${selected.plugin.metadata.name}?`,
+                            { modal: true },
+                            'Yes', 'No'
+                        );
+                        if (confirm === 'Yes') {
+                            await pluginManager.unregister(selected.plugin.metadata.id);
+                            vscode.window.showInformationMessage(`${selected.plugin.metadata.name} uninstalled`);
+                        }
+                        break;
+                }
+            }
+        }
+    });
+
+    const pluginMarketplaceCommand = vscode.commands.registerCommand('aiDebugUtilities.pluginMarketplace', async () => {
+        const query = await vscode.window.showInputBox({
+            prompt: 'Search for plugins',
+            placeHolder: 'Enter search terms (e.g., "git", "test", "ai")',
+            value: ''
+        });
+        
+        if (query !== undefined) {
+            const plugins = await pluginMarketplace.searchPlugins(query || '');
+            const items = plugins.map(plugin => ({
+                label: plugin.name,
+                description: plugin.description,
+                detail: `v${plugin.version} - ${plugin.author} (${plugin.downloads} downloads, ${plugin.rating}/5 stars)`,
+                plugin
+            }));
+            
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a plugin to install',
+                canPickMany: false
+            });
+            
+            if (selected) {
+                const actions = [
+                    { label: 'Install', action: 'install' },
+                    { label: 'View Details', action: 'details' }
+                ];
+                
+                const action = await vscode.window.showQuickPick(actions, {
+                    placeHolder: `What would you like to do with ${selected.plugin.name}?`
+                });
+                
+                if (action) {
+                    switch (action.action) {
+                        case 'install':
+                            try {
+                                await pluginMarketplace.installPlugin(selected.plugin.id);
+                                vscode.window.showInformationMessage(`${selected.plugin.name} installed successfully!`);
+                            } catch (error) {
+                                vscode.window.showErrorMessage(`Failed to install ${selected.plugin.name}: ${error.message}`);
+                            }
+                            break;
+                        case 'details':
+                            const details = `# ${selected.plugin.name}\n\n` +
+                                `**Version:** ${selected.plugin.version}\n` +
+                                `**Author:** ${selected.plugin.author}\n` +
+                                `**Description:** ${selected.plugin.description}\n` +
+                                `**Downloads:** ${selected.plugin.downloads}\n` +
+                                `**Rating:** ${selected.plugin.rating}/5\n\n` +
+                                `**Tags:** ${selected.plugin.tags.join(', ')}\n\n` +
+                                `**README:**\n${selected.plugin.readme}`;
+                            
+                            const doc = await vscode.workspace.openTextDocument({
+                                content: details,
+                                language: 'markdown'
+                            });
+                            await vscode.window.showTextDocument(doc);
+                            break;
+                    }
+                }
+            }
+        }
+    });
+
+    const runPluginCommand = vscode.commands.registerCommand('aiDebugUtilities.runPluginCommand', async () => {
+        const plugins = pluginManager.getAll().filter(p => pluginManager.isEnabled(p.metadata.id));
+        const commands = plugins.flatMap(plugin => 
+            (plugin.commands || []).map(cmd => ({
+                label: cmd.title,
+                description: cmd.description,
+                detail: `Plugin: ${plugin.metadata.name}`,
+                pluginId: plugin.metadata.id,
+                commandId: cmd.id
+            }))
+        );
+        
+        const selected = await vscode.window.showQuickPick(commands, {
+            placeHolder: 'Select a plugin command to run',
+            canPickMany: false
+        });
+        
+        if (selected) {
+            try {
+                const result = await pluginManager.executePluginCommand(selected.pluginId, selected.commandId);
+                vscode.window.showInformationMessage(`Command executed successfully: ${selected.label}`);
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to execute command: ${error.message}`);
+            }
+        }
     });
 
     const clearHistoryCommand = vscode.commands.registerCommand('aiDebugUtilities.clearHistory', async () => {
@@ -200,7 +371,10 @@ function registerCommands(
         showStatusCommand,
         clearHistoryCommand,
         cancelAllCommand,
-        healthReportCommand
+        healthReportCommand,
+        pluginManagerCommand,
+        pluginMarketplaceCommand,
+        runPluginCommand
     );
 }
 
@@ -214,5 +388,17 @@ export function deactivate() {
     
     if (commandCoordinator) {
         commandCoordinator.dispose();
+    }
+    
+    // Clean up plugin system
+    if (pluginManager) {
+        const allPlugins = pluginManager.getAll();
+        for (const plugin of allPlugins) {
+            if (pluginManager.isEnabled(plugin.metadata.id)) {
+                pluginManager.disable(plugin.metadata.id).catch(error => {
+                    console.error(`Failed to disable plugin ${plugin.metadata.id}:`, error);
+                });
+            }
+        }
     }
 }
