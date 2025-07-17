@@ -15,6 +15,11 @@ import {
     InsightContext
 } from '../../types';
 
+// Phase 4.2 Enhanced Engines
+import { IntelligentSuggestionsEngine } from './engines/intelligentSuggestionsEngine';
+import { AutomatedInsightsEngine } from './engines/automatedInsightsEngine';
+import { NaturalLanguageQueryEngine } from './engines/naturalLanguageQueryEngine';
+
 /**
  * AIInsightsEngine provides AI-powered insights and recommendations for debugging workflows
  * Phase 4.2: Intelligent command suggestions, pattern analysis, and workflow optimization
@@ -25,8 +30,22 @@ export class AIInsightsEngine implements IAIInsightsEngine {
     private suggestionCache: Map<string, CommandSuggestion[]> = new Map();
     private readonly cacheTimeout = 300000; // 5 minutes
 
+    // Phase 4.2 Enhanced Engines
+    private intelligentSuggestionsEngine: IntelligentSuggestionsEngine;
+    private automatedInsightsEngine: AutomatedInsightsEngine;
+    private naturalLanguageQueryEngine: NaturalLanguageQueryEngine;
+    private readonly phase42Enabled = true;
+
     constructor(private context: vscode.ExtensionContext) {
         this.initializeEngine();
+        
+        // Initialize Phase 4.2 engines
+        if (this.phase42Enabled) {
+            this.intelligentSuggestionsEngine = new IntelligentSuggestionsEngine(context);
+            this.automatedInsightsEngine = new AutomatedInsightsEngine(context);
+            this.naturalLanguageQueryEngine = new NaturalLanguageQueryEngine(context);
+            console.log('Phase 4.2 AI engines initialized successfully');
+        }
     }
 
     private initializeEngine(): void {
@@ -45,14 +64,22 @@ export class AIInsightsEngine implements IAIInsightsEngine {
         const insights: Insight[] = [];
         
         try {
-            const performanceInsights = await this.analyzePerformancePatterns(data);
-            insights.push(...performanceInsights);
+            // Phase 4.2: Use enhanced automated insights engine
+            if (this.phase42Enabled && this.automatedInsightsEngine) {
+                const enhancedInsights = await this.automatedInsightsEngine.generateAutomatedInsights(data);
+                insights.push(...enhancedInsights);
+                console.log(`Phase 4.2: Generated ${enhancedInsights.length} enhanced insights`);
+            } else {
+                // Fallback to legacy analysis
+                const performanceInsights = await this.analyzePerformancePatterns(data);
+                insights.push(...performanceInsights);
 
-            const errorInsights = await this.analyzeErrorPatterns(data);
-            insights.push(...errorInsights);
+                const errorInsights = await this.analyzeErrorPatterns(data);
+                insights.push(...errorInsights);
 
-            const testInsights = await this.analyzeTestPatterns(data);
-            insights.push(...testInsights);
+                const testInsights = await this.analyzeTestPatterns(data);
+                insights.push(...testInsights);
+            }
 
             this.insightCache.set(cacheKey, insights);
             console.log(`Generated ${insights.length} insights from pattern analysis`);
@@ -74,11 +101,19 @@ export class AIInsightsEngine implements IAIInsightsEngine {
         const suggestions: CommandSuggestion[] = [];
         
         try {
-            const contextSuggestions = await this.generateContextBasedSuggestions(context);
-            suggestions.push(...contextSuggestions);
+            // Phase 4.2: Use intelligent suggestions engine
+            if (this.phase42Enabled && this.intelligentSuggestionsEngine) {
+                const intelligentSuggestions = await this.intelligentSuggestionsEngine.generateIntelligentSuggestions(context);
+                suggestions.push(...intelligentSuggestions);
+                console.log(`Phase 4.2: Generated ${intelligentSuggestions.length} intelligent suggestions`);
+            } else {
+                // Fallback to legacy suggestions
+                const contextSuggestions = await this.generateContextBasedSuggestions(context);
+                suggestions.push(...contextSuggestions);
+            }
 
             suggestions.sort((a, b) => b.confidence - a.confidence);
-            const topSuggestions = suggestions.slice(0, 5);
+            const topSuggestions = suggestions.slice(0, 8); // Increased from 5 to 8 for Phase 4.2
             
             this.suggestionCache.set(contextKey, topSuggestions);
             console.log(`Generated ${topSuggestions.length} command suggestions`);
@@ -122,25 +157,33 @@ export class AIInsightsEngine implements IAIInsightsEngine {
         }
     }
 
-    async processNaturalLanguageQuery(query: string): Promise<QueryResult> {
+    async processNaturalLanguageQuery(query: string, context?: AnalysisData): Promise<QueryResult> {
         try {
-            const intent = await this.parseQueryIntent(query);
-            const entities = await this.extractQueryEntities(query);
-            const response = await this.generateQueryResponse(intent, entities, query);
-            const suggestedActions = await this.generateQueryActions(intent, entities);
-            const data = await this.fetchQueryData(intent, entities);
-            
-            const result: QueryResult = {
-                intent,
-                entities,
-                confidence: this.calculateQueryConfidence(intent, entities),
-                response,
-                suggestedActions,
-                data
-            };
-            
-            console.log(`Processed natural language query: "${query}"`);
-            return result;
+            // Phase 4.2: Use enhanced natural language query engine
+            if (this.phase42Enabled && this.naturalLanguageQueryEngine) {
+                const enhancedResult = await this.naturalLanguageQueryEngine.processQuery(query, context);
+                console.log(`Phase 4.2: Processed query with ${enhancedResult.confidence.toFixed(2)} confidence`);
+                return enhancedResult;
+            } else {
+                // Fallback to legacy NLP processing
+                const intent = await this.parseQueryIntent(query);
+                const entities = await this.extractQueryEntities(query);
+                const response = await this.generateQueryResponse(intent, entities, query);
+                const suggestedActions = await this.generateQueryActions(intent, entities);
+                const data = await this.fetchQueryData(intent, entities);
+                
+                const result: QueryResult = {
+                    intent,
+                    entities,
+                    confidence: this.calculateQueryConfidence(intent, entities),
+                    response,
+                    suggestedActions,
+                    data
+                };
+                
+                console.log(`Processed natural language query: "${query}"`);
+                return result;
+            }
             
         } catch (error) {
             console.error('Error processing natural language query:', error);
@@ -561,7 +604,86 @@ export class AIInsightsEngine implements IAIInsightsEngine {
         return 'Optimization based on command usage patterns and historical performance data';
     }
 
+    /**
+     * Phase 4.2: Get query suggestions based on context
+     */
+    async getQuerySuggestions(context?: AnalysisData): Promise<string[]> {
+        if (this.phase42Enabled && this.naturalLanguageQueryEngine) {
+            return this.naturalLanguageQueryEngine.getQuerySuggestions(context);
+        }
+        
+        // Fallback suggestions
+        return [
+            "Show me failing tests",
+            "What errors are most common?",
+            "How can I improve performance?",
+            "Show recent changes"
+        ];
+    }
+
+    /**
+     * Phase 4.2: Analyze command execution patterns for learning
+     */
+    async analyzeExecutionPatterns(executions: CommandExecution[]): Promise<void> {
+        if (this.phase42Enabled && this.intelligentSuggestionsEngine) {
+            await this.intelligentSuggestionsEngine.analyzeExecutionPatterns(executions);
+            console.log(`Phase 4.2: Analyzed ${executions.length} execution patterns`);
+        }
+    }
+
+    /**
+     * Phase 4.2: Predict command success based on context
+     */
+    async predictCommandSuccess(context: ExecutionContext): Promise<Map<string, any>> {
+        if (this.phase42Enabled && this.intelligentSuggestionsEngine) {
+            return this.intelligentSuggestionsEngine.predictCommandSuccess(context);
+        }
+        
+        return new Map();
+    }
+
+    /**
+     * Phase 4.2: Get learning analytics from query patterns
+     */
+    async getQueryAnalytics(): Promise<any> {
+        if (this.phase42Enabled && this.naturalLanguageQueryEngine) {
+            return this.naturalLanguageQueryEngine.analyzeQueryPatterns();
+        }
+        
+        return { patterns: [], insights: [] };
+    }
+
+    /**
+     * Phase 4.2: Save all engine states and patterns
+     */
+    async saveEngineStates(): Promise<void> {
+        try {
+            if (this.phase42Enabled) {
+                await Promise.all([
+                    this.intelligentSuggestionsEngine?.savePatterns(),
+                    this.automatedInsightsEngine?.saveInsightHistory(),
+                    this.naturalLanguageQueryEngine?.saveQueryHistory()
+                ]);
+                console.log('Phase 4.2: All engine states saved successfully');
+            }
+        } catch (error) {
+            console.error('Error saving engine states:', error);
+        }
+    }
+
     dispose(): void {
+        // Save state before disposing
+        this.saveEngineStates();
+        
+        // Dispose Phase 4.2 engines
+        if (this.phase42Enabled) {
+            this.intelligentSuggestionsEngine?.dispose();
+            this.automatedInsightsEngine?.dispose();
+            this.naturalLanguageQueryEngine?.dispose();
+            console.log('Phase 4.2 engines disposed');
+        }
+        
+        // Clear legacy caches
         this.insightCache.clear();
         this.patternHistory.clear();
         this.suggestionCache.clear();
