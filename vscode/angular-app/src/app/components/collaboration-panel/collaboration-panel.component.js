@@ -1,0 +1,32 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const core_1 = require("@angular/core");
+nimport;
+{
+    CommonModule;
+}
+from;
+'@angular/common';
+nimport;
+{
+    FormsModule;
+}
+from;
+'@angular/forms';
+nimport;
+{
+    WebviewService;
+}
+from;
+'../../services/webview.service';
+n;
+n; /**\n * CollaborationPanelComponent - Phase 4.1 Real-time Collaboration UI\n * Provides interface for creating, joining, and managing collaboration sessions\n */
+n;
+nexport;
+class CollaborationPanelComponent {
+    n;
+    webviewService = (0, core_1.inject)(WebviewService);
+    n;
+    n;
+} // Signals for reactive state management\n  showCreateSession = signal(false);\n  joinSessionId = signal('');\n  aiQuery = signal('');\n  aiResponse = signal<any>(null);\n  commandSuggestions = signal<any[]>([]);\n  isProcessingQuery = signal(false);\n  \n  // New session form data\n  newSession = {\n    name: '',\n    description: '',\n    maxParticipants: 5,\n    duration: 240,\n    permissions: {\n      canExecuteCommands: true,\n      canEditFiles: false,\n      canAddAnnotations: true,\n      canInviteOthers: true\n    },\n    autoShareCommands: true\n  };\n  \n  ngOnInit() {\n    this.loadCommandSuggestions();\n    \n    // Set up periodic refresh\n    setInterval(() => {\n      this.loadCommandSuggestions();\n    }, 10000);\n  }\n  \n  ngOnDestroy() {\n    // Cleanup handled automatically\n  }\n  \n  async createSession() {\n    if (!this.newSession.name.trim()) return;\n    \n    try {\n      await this.webviewService.postMessage('createCollaborationSession', this.newSession);\n      \n      // Reset form\n      this.newSession.name = '';\n      this.newSession.description = '';\n      this.showCreateSession.set(false);\n      \n      console.log('Collaboration session created successfully');\n      \n    } catch (error) {\n      console.error('Failed to create session:', error);\n    }\n  }\n  \n  async joinSession() {\n    const sessionId = this.joinSessionId().trim();\n    if (!sessionId) return;\n    \n    try {\n      await this.webviewService.postMessage('joinCollaborationSession', { sessionId });\n      this.joinSessionId.set('');\n      \n      console.log('Joined collaboration session successfully');\n      \n    } catch (error) {\n      console.error('Failed to join session:', error);\n    }\n  }\n  \n  async processAIQuery() {\n    const query = this.aiQuery().trim();\n    if (!query) return;\n    \n    this.isProcessingQuery.set(true);\n    \n    try {\n      // Simulate AI processing\n      await new Promise(resolve => setTimeout(resolve, 1500));\n      \n      const mockResponse = {\n        response: this.generateMockResponse(query),\n        suggestedActions: this.generateMockActions(query)\n      };\n      \n      this.aiResponse.set(mockResponse);\n      this.aiQuery.set('');\n      \n    } catch (error) {\n      console.error('Failed to process AI query:', error);\n      this.aiResponse.set({\n        response: 'Sorry, I encountered an error processing your query. Please try again.',\n        suggestedActions: []\n      });\n    } finally {\n      this.isProcessingQuery.set(false);\n    }\n  }\n  \n  async executeAIAction(action: any) {\n    try {\n      await this.webviewService.postMessage('executeAIAction', { action });\n      console.log('Executed AI action:', action.title);\n    } catch (error) {\n      console.error('Failed to execute AI action:', error);\n    }\n  }\n  \n  async executeSuggestion(suggestion: any) {\n    try {\n      await this.webviewService.postMessage('executeCommandSuggestion', { suggestion });\n      console.log('Executed suggestion:', suggestion.command);\n    } catch (error) {\n      console.error('Failed to execute suggestion:', error);\n    }\n  }\n  \n  private async loadCommandSuggestions() {\n    // Mock suggestions for demo\n    const mockSuggestions = [\n      {\n        command: 'nxTest',\n        reason: 'Files changed in core module',\n        confidence: 0.85,\n        estimatedImpact: 'high'\n      },\n      {\n        command: 'gitDiff',\n        reason: 'Uncommitted changes detected',\n        confidence: 0.92,\n        estimatedImpact: 'medium'\n      }\n    ];\n    \n    this.commandSuggestions.set(mockSuggestions);\n  }\n  \n  private generateMockResponse(query: string): string {\n    const lowerQuery = query.toLowerCase();\n    \n    if (lowerQuery.includes('test')) {\n      return 'I can see you\\'re asking about tests. Your current test suite has a 94% pass rate with 3 failing tests in the user authentication module. The average test execution time is 2.3 seconds.';\n    }\n    \n    if (lowerQuery.includes('performance')) {\n      return 'Performance analysis shows your debugging workflow is 15% slower than optimal. The main bottleneck is in the test execution phase, taking an average of 45 seconds.';\n    }\n    \n    if (lowerQuery.includes('error')) {\n      return 'I\\'ve identified 3 recurring error patterns in your recent sessions. The most frequent is \"Module not found\" errors, occurring 8 times in the last week.';\n    }\n    \n    return 'I can help you analyze your debugging patterns, suggest workflow optimizations, and provide insights about your development process. What specific aspect would you like to explore?';\n  }\n  \n  private generateMockActions(query: string): any[] {\n    const lowerQuery = query.toLowerCase();\n    \n    if (lowerQuery.includes('test')) {\n      return [\n        {\n          id: '1',\n          title: 'Run Failing Tests',\n          description: 'Execute only the 3 failing tests to debug issues'\n        },\n        {\n          id: '2',\n          title: 'Generate Test Report',\n          description: 'Create detailed analysis of test failures'\n        }\n      ];\n    }\n    \n    if (lowerQuery.includes('performance')) {\n      return [\n        {\n          id: '3',\n          title: 'Optimize Test Selection',\n          description: 'Run focused tests to reduce execution time'\n        }\n      ];\n    }\n    \n    return [\n      {\n        id: '4',\n        title: 'Analyze Patterns',\n        description: 'Generate comprehensive workflow analysis'\n      }\n    ];\n  }\n}\n
+//# sourceMappingURL=collaboration-panel.component.js.map
