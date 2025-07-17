@@ -13,10 +13,12 @@ export function activate(context: vscode.ExtensionContext) {
   const nxManager = new NxAffectedManager(context);
   const gitManager = new GitDiffManager(context);
   const configManager = new ConfigurationManager(context);
+  const flipperManager = new FlipperDetectionManager(context);
   
   // Register command providers
   const nxProvider = new NxCommandProvider(nxManager);
   const gitProvider = new GitCommandProvider(gitManager);
+  const flipperProvider = new FlipperCommandProvider(flipperManager);
   
   // Setup UI components
   const statusBar = new ExtensionStatusBar(context);
@@ -26,6 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     ...nxProvider.register(),
     ...gitProvider.register(),
+    ...flipperProvider.register(),
     statusBar,
     vscode.window.createTreeView('nxProjects', { treeDataProvider: treeView })
   );
@@ -39,10 +42,12 @@ src/
 ├── managers/
 │   ├── NxAffectedManager.ts    # NX affected logic
 │   ├── GitDiffManager.ts       # Git diff operations
+│   ├── FlipperDetectionManager.ts # Flipper pattern detection
 │   └── ConfigurationManager.ts # Settings management
 ├── providers/
 │   ├── NxCommandProvider.ts    # NX command registration
 │   ├── GitCommandProvider.ts   # Git command registration
+│   ├── FlipperCommandProvider.ts # Flipper command registration
 │   └── ProjectTreeProvider.ts  # Tree view data provider
 ├── ui/
 │   ├── StatusBar.ts            # Status bar integration
@@ -51,6 +56,7 @@ src/
 ├── utils/
 │   ├── CommandExecutor.ts      # Safe command execution
 │   ├── GitUtils.ts             # Git helper functions
+│   ├── FlipperPatterns.ts      # Flipper detection patterns
 │   └── ValidationUtils.ts      # Input validation
 └── test/
     ├── unit/                   # Unit tests
@@ -224,6 +230,16 @@ export class WorkspaceDetector {
           "minimum": 1,
           "maximum": 10,
           "description": "Number of parallel executions for affected commands"
+        },
+        "flipperDetection.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Flipper feature flag detection"
+        },
+        "flipperDetection.includePRSection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include Flipper section in PR descriptions"
         }
       }
     }
@@ -238,6 +254,7 @@ export class WorkspaceDetector {
 export class ExtensionStatusBar {
   private statusBarItem: vscode.StatusBarItem;
   private affectedCount: number = 0;
+  private flipperCount: number = 0;
   
   constructor(private context: vscode.ExtensionContext) {
     this.statusBarItem = vscode.window.createStatusBarItem(
@@ -253,10 +270,19 @@ export class ExtensionStatusBar {
     this.affectedCount = count;
     this.updateStatusBar();
   }
+
+  updateFlipperCount(count: number) {
+    this.flipperCount = count;
+    this.updateStatusBar();
+  }
   
   private updateStatusBar() {
-    this.statusBarItem.text = `$(gear) NX (${this.affectedCount} affected)`;
-    this.statusBarItem.tooltip = `${this.affectedCount} projects affected by recent changes`;
+    const statusParts = [`$(gear) NX (${this.affectedCount} affected)`];
+    if (this.flipperCount > 0) {
+      statusParts.push(`$(settings-gear) ${this.flipperCount} flippers`);
+    }
+    this.statusBarItem.text = statusParts.join(' | ');
+    this.statusBarItem.tooltip = `${this.affectedCount} projects affected by recent changes${this.flipperCount > 0 ? `, ${this.flipperCount} flipper changes detected` : ''}`;
   }
 }
 ```
@@ -440,6 +466,410 @@ export class BranchComparisonProvider {
 }
 ```
 
+## Feature 3: Flipper Detection Implementation
+
+### Core Flipper Detection Service
+
+Based on your specific requirements, here's the comprehensive Flipper detection integrated into Git Diff analysis:
+
+```typescript
+export class FlipperDetectionManager {
+  private broadPatterns: FlipperBroadPattern[];
+  private cache = new Map<string, FlipperDetectionResult>();
+  
+  constructor(private context: vscode.ExtensionContext) {
+    this.initializeBroadPatterns();
+    this.setupFileWatcher();
+  }
+  
+  private initializeBroadPatterns() {
+    this.broadPatterns = [
+      // 1. FlipperService imports and dependencies
+      {
+        type: 'import',
+        pattern: /import\s+.*FlipperService.*from\s+['"]@callrail\/looky\/core['"]/g,
+        description: 'FlipperService import',
+        extractFlag: false
+      },
+      {
+        type: 'import',
+        pattern: /import\s+.*FlipperFlags.*from.*flipper-flags/g,
+        description: 'FlipperFlags type import',
+        extractFlag: false
+      },
+      {
+        type: 'injection',
+        pattern: /constructor\([^)]*FlipperService[^)]*\)/g,
+        description: 'FlipperService dependency injection',
+        extractFlag: false
+      },
+      
+      // 2. Direct method calls with flag extraction
+      {
+        type: 'method_call',
+        pattern: /\.flipperEnabled\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
+        description: 'flipperEnabled() method call',
+        extractFlag: true
+      },
+      {
+        type: 'method_call',
+        pattern: /\.eagerlyEnabled\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g,
+        description: 'eagerlyEnabled() method call',
+        extractFlag: true
+      },
+      
+      // 3. Observable patterns from FlipperService
+      {
+        type: 'observable',
+        pattern: /(\w+)\$:\s*Observable<boolean>\s*=\s*this\.flipper\$\.pipe\(/g,
+        description: 'Flipper observable declaration',
+        extractFlag: true,
+        flagIndex: 1
+      },
+      {
+        type: 'observable',
+        pattern: /\.pipe\(\s*map\(\s*\([^)]*\)\s*=>\s*[^.]*\.isEnabled\s*\(\s*['"`]([^'"`]+)['"`]\s*\)\s*\)/g,
+        description: 'Feature flag check in observable pipe',
+        extractFlag: true
+      },
+      
+      // 4. Specific pre-defined observables from actual FlipperService
+      {
+        type: 'predefined_observable',
+        pattern: /(zuoraMaintenance|reportingNoop|acceleratedCallLog|otherHomepage|fullstory|cursorPaginateAcceleratedCallLog)\$/g,
+        description: 'Pre-defined flipper observable usage',
+        extractFlag: true,
+        flagMapping: {
+          'zuoraMaintenance': 'zuora_maintenance',
+          'reportingNoop': 'reporting_noop',
+          'acceleratedCallLog': 'accelerated_call_log',
+          'otherHomepage': 'other_homepage',
+          'fullstory': 'allow_fullstory_tracking',
+          'cursorPaginateAcceleratedCallLog': 'cursor_paginate_accelerated_call_log'
+        }
+      },
+      
+      // 5. Configuration and setup patterns
+      {
+        type: 'configuration',
+        pattern: /loadFlippers\s*\([^)]*\)/g,
+        description: 'Flipper configuration loading',
+        extractFlag: false
+      },
+      {
+        type: 'configuration',
+        pattern: /enabledFlippers\s*\([^)]*\)/g,
+        description: 'Flipper enablement configuration',
+        extractFlag: false
+      },
+      
+      // 6. Feature flag string literals (comprehensive list)
+      {
+        type: 'flag_literal',
+        pattern: /['"`](zuora_maintenance|pendo_resource_center|support_chat|show_cc_link_to_pending|show_call_tracking_migration_alert|ci_forms_incentive|reporting_noop|internal_calling|add_remove_lc_agents_ux|zuora_qa|account_billing_usage|use_inti|use_inti_for_bulk_google_adword|use_inti_for_my_case|use_inti_for_unbounce|apple_business_connect|use_inti_for_triggers|use_inti_for_hub_spot|use_inti_for_slack|use_inti_for_ms_teams|other_homepage|accelerated_call_log|homey_enabled|limit_client_view|rollout_anubis|allow_fullstory_tracking|new_numbers_page|cursor_paginate_accelerated_call_log|homepage_onboarding|ai_alpha_action_items|pre_ten_dlc_in_app_messaging|ai_alpha_new_or_existing_customer|ai_alpha_appointment_scheduled|ai_alpha_ai_coach|override_days_to_renewal|ai_alpha_questions_asked|ai_alpha_caller_details|ai_alpha_follow_up_email|ai_alpha_lead_qualification|ai_alpha_led_to_sale|pendo_segmentation|product_tier|prosperstack_flow|ai_alphas_white_label|kyc_registration_live|accelerated_reports|ai_alpha_lead_score|inbound_call_recording|year_end_metrics|click_to_contact_dynamic|account_deletion_ui|sa_update_plans_looky|automation_rule_new_criterias|business_profile_page|smart-follow-up-message-new-tag|voice_assist_workflow_page|native_10dlc_registration|hubspot_e164|voice_assist_select|voice_assist_test_call|automation_rules_templates)['"`]/g,
+        description: 'Feature flag string literal',
+        extractFlag: true
+      },
+      
+      // 7. Conditional patterns
+      {
+        type: 'conditional',
+        pattern: /if\s*\([^)]*\.(?:flipperEnabled|eagerlyEnabled|isEnabled)\s*\(\s*['"`]([^'"`]+)['"`]\s*\)[^)]*\)/g,
+        description: 'Conditional flipper check',
+        extractFlag: true
+      },
+      
+      // 8. Template/HTML patterns
+      {
+        type: 'template',
+        pattern: /\*ngIf\s*=\s*['"`][^'"`]*(?:flipperEnabled|eagerlyEnabled)\s*\(\s*['"`]([^'"`]+)['"`]\s*\)[^'"`]*['"`]/g,
+        description: 'Angular template flipper conditional',
+        extractFlag: true
+      }
+    ];
+  }
+  
+  // Main method to integrate with Git Diff analysis
+  async analyzeGitDiffForFlippers(diffContent: string): Promise<FlipperGitDiffResult> {
+    const parsedDiff = this.parseGitDiff(diffContent);
+    const flipperResults: FlipperFileResult[] = [];
+    const detectedFlags = new Set<string>();
+    
+    for (const file of parsedDiff.files) {
+      if (this.shouldAnalyzeFile(file.path)) {
+        const fileResult = await this.analyzeFileForFlippers(file);
+        if (fileResult.detections.length > 0) {
+          flipperResults.push(fileResult);
+          fileResult.detections.forEach(d => {
+            if (d.flagName) detectedFlags.add(d.flagName);
+          });
+        }
+      }
+    }
+    
+    const prSections = this.generatePRSection(Array.from(detectedFlags));
+    
+    return {
+      files: flipperResults,
+      detectedFlags: Array.from(detectedFlags),
+      summary: this.generateFlipperSummary(flipperResults),
+      qaSection: prSections.qaSection,
+      detailsSection: prSections.detailsSection
+    };
+  }
+  
+  private async analyzeFileForFlippers(file: GitFileChange): Promise<FlipperFileResult> {
+    const detections: FlipperDetection[] = [];
+    const content = file.content || '';
+    
+    for (const pattern of this.broadPatterns) {
+      let match;
+      const regex = new RegExp(pattern.pattern.source, pattern.pattern.flags);
+      
+      while ((match = regex.exec(content)) !== null) {
+        const flagName = this.extractFlagName(match, pattern);
+        
+        const detection: FlipperDetection = {
+          type: pattern.type,
+          pattern: pattern.description,
+          line: this.getLineNumber(content, match.index),
+          column: this.getColumnNumber(content, match.index),
+          match: match[0],
+          flagName: flagName,
+          context: this.getContext(content, match.index, 50)
+        };
+        
+        detections.push(detection);
+      }
+    }
+    
+    return {
+      path: file.path,
+      detections,
+      changeType: file.status
+    };
+  }
+  
+  private extractFlagName(match: RegExpExecArray, pattern: FlipperBroadPattern): string | undefined {
+    if (!pattern.extractFlag) return undefined;
+    
+    // Handle flag mapping for predefined observables
+    if (pattern.flagMapping && match[1]) {
+      return pattern.flagMapping[match[1]] || match[1];
+    }
+    
+    // Extract flag from specified index or default to index 1
+    const flagIndex = pattern.flagIndex || 1;
+    return match[flagIndex];
+  }
+  
+  private generatePRSection(detectedFlags: string[]): { qaSection: string, detailsSection: string } {
+    if (detectedFlags.length === 0) return { qaSection: '', detailsSection: '' };
+    
+    const flagList = detectedFlags.map(flag => `- \`${flag}\``).join('\n');
+    
+    const qaSection = `## 🔄 Feature Flags / Flipper Changes
+
+**⚠️ This work is being hidden behind Feature Flags (Flippers)**
+
+### Detected Flipper Changes:
+${flagList}
+
+### 📋 QA Checklist - Flipper Setup Required:
+- [ ] Test functionality with flipper(s) **DISABLED** (fallback behavior)
+- [ ] Test functionality with flipper(s) **ENABLED** (new behavior)
+- [ ] Verify flipper(s) can be toggled without requiring deployment
+
+### 🧹 Post-Release Cleanup:
+- [ ] Remove flipper conditional logic from codebase
+- [ ] **IMPORTANT**: Schedule flipper removal after 100% rollout
+- [ ] Clean up unused flipper definitions
+- [ ] Update documentation to reflect permanent changes`;
+
+    const detailsSection = `## 🔧 Environment Setup Details - Flipper Configuration
+
+### Staging Environment Setup:
+1. **Flipper Dashboard Configuration:**
+   - Access Staging Flipper dashboard
+   - Verify the following flipper(s) are configured:
+     ${flagList}
+   - Ensure flipper(s) are initially set to **DISABLED**
+
+2. **Testing Protocol:**
+   - Deploy to staging with flipper(s) disabled
+   - Verify fallback behavior works correctly
+   - Enable flipper(s) and test new functionality
+   - Confirm flipper(s) can be toggled without redeployment
+
+### Production Environment Setup:
+1. **Pre-Deployment:**
+   - Ensure flipper(s) are configured in Production Flipper dashboard
+   - Set flipper(s) to **DISABLED** initially
+   - Document rollback procedure
+
+2. **Rollout Strategy:**
+   - Plan gradual rollout (percentage-based or user-based)
+   - Monitor metrics and error rates during rollout
+   - Have rollback plan ready in case of issues
+
+### 🔗 Resources:
+- [Flipper Documentation](https://callrail.atlassian.net/l/c/u7fFhHPM)
+- [Flipper Cloud Dashboard](https://www.flippercloud.io/docs/ui)
+
+### 📞 Coordination Required:
+- **PR Developer**: Responsible for flipper configuration across environments
+- **QA Team**: For testing both enabled/disabled states
+- **Product Team**: For rollout strategy and success metrics
+
+> **⚠️ Important**: This feature requires environment setup before deployment. Coordinate with DevOps team early in the development cycle.`;
+
+    return { qaSection, detailsSection };
+  }
+}
+```
+
+### Integration with Enhanced Git Diff Manager
+
+```typescript
+export class EnhancedGitDiffManager extends GitDiffManager {
+  constructor(
+    context: vscode.ExtensionContext,
+    private flipperManager: FlipperDetectionManager
+  ) {
+    super(context);
+  }
+  
+  async analyzeWithFlipperDetection(diffContent: string): Promise<EnhancedDiffResult> {
+    // Run standard git diff analysis
+    const baseDiffResult = await this.analyzeDiff(diffContent);
+    
+    // Run flipper detection
+    const flipperResult = await this.flipperManager.analyzeGitDiffForFlippers(diffContent);
+    
+    // Combine results
+    const enhancedResult: EnhancedDiffResult = {
+      ...baseDiffResult,
+      flipperAnalysis: flipperResult,
+      hasFlipperChanges: flipperResult.detectedFlags.length > 0
+    };
+    
+    return enhancedResult;
+  }
+  
+  async generateEnhancedDiffReport(result: EnhancedDiffResult): Promise<string> {
+    const sections = [
+      this.generateStandardDiffSection(result),
+      this.generateFlipperSection(result.flipperAnalysis),
+      result.flipperAnalysis.qaSection // Add QA section to diff report
+    ];
+    
+    return sections.filter(section => section.length > 0).join('\n\n');
+  }
+  
+  private generateFlipperSection(flipperResult: FlipperGitDiffResult): string {
+    if (flipperResult.detectedFlags.length === 0) return '';
+    
+    const flagDetails = flipperResult.detectedFlags.map(flag => {
+      const usageCount = flipperResult.files
+        .flatMap(f => f.detections)
+        .filter(d => d.flagName === flag).length;
+      
+      return `- **${flag}**: ${usageCount} usage(s) detected`;
+    }).join('\n');
+    
+    return `## 🔄 Flipper Detection Results
+
+### Feature Flags Modified:
+${flagDetails}
+
+### Files with Flipper Changes:
+${flipperResult.files.map(f => `- ${f.path} (${f.detections.length} detection(s))`).join('\n')}
+
+### Summary:
+${flipperResult.summary}`;
+  }
+}
+```
+
+### Updated File Manager for PR Generation
+
+```typescript
+export class EnhancedFileManager extends FileManager {
+  async generatePRDescription(result: EnhancedDiffResult): Promise<{ description: string, details: string }> {
+    const description = [
+      this.generateStandardPRDescription(result),
+      result.flipperAnalysis.qaSection // Include the QA checklist in main description
+    ].filter(section => section.length > 0).join('\n\n');
+    
+    const details = result.flipperAnalysis.detailsSection; // Environment setup goes to details
+    
+    return { description, details };
+  }
+  
+  async saveDiffWithFlipperAnalysis(result: EnhancedDiffResult): Promise<void> {
+    // Save standard diff file
+    await this.saveDiffReport(result);
+    
+    // Save PR description with flipper section
+    const prContent = await this.generatePRDescription(result);
+    await this.saveFile('pr-description-with-flippers.md', prContent.description);
+    
+    // Save PR details section separately
+    if (result.hasFlipperChanges && prContent.details) {
+      await this.saveFile('pr-details-flipper-setup.md', prContent.details);
+    }
+    
+    // Save flipper-specific report
+    if (result.hasFlipperChanges) {
+      const flipperReport = this.generateFlipperReport(result.flipperAnalysis);
+      await this.saveFile('flipper-analysis.md', flipperReport);
+    }
+  }
+}
+```
+
+### Types for Flipper Detection
+
+```typescript
+interface FlipperBroadPattern {
+  type: 'import' | 'method_call' | 'observable' | 'predefined_observable' | 'configuration' | 'flag_literal' | 'conditional' | 'template' | 'injection';
+  pattern: RegExp;
+  description: string;
+  extractFlag: boolean;
+  flagIndex?: number;
+  flagMapping?: { [key: string]: string };
+}
+
+interface FlipperDetection {
+  type: string;
+  pattern: string;
+  line: number;
+  column: number;
+  match: string;
+  flagName?: string;
+  context: string;
+}
+
+interface FlipperFileResult {
+  path: string;
+  detections: FlipperDetection[];
+  changeType: 'added' | 'modified' | 'deleted' | 'renamed';
+}
+
+interface FlipperGitDiffResult {
+  files: FlipperFileResult[];
+  detectedFlags: string[];
+  summary: string;
+  qaSection: string;
+  detailsSection: string;
+}
+
+interface EnhancedDiffResult extends GitDiffResult {
+  flipperAnalysis: FlipperGitDiffResult;
+  hasFlipperChanges: boolean;
+}
+```
+
 ## Security and Performance Considerations
 
 ### Security Implementation
@@ -586,18 +1016,12 @@ export class BackgroundTaskManager {
 
 ### Unit Testing Framework
 ```typescript
-// test/unit/NxAffectedManager.test.ts
-import { NxAffectedManager } from '../../src/managers/NxAffectedManager';
+// test/unit/FlipperDetectionManager.test.ts
+import { FlipperDetectionManager } from '../../src/managers/FlipperDetectionManager';
 import * as vscode from 'vscode';
 
-jest.mock('vscode', () => ({
-  workspace: {
-    workspaceFolders: [{ uri: { fsPath: '/test/workspace' } }]
-  }
-}));
-
-describe('NxAffectedManager', () => {
-  let manager: NxAffectedManager;
+describe('FlipperDetectionManager', () => {
+  let manager: FlipperDetectionManager;
   let mockContext: vscode.ExtensionContext;
   
   beforeEach(() => {
@@ -606,38 +1030,83 @@ describe('NxAffectedManager', () => {
       extensionUri: vscode.Uri.file('/test')
     } as any;
     
-    manager = new NxAffectedManager(mockContext);
+    manager = new FlipperDetectionManager(mockContext);
   });
   
-  test('should detect affected projects', async () => {
-    const mockProjects = ['app1', 'lib1'];
-    jest.spyOn(manager as any, 'executeNxCommand').mockResolvedValue(mockProjects);
+  test('should detect FlipperService imports and extract patterns', async () => {
+    const code = `import { FlipperService } from '@callrail/looky/core';`;
+    const result = await manager.analyzeCode(code);
     
-    const result = await manager.getAffectedProjects();
-    expect(result).toEqual(mockProjects);
+    expect(result.detections).toHaveLength(1);
+    expect(result.detections[0].type).toBe('import');
+    expect(result.detections[0].pattern).toContain('FlipperService import');
+  });
+  
+  test('should detect and extract flag names from flipperEnabled calls', async () => {
+    const code = `if (this.flipperService.flipperEnabled('zuora_maintenance')) {`;
+    const result = await manager.analyzeCode(code);
+    
+    expect(result.detections).toHaveLength(1);
+    expect(result.detections[0].type).toBe('method_call');
+    expect(result.detections[0].flagName).toBe('zuora_maintenance');
+  });
+  
+  test('should detect predefined observable usage', async () => {
+    const code = `
+      return this.flipperService.zuoraMaintenance$.pipe(
+        switchMap(enabled => enabled ? this.processPayment() : of(false))
+      );
+    `;
+    const result = await manager.analyzeCode(code);
+    
+    expect(result.detections.length).toBeGreaterThan(0);
+    expect(result.detections.some(d => d.flagName === 'zuora_maintenance')).toBe(true);
+  });
+  
+  test('should generate PR section with QA checklist', async () => {
+    const mockDiff = `
++  if (this.flipperService.flipperEnabled('new_feature')) {
++    // New feature implementation
++  }
+    `;
+    
+    const result = await manager.analyzeGitDiffForFlippers(mockDiff);
+    
+    expect(result.prSection).toContain('🔄 Feature Flags / Flipper Changes');
+    expect(result.prSection).toContain('QA Checklist - Flipper Setup Required');
+    expect(result.prSection).toContain('new_feature');
+    expect(result.prSection).toContain('Schedule flipper removal');
   });
 });
 ```
 
 ### Integration Testing
 ```typescript
-// test/integration/extension.test.ts
-import * as vscode from 'vscode';
-import * as assert from 'assert';
-
-suite('Extension Integration Tests', () => {
-  test('Extension should activate', async () => {
-    const ext = vscode.extensions.getExtension('publisher.nx-angular-extension');
-    assert.ok(ext);
+// test/integration/flipper-git-diff.test.ts
+describe('Flipper Git Diff Integration', () => {
+  test('should integrate flipper detection with git diff analysis', async () => {
+    const mockDiff = `
+diff --git a/src/app/services/billing.service.ts b/src/app/services/billing.service.ts
+index 1234567..abcdefg 100644
+--- a/src/app/services/billing.service.ts
++++ b/src/app/services/billing.service.ts
+@@ -1,4 +1,8 @@
++import { FlipperService } from '@callrail/looky/core';
++
+ export class BillingService {
++  constructor(private flipperService: FlipperService) {}
++  
++  isZuoraMaintenance$ = this.flipperService.flipperEnabled('zuora_maintenance');
+   canProcessPayment(): Observable<boolean> {
+     return of(true);
+   }
+    `;
     
-    await ext.activate();
-    assert.ok(ext.isActive);
-  });
-  
-  test('NX commands should be registered', async () => {
-    const commands = await vscode.commands.getCommands(true);
-    assert.ok(commands.includes('nx.runAffected'));
-    assert.ok(commands.includes('nx.testAffected'));
+    const result = await enhancedGitDiffManager.analyzeWithFlipperDetection(mockDiff);
+    
+    expect(result.hasFlipperChanges).toBe(true);
+    expect(result.flipperAnalysis.detectedFlags).toContain('zuora_maintenance');
+    expect(result.flipperAnalysis.prSection).toContain('Flipper Setup Required');
   });
 });
 ```
@@ -657,33 +1126,33 @@ suite('Extension Integration Tests', () => {
 - **Week 4**: Interactive commit selection UI, webview implementation
 - **Week 5**: Branch comparison interface, advanced diff features
 
-### Phase 4: UI Enhancement (Weeks 4-6)
-- **Week 4-5**: Webview development, interactive components
-- **Week 5-6**: Theme integration, accessibility features, responsive design
+### Phase 4: Flipper Detection (Weeks 4-6)
+- **Week 4**: Broad pattern detection for all flipper usage types
+- **Week 5**: Git diff integration with PR section generation
+- **Week 6**: QA checklist automation and enhanced reporting
 
-### Phase 5: Testing and Optimization (Weeks 5-7)
-- **Week 5-6**: Unit and integration testing implementation
-- **Week 6-7**: Performance optimization, security auditing, error handling
+### Phase 5: UI Enhancement (Weeks 5-7)
+- **Week 5-6**: Enhanced diff reports with flipper sections
+- **Week 6-7**: PR description generation with flipper checklists
 
-### Phase 6: Polish and Deployment (Weeks 7-8)
-- **Week 7**: Documentation, marketplace preparation, final testing
-- **Week 8**: Publishing, user feedback collection, initial bug fixes
+### Phase 6: Testing and Optimization (Weeks 6-8)
+- **Week 6-7**: Unit and integration testing implementation
+- **Week 7-8**: Performance optimization, security auditing, error handling
+
+### Phase 7: Polish and Deployment (Weeks 8-9)
+- **Week 8**: Documentation, marketplace preparation, final testing
+- **Week 9**: Publishing, user feedback collection, initial bug fixes
 
 ## Risk Assessment and Mitigation
 
 **Technical Risks:**
-- **NX API Changes**: Mitigate by implementing version detection and fallback mechanisms
-- **Git Integration Complexity**: Use established patterns from GitLens and Git Graph extensions
-- **Performance in Large Repos**: Implement lazy loading and background processing
+- **Pattern Accuracy**: Comprehensive regex testing with real codebase samples
+- **Performance**: Optimize pattern matching for large diffs
+- **False Positives**: Careful pattern design to avoid incorrect matches
 
-**Timeline Risks:**
-- **Scope Creep**: Maintain strict feature boundaries and prioritize core functionality
-- **Testing Complexity**: Allocate 30% of development time for testing
-- **Platform Compatibility**: Test on Windows, macOS, and Linux throughout development
+**Implementation Risks:**
+- **Integration Complexity**: Incremental integration with existing git diff workflow
+- **QA Workflow**: Collaborate with QA team to validate checklist accuracy
+- **Flipper Management**: Coordinate with DevOps for proper flipper configuration
 
-**Deployment Risks:**
-- **Marketplace Approval**: Follow VS Code extension guidelines strictly
-- **User Adoption**: Provide comprehensive documentation and examples
-- **Support Burden**: Implement proper error handling and logging
-
-This comprehensive implementation plan provides a structured approach to building robust, secure, and performant VSCode extensions for Angular NX monorepos, with estimated completion in 8 weeks for a team of 2-3 developers.
+This comprehensive implementation plan now includes your specific requirements for broad pattern detection, git diff integration, and automated PR section generation with QA checklists for flipper management.
