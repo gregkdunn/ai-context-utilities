@@ -1,0 +1,300 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createMockContext = exports.createMockWebviewView = exports.EventEmitter = exports.Diagnostic = exports.Location = exports.Selection = exports.Position = exports.Range = exports.DiagnosticSeverity = exports.ConfigurationTarget = exports.TreeItemCollapsibleState = exports.tasks = exports.debug = exports.languages = exports.env = exports.extensions = exports.commands = exports.window = exports.workspace = exports.Uri = exports.ViewColumn = exports.StatusBarAlignment = void 0;
+const events_1 = require("events");
+// Mock VSCode API for testing
+const mockStatusBarItem = {
+    show: jest.fn(),
+    hide: jest.fn(),
+    dispose: jest.fn(),
+    text: '',
+    tooltip: '',
+    command: '',
+    alignment: 1,
+    priority: 100
+};
+const mockWebview = {
+    html: '',
+    options: {},
+    onDidReceiveMessage: jest.fn(),
+    postMessage: jest.fn(),
+    asWebviewUri: jest.fn().mockReturnValue({ toString: () => 'mock://uri' })
+};
+const mockWebviewView = {
+    webview: mockWebview,
+    show: jest.fn(),
+    title: '',
+    description: '',
+    onDidDispose: jest.fn(),
+    onDidChangeVisibility: jest.fn()
+};
+const mockDocument = {
+    uri: { fsPath: '/mock/path' },
+    getText: jest.fn().mockReturnValue('mock text'),
+    save: jest.fn(),
+    lineCount: 10
+};
+const mockTerminal = {
+    sendText: jest.fn(),
+    show: jest.fn(),
+    hide: jest.fn(),
+    dispose: jest.fn(),
+    name: 'Mock Terminal'
+};
+exports.StatusBarAlignment = {
+    Left: 1,
+    Right: 2
+};
+exports.ViewColumn = {
+    Active: -1,
+    Beside: -2,
+    One: 1,
+    Two: 2,
+    Three: 3
+};
+exports.Uri = {
+    file: jest.fn().mockReturnValue({ toString: () => 'mock://file' }),
+    parse: jest.fn().mockReturnValue({ toString: () => 'mock://uri' }),
+    joinPath: jest.fn().mockReturnValue({ toString: () => 'mock://joined' })
+};
+exports.workspace = {
+    workspaceFolders: [{ uri: { fsPath: '/test/workspace' } }],
+    getConfiguration: jest.fn().mockReturnValue({
+        get: jest.fn().mockReturnValue(true),
+        update: jest.fn(),
+        has: jest.fn().mockReturnValue(true),
+        inspect: jest.fn()
+    }),
+    openTextDocument: jest.fn().mockResolvedValue(mockDocument),
+    findFiles: jest.fn().mockResolvedValue([]),
+    createFileSystemWatcher: jest.fn().mockReturnValue({
+        onDidCreate: jest.fn(),
+        onDidChange: jest.fn(),
+        onDidDelete: jest.fn(),
+        dispose: jest.fn()
+    }),
+    fs: {
+        readFile: jest.fn(),
+        writeFile: jest.fn(),
+        stat: jest.fn(),
+        readDirectory: jest.fn()
+    }
+};
+exports.window = {
+    createStatusBarItem: jest.fn().mockReturnValue(mockStatusBarItem),
+    registerWebviewViewProvider: jest.fn(),
+    showInformationMessage: jest.fn(),
+    showWarningMessage: jest.fn(),
+    showErrorMessage: jest.fn(),
+    showQuickPick: jest.fn(),
+    showInputBox: jest.fn(),
+    showTextDocument: jest.fn(),
+    createOutputChannel: jest.fn().mockReturnValue({
+        append: jest.fn(),
+        appendLine: jest.fn(),
+        show: jest.fn(),
+        hide: jest.fn(),
+        dispose: jest.fn()
+    }),
+    createTerminal: jest.fn().mockReturnValue(mockTerminal),
+    terminals: [],
+    activeTextEditor: null,
+    visibleTextEditors: [],
+    onDidChangeActiveTextEditor: jest.fn(),
+    onDidChangeVisibleTextEditors: jest.fn()
+};
+exports.commands = {
+    registerCommand: jest.fn(),
+    executeCommand: jest.fn(),
+    getCommands: jest.fn().mockResolvedValue([])
+};
+exports.extensions = {
+    getExtension: jest.fn().mockReturnValue({
+        isActive: true,
+        exports: {
+            getAPI: jest.fn().mockReturnValue({
+                getRepository: jest.fn().mockReturnValue({
+                    getCommits: jest.fn().mockResolvedValue([]),
+                    getBranches: jest.fn().mockResolvedValue([]),
+                    getDiff: jest.fn().mockResolvedValue('')
+                })
+            })
+        }
+    })
+};
+exports.env = {
+    clipboard: {
+        readText: jest.fn(),
+        writeText: jest.fn()
+    },
+    openExternal: jest.fn(),
+    machineId: 'mock-machine-id',
+    sessionId: 'mock-session-id'
+};
+exports.languages = {
+    createDiagnosticCollection: jest.fn(),
+    registerCompletionItemProvider: jest.fn(),
+    registerHoverProvider: jest.fn()
+};
+exports.debug = {
+    startDebugging: jest.fn(),
+    stopDebugging: jest.fn(),
+    onDidStartDebugSession: jest.fn(),
+    onDidTerminateDebugSession: jest.fn()
+};
+exports.tasks = {
+    executeTask: jest.fn(),
+    fetchTasks: jest.fn(),
+    onDidStartTask: jest.fn(),
+    onDidEndTask: jest.fn()
+};
+exports.TreeItemCollapsibleState = {
+    None: 0,
+    Collapsed: 1,
+    Expanded: 2
+};
+exports.ConfigurationTarget = {
+    Global: 1,
+    Workspace: 2,
+    WorkspaceFolder: 3
+};
+exports.DiagnosticSeverity = {
+    Error: 0,
+    Warning: 1,
+    Information: 2,
+    Hint: 3
+};
+const Range = class MockRange {
+    start;
+    end;
+    constructor(start, end) {
+        this.start = start;
+        this.end = end;
+    }
+};
+exports.Range = Range;
+const Position = class MockPosition {
+    line;
+    character;
+    constructor(line, character) {
+        this.line = line;
+        this.character = character;
+    }
+};
+exports.Position = Position;
+const Selection = class MockSelection extends exports.Range {
+    anchor;
+    active;
+    constructor(anchor, active) {
+        super(anchor, active);
+        this.anchor = anchor;
+        this.active = active;
+    }
+};
+exports.Selection = Selection;
+const Location = class MockLocation {
+    uri;
+    range;
+    constructor(uri, range) {
+        this.uri = uri;
+        this.range = range;
+    }
+};
+exports.Location = Location;
+const Diagnostic = class MockDiagnostic {
+    range;
+    message;
+    severity;
+    constructor(range, message, severity) {
+        this.range = range;
+        this.message = message;
+        this.severity = severity;
+    }
+};
+exports.Diagnostic = Diagnostic;
+const EventEmitter = class MockEventEmitter {
+    _event = new exports.EventEmitter();
+    fire(data) {
+        this._event.emit('event', data);
+    }
+    get event() {
+        return (listener) => {
+            this._event.on('event', listener);
+            return { dispose: () => this._event.removeListener('event', listener) };
+        };
+    }
+    dispose() {
+        this._event.removeAllListeners();
+    }
+};
+exports.EventEmitter = EventEmitter;
+// Create a mock that can be used by individual tests
+const createMockWebviewView = () => ({
+    webview: {
+        html: '',
+        options: {},
+        onDidReceiveMessage: jest.fn(),
+        postMessage: jest.fn(),
+        asWebviewUri: jest.fn().mockReturnValue({ toString: () => 'mock://uri' })
+    },
+    show: jest.fn(),
+    title: '',
+    description: '',
+    onDidDispose: jest.fn(),
+    onDidChangeVisibility: jest.fn()
+});
+exports.createMockWebviewView = createMockWebviewView;
+const createMockContext = () => ({
+    subscriptions: [],
+    workspaceState: {
+        get: jest.fn(),
+        update: jest.fn(),
+        keys: jest.fn().mockReturnValue([])
+    },
+    globalState: {
+        get: jest.fn(),
+        update: jest.fn(),
+        keys: jest.fn().mockReturnValue([])
+    },
+    extensionUri: exports.Uri.parse('mock://extension'),
+    extensionPath: '/mock/extension/path',
+    storagePath: '/mock/storage/path',
+    globalStoragePath: '/mock/global/storage/path',
+    logPath: '/mock/log/path',
+    environmentVariableCollection: {
+        persistent: true,
+        replace: jest.fn(),
+        append: jest.fn(),
+        prepend: jest.fn(),
+        get: jest.fn(),
+        forEach: jest.fn(),
+        delete: jest.fn(),
+        clear: jest.fn()
+    }
+});
+exports.createMockContext = createMockContext;
+exports.default = {
+    StatusBarAlignment: exports.StatusBarAlignment,
+    ViewColumn: exports.ViewColumn,
+    Uri: exports.Uri,
+    workspace: exports.workspace,
+    window: exports.window,
+    commands: exports.commands,
+    extensions: exports.extensions,
+    env: exports.env,
+    languages: exports.languages,
+    debug: exports.debug,
+    tasks: exports.tasks,
+    TreeItemCollapsibleState: exports.TreeItemCollapsibleState,
+    ConfigurationTarget: exports.ConfigurationTarget,
+    DiagnosticSeverity: exports.DiagnosticSeverity,
+    Range: exports.Range,
+    Position: exports.Position,
+    Selection: exports.Selection,
+    Location: exports.Location,
+    Diagnostic: exports.Diagnostic,
+    EventEmitter: exports.EventEmitter,
+    createMockWebviewView: exports.createMockWebviewView,
+    createMockContext: exports.createMockContext
+};
+//# sourceMappingURL=vscode.js.map

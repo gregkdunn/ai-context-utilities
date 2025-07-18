@@ -272,9 +272,13 @@ This separation ensures:
 ## 📖 Documentation
 
 - **[Getting Started](docs/guides/GETTING_STARTED.md)**: Quick setup and first steps
+- **[Development Guide](docs/guides/DEVELOPMENT.md)**: Development setup and workflow
+- **[Test Commands](docs/guides/TEST_COMMANDS.md)**: Comprehensive testing guide
 - **[Testing Guide](docs/guides/TESTING.md)**: Complete testing documentation
 - **[Usage Guide](docs/guides/USAGE.md)**: Detailed feature usage
 - **[Troubleshooting Guide](docs/guides/TROUBLESHOOTING.md)**: Common issues and solutions
+- **[Implementation Status](docs/implementation/IMPLEMENTATION_STATUS.md)**: Current implementation status
+- **[TypeScript Fix Details](docs/implementation/TYPESCRIPT_FIX.md)**: TypeScript configuration fix details
 - **[API Reference](docs/api/)**: Developer API documentation
 
 ## 🤝 Contributing

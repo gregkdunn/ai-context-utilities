@@ -1,1 +1,0 @@
-npm test -- --testNamePattern="should generate intelligent command suggestions"
