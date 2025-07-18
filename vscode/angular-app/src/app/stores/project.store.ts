@@ -308,6 +308,22 @@ export const ProjectStore = signalStore(
       });
     },
     
+    // Additional methods for app component
+    setProjects(projects: NxProject[]) {
+      store.update(state => ({
+        ...state,
+        availableProjects: projects,
+        lastUpdated: new Date()
+      }));
+    },
+    
+    setWorkspaceInfo(workspaceInfo: WorkspaceInfo) {
+      store.update(state => ({
+        ...state,
+        workspaceInfo
+      }));
+    },
+    
     // Configuration validation
     validateConfiguration(projectName: string): boolean {
       const project = store.availableProjects().find(p => p.name === projectName);

@@ -13,14 +13,17 @@ module.exports = {
     '/node_modules/',
     '/src/test.ts'
   ],
-  moduleNameMapper: pathsToModuleNameMapper(compilerOptions.paths || {}, {
-    prefix: '<rootDir>/'
-  }),
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    ...pathsToModuleNameMapper(compilerOptions.paths || {}, {
+      prefix: '<rootDir>/'
+    })
+  },
   transform: {
     '^.+\\.(ts|mjs|js|html)$': 'jest-preset-angular'
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(.*\\.mjs$|@ngrx))'
+    'node_modules/(?!(.*\\.mjs$|@angular|@ngrx))'
   ],
   testEnvironment: 'jsdom',
   moduleFileExtensions: ['ts', 'html', 'js', 'json', 'mjs'],
@@ -29,5 +32,17 @@ module.exports = {
       useESM: true,
       stringifyContentPathRegex: '\\.(html|svg)$'
     }
-  }
+  },
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/coverage/'
+  ],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/*.spec.ts',
+    '!src/test.ts',
+    '!src/main.ts',
+    '!src/**/*.module.ts'
+  ]
 };
