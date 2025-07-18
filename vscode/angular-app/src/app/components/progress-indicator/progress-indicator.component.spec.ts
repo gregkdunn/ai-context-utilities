@@ -4,10 +4,17 @@ import { ProgressIndicatorComponent } from './progress-indicator.component';
 import { CommandStore } from '../../stores/command.store';
 import { CommandExecution, QueuedCommand } from '../../models';
 
+// Create a mock type that matches the CommandStore interface
+interface MockCommandStore {
+  activeCommands: ReturnType<typeof signal>;
+  executionQueue: ReturnType<typeof signal>;
+  commandHistory: ReturnType<typeof signal>;
+}
+
 describe('ProgressIndicatorComponent', () => {
   let component: ProgressIndicatorComponent;
   let fixture: ComponentFixture<ProgressIndicatorComponent>;
-  let mockCommandStore: jasmine.SpyObj<CommandStore>;
+  let mockCommandStore: MockCommandStore;
 
   const mockActiveCommand: CommandExecution = {
     id: 'active-1',
@@ -30,26 +37,22 @@ describe('ProgressIndicatorComponent', () => {
   };
 
   beforeEach(async () => {
-    const commandStoreSpy = jasmine.createSpyObj('CommandStore', [
-      'activeCommands',
-      'executionQueue',
-      'commandHistory'
-    ]);
-
-    commandStoreSpy.activeCommands = signal({ 'active-1': mockActiveCommand });
-    commandStoreSpy.executionQueue = signal([mockQueuedCommand]);
-    commandStoreSpy.commandHistory = signal([]);
+    // Create mock for CommandStore
+    mockCommandStore = {
+      activeCommands: signal({ 'active-1': mockActiveCommand }),
+      executionQueue: signal([mockQueuedCommand]),
+      commandHistory: signal([])
+    };
 
     await TestBed.configureTestingModule({
       imports: [ProgressIndicatorComponent],
       providers: [
-        { provide: CommandStore, useValue: commandStoreSpy }
+        { provide: CommandStore, useValue: mockCommandStore }
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ProgressIndicatorComponent);
     component = fixture.componentInstance;
-    mockCommandStore = TestBed.inject(CommandStore) as jasmine.SpyObj<CommandStore>;
   });
 
   it('should create', () => {

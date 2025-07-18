@@ -108,6 +108,25 @@ export class ResponsiveService {
     this.initializeMediaQueries();
     this.setupResizeObserver();
     this.setupEventListeners();
+    
+    // Initialize with current window dimensions
+    this.updateDimensions();
+  }
+
+  /**
+   * Update window dimensions (useful for testing)
+   */
+  updateDimensions() {
+    this.windowWidth.set(window.innerWidth);
+    this.windowHeight.set(window.innerHeight);
+  }
+
+  /**
+   * Set dimensions directly (for testing)
+   */
+  setDimensions(width: number, height: number) {
+    this.windowWidth.set(width);
+    this.windowHeight.set(height);
   }
 
   private initializeMediaQueries() {
@@ -152,8 +171,7 @@ export class ResponsiveService {
     if (!this.resizeObserver) {
       window.addEventListener('resize', () => {
         this.ngZone.run(() => {
-          this.windowWidth.set(window.innerWidth);
-          this.windowHeight.set(window.innerHeight);
+          this.updateDimensions();
         });
       });
     }
@@ -162,8 +180,7 @@ export class ResponsiveService {
     window.addEventListener('orientationchange', () => {
       setTimeout(() => {
         this.ngZone.run(() => {
-          this.windowWidth.set(window.innerWidth);
-          this.windowHeight.set(window.innerHeight);
+          this.updateDimensions();
         });
       }, 100);
     });

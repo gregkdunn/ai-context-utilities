@@ -265,10 +265,10 @@ export class ActionButtonsComponent {
     const progress = this.getActionProgress(action.id);
     
     if (status === 'running') {
-      return `${action.description} (${progress}% complete)`;
+      return `${action.description || action.label} (${progress}% complete)`;
     }
     
-    return action.description;
+    return action.description || action.label;
   }
 
   formatLastRun(lastRun: Date): string {

@@ -47,26 +47,30 @@ describe('KeyboardShortcutsService', () => {
   });
 
   it('should organize shortcuts by category', () => {
+    // Get initial categories count (service has default shortcuts)
+    const initialCategories = service.shortcutCategories();
+    const initialCategoryCount = initialCategories.length;
+
     const shortcuts: KeyboardShortcut[] = [
       {
         id: 'general1',
         key: 'a',
         description: 'General Action A',
-        category: 'general',
+        category: 'test-general',
         action: () => {}
       },
       {
         id: 'general2',
         key: 'b',
         description: 'General Action B',
-        category: 'general',
+        category: 'test-general',
         action: () => {}
       },
       {
         id: 'navigation1',
         key: 'c',
         description: 'Navigation Action C',
-        category: 'navigation',
+        category: 'test-navigation',
         action: () => {}
       }
     ];
@@ -74,12 +78,13 @@ describe('KeyboardShortcutsService', () => {
     service.registerShortcuts(shortcuts);
 
     const categories = service.shortcutCategories();
-    expect(categories.length).toBe(2);
+    // Should have initial categories plus 2 new test categories
+    expect(categories.length).toBe(initialCategoryCount + 2);
     
-    const generalCategory = categories.find(c => c.id === 'general');
+    const generalCategory = categories.find(c => c.id === 'test-general');
     expect(generalCategory?.shortcuts.length).toBe(2);
     
-    const navigationCategory = categories.find(c => c.id === 'navigation');
+    const navigationCategory = categories.find(c => c.id === 'test-navigation');
     expect(navigationCategory?.shortcuts.length).toBe(1);
   });
 

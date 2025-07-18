@@ -104,18 +104,17 @@ export class CommandService {
 
   // Command queue management
   private setupCommandQueue(): void {
-    // Process queue when commands complete
-    combineLatest([
-      this.commandStore.activeCommandCount,
-      this.commandStore.queueLength
-    ]).pipe(
-      filter(([activeCount, queueLength]) => 
-        activeCount < this.maxConcurrentCommands && queueLength > 0
-      ),
-      debounceTime(100),
+    // Process queue when commands complete - using effect for signals
+    // This will be handled by periodic checks instead of reactive streams
+    timer(0, 1000).pipe(
       takeUntil(this.destroy$)
     ).subscribe(async () => {
-      await this.processCommandQueue();
+      const activeCount = this.commandStore.activeCommandCount();
+      const queueLength = this.commandStore.queueLength();
+      
+      if (activeCount < this.maxConcurrentCommands && queueLength > 0) {
+        await this.processCommandQueue();
+      }
     });
   }
 
@@ -344,15 +343,33 @@ export class CommandService {
 
   // Public query methods
   getCommandHistory(): Observable<CommandResult[]> {
-    return this.commandStore.commandHistory;
+    // Convert signal to observable
+    return new Observable(observer => {
+      const subscription = timer(0, 100).subscribe(() => {
+        observer.next(this.commandStore.commandHistory());
+      });
+      return () => subscription.unsubscribe();
+    });
   }
 
   getActiveCommands(): Observable<Record<string, CommandExecution>> {
-    return this.commandStore.activeCommands;
+    // Convert signal to observable
+    return new Observable(observer => {
+      const subscription = timer(0, 100).subscribe(() => {
+        observer.next(this.commandStore.activeCommands());
+      });
+      return () => subscription.unsubscribe();
+    });
   }
 
   getExecutionQueue(): Observable<QueuedCommand[]> {
-    return this.commandStore.executionQueue;
+    // Convert signal to observable
+    return new Observable(observer => {
+      const subscription = timer(0, 100).subscribe(() => {
+        observer.next(this.commandStore.executionQueue());
+      });
+      return () => subscription.unsubscribe();
+    });
   }
 
   getCommandStats(): Observable<{
@@ -362,28 +379,35 @@ export class CommandService {
     activeCount: number;
     queueLength: number;
   }> {
-    return combineLatest([
-      this.commandStore.successRate,
-      this.commandStore.averageExecutionTime,
-      this.commandStore.commandHistory,
-      this.commandStore.activeCommandCount,
-      this.commandStore.queueLength
-    ]).pipe(
-      map(([successRate, averageTime, history, activeCount, queueLength]) => ({
-        successRate,
-        averageTime,
-        totalExecuted: history.length,
-        activeCount,
-        queueLength
-      }))
-    );
+    return new Observable(observer => {
+      const subscription = timer(0, 1000).subscribe(() => {
+        const successRate = this.commandStore.successRate();
+        const averageTime = this.commandStore.averageExecutionTime();
+        const history = this.commandStore.commandHistory();
+        const activeCount = this.commandStore.activeCommandCount();
+        const queueLength = this.commandStore.queueLength();
+        
+        observer.next({
+          successRate,
+          averageTime,
+          totalExecuted: history.length,
+          activeCount,
+          queueLength
+        });
+      });
+      return () => subscription.unsubscribe();
+    });
   }
 
   // Project-specific command methods
   getProjectCommands(projectName: string): Observable<CommandResult[]> {
-    return this.commandStore.commandsByProject.pipe(
-      map(byProject => byProject[projectName] || [])
-    );
+    return new Observable(observer => {
+      const subscription = timer(0, 1000).subscribe(() => {
+        const byProject = this.commandStore.commandsByProject();
+        observer.next(byProject[projectName] || []);
+      });
+      return () => subscription.unsubscribe();
+    });
   }
 
   getProjectSuccessRate(projectName: string): Observable<number> {
@@ -402,13 +426,15 @@ export class CommandService {
     averageTime: number;
     totalRuns: number;
   }> {
-    return this.commandStore.commandsByAction.pipe(
-      map(byAction => {
+    return new Observable(observer => {
+      const subscription = timer(0, 1000).subscribe(() => {
+        const byAction = this.commandStore.commandsByAction();
         const actionCommands = byAction[action] || [];
         const totalRuns = actionCommands.length;
         
         if (totalRuns === 0) {
-          return { successRate: 0, averageTime: 0, totalRuns: 0 };
+          observer.next({ successRate: 0, averageTime: 0, totalRuns: 0 });
+          return;
         }
 
         const successful = actionCommands.filter(cmd => cmd.status === 'success').length;
@@ -419,9 +445,10 @@ export class CommandService {
           ? completedCommands.reduce((sum, cmd) => sum + cmd.duration, 0) / completedCommands.length
           : 0;
 
-        return { successRate, averageTime, totalRuns };
-      })
-    );
+        observer.next({ successRate, averageTime, totalRuns });
+      });
+      return () => subscription.unsubscribe();
+    });
   }
 
   // Cleanup

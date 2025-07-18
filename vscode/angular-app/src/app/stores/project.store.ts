@@ -1,5 +1,5 @@
 import { computed } from '@angular/core';
-import { signalStore, withState, withMethods, withComputed } from '@ngrx/signals';
+import { signalStore, withState, withMethods, withComputed, patchState } from '@ngrx/signals';
 import { 
   ProjectState, 
   NxProject, 
@@ -81,19 +81,19 @@ export const ProjectStore = signalStore(
     
     // Projects with specific capabilities
     projectsWithTests: computed(() => 
-      availableProjects().filter(p => p.targets?.test)
+      availableProjects().filter(p => p.targets?.['test'])
     ),
     
     projectsWithBuild: computed(() => 
-      availableProjects().filter(p => p.targets?.build)
+      availableProjects().filter(p => p.targets?.['build'])
     ),
     
     projectsWithLint: computed(() => 
-      availableProjects().filter(p => p.targets?.lint)
+      availableProjects().filter(p => p.targets?.['lint'])
     ),
     
     projectsWithServe: computed(() => 
-      availableProjects().filter(p => p.targets?.serve)
+      availableProjects().filter(p => p.targets?.['serve'])
     ),
     
     // Default project detection
@@ -121,7 +121,7 @@ export const ProjectStore = signalStore(
   withMethods((store) => ({
     // Project loading
     loadProjects(projects: NxProject[], workspaceInfo: WorkspaceInfo) {
-      store.update({
+      patchState(store, {
         availableProjects: projects,
         workspaceInfo,
         isLoading: false,
@@ -131,12 +131,12 @@ export const ProjectStore = signalStore(
     
     // Loading state management
     setLoading(isLoading: boolean) {
-      store.update({ isLoading });
+      patchState(store, { isLoading });
     },
     
     // Project configuration
     updateProjectConfig(projectName: string, config: ProjectConfig) {
-      store.update(state => ({
+      patchState(store, (state) => ({
         projectConfigurations: {
           ...state.projectConfigurations,
           [projectName]: config
@@ -146,7 +146,7 @@ export const ProjectStore = signalStore(
     
     // Batch configuration updates
     updateMultipleConfigs(configs: Record<string, ProjectConfig>) {
-      store.update(state => ({
+      patchState(store, (state) => ({
         projectConfigurations: {
           ...state.projectConfigurations,
           ...configs
@@ -156,7 +156,7 @@ export const ProjectStore = signalStore(
     
     // Configuration removal
     removeProjectConfig(projectName: string) {
-      store.update(state => {
+      patchState(store, (state) => {
         const { [projectName]: removed, ...remaining } = state.projectConfigurations;
         return {
           projectConfigurations: remaining
@@ -166,13 +166,13 @@ export const ProjectStore = signalStore(
     
     // Project refresh
     refreshProjects() {
-      store.update({ isLoading: true });
+      patchState(store, { isLoading: true });
       // Service will handle the actual refresh
     },
     
     // Project addition (for dynamic workspaces)
     addProject(project: NxProject) {
-      store.update(state => {
+      patchState(store, (state) => {
         const exists = state.availableProjects.some(p => p.name === project.name);
         if (exists) return state;
         
@@ -187,7 +187,7 @@ export const ProjectStore = signalStore(
     
     // Project removal
     removeProject(projectName: string) {
-      store.update(state => {
+      patchState(store, (state) => {
         const { [projectName]: removedConfig, ...remainingConfigs } = state.projectConfigurations;
         
         return {
@@ -200,7 +200,7 @@ export const ProjectStore = signalStore(
     
     // Project updates
     updateProject(projectName: string, updates: Partial<NxProject>) {
-      store.update(state => ({
+      patchState(store, (state) => ({
         availableProjects: state.availableProjects.map(p => 
           p.name === projectName ? { ...p, ...updates } : p
         ),
@@ -210,7 +210,19 @@ export const ProjectStore = signalStore(
     
     // Workspace info updates
     updateWorkspaceInfo(workspaceInfo: WorkspaceInfo) {
-      store.update({ workspaceInfo });
+      patchState(store, { workspaceInfo });
+    },
+    
+    // Additional methods for app component
+    setProjects(projects: NxProject[]) {
+      patchState(store, {
+        availableProjects: projects,
+        lastUpdated: new Date()
+      });
+    },
+    
+    setWorkspaceInfo(workspaceInfo: WorkspaceInfo) {
+      patchState(store, { workspaceInfo });
     },
     
     // Utility methods
@@ -229,22 +241,22 @@ export const ProjectStore = signalStore(
     // Project capability checks
     canRunTests(projectName: string): boolean {
       const project = store.availableProjects().find(p => p.name === projectName);
-      return !!project?.targets?.test;
+      return !!project?.targets?.['test'];
     },
     
     canBuild(projectName: string): boolean {
       const project = store.availableProjects().find(p => p.name === projectName);
-      return !!project?.targets?.build;
+      return !!project?.targets?.['build'];
     },
     
     canLint(projectName: string): boolean {
       const project = store.availableProjects().find(p => p.name === projectName);
-      return !!project?.targets?.lint;
+      return !!project?.targets?.['lint'];
     },
     
     canServe(projectName: string): boolean {
       const project = store.availableProjects().find(p => p.name === projectName);
-      return !!project?.targets?.serve;
+      return !!project?.targets?.['serve'];
     },
     
     // Default configuration creator
@@ -256,9 +268,9 @@ export const ProjectStore = signalStore(
       
       return {
         name: projectName,
-        testCommand: project.targets?.test ? 'test' : undefined,
-        buildCommand: project.targets?.build ? 'build' : undefined,
-        lintCommand: project.targets?.lint ? 'lint' : undefined,
+        testCommand: project.targets?.['test'] ? 'test' : undefined,
+        buildCommand: project.targets?.['build'] ? 'build' : undefined,
+        lintCommand: project.targets?.['lint'] ? 'lint' : undefined,
         preferences: {
           autoDebug: false,
           quickTest: false,
@@ -269,16 +281,16 @@ export const ProjectStore = signalStore(
     
     // Bulk operations
     initializeAllConfigs() {
-      store.update(state => {
+      patchState(store, (state) => {
         const newConfigs: Record<string, ProjectConfig> = {};
         
         state.availableProjects.forEach(project => {
           if (!state.projectConfigurations[project.name]) {
             newConfigs[project.name] = {
               name: project.name,
-              testCommand: project.targets?.test ? 'test' : undefined,
-              buildCommand: project.targets?.build ? 'build' : undefined,
-              lintCommand: project.targets?.lint ? 'lint' : undefined,
+              testCommand: project.targets?.['test'] ? 'test' : undefined,
+              buildCommand: project.targets?.['build'] ? 'build' : undefined,
+              lintCommand: project.targets?.['lint'] ? 'lint' : undefined,
               preferences: {
                 autoDebug: false,
                 quickTest: false,
@@ -299,29 +311,13 @@ export const ProjectStore = signalStore(
     
     // Reset operations
     resetProjects() {
-      store.update({
+      patchState(store, {
         availableProjects: [],
         projectConfigurations: {},
         workspaceInfo: null,
         isLoading: false,
         lastUpdated: null
       });
-    },
-    
-    // Additional methods for app component
-    setProjects(projects: NxProject[]) {
-      store.update(state => ({
-        ...state,
-        availableProjects: projects,
-        lastUpdated: new Date()
-      }));
-    },
-    
-    setWorkspaceInfo(workspaceInfo: WorkspaceInfo) {
-      store.update(state => ({
-        ...state,
-        workspaceInfo
-      }));
     },
     
     // Configuration validation

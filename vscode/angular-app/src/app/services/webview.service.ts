@@ -49,6 +49,11 @@ export class WebviewService {
     });
   }
 
+  // Legacy postMessage method for backward compatibility
+  async postMessage(command: string, data?: any): Promise<void> {
+    this.sendMessage(command, data);
+  }
+
   // State management
   setState(state: any): void {
     this.vscode.setState(state);

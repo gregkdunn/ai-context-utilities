@@ -363,11 +363,11 @@ export class ProjectSelectorComponent {
   // Project capabilities
   getProjectCapabilities(project: NxProject): Array<{name: string, available: boolean}> {
     return [
-      { name: 'Test', available: !!project.targets?.test },
-      { name: 'Build', available: !!project.targets?.build },
-      { name: 'Lint', available: !!project.targets?.lint },
-      { name: 'Serve', available: !!project.targets?.serve },
-      { name: 'E2E', available: !!project.targets?.e2e }
+      { name: 'Test', available: !!project.targets?.['test'] },
+      { name: 'Build', available: !!project.targets?.['build'] },
+      { name: 'Lint', available: !!project.targets?.['lint'] },
+      { name: 'Serve', available: !!project.targets?.['serve'] },
+      { name: 'E2E', available: !!project.targets?.['e2e'] }
     ];
   }
 

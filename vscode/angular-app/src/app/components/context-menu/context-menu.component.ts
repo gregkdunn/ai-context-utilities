@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 
 export interface ContextMenuItem {
   id: string;
-  label: string;
+  label?: string;
   icon?: string;
   disabled?: boolean;
   separator?: boolean;
@@ -52,7 +52,7 @@ export interface ContextMenuPosition {
                 @if (item.icon) {
                   <i class="context-menu-icon {{ item.icon }}"></i>
                 }
-                <span class="context-menu-label">{{ item.label }}</span>
+                <span class="context-menu-label">{{ item.label || '' }}</span>
                 @if (item.shortcut) {
                   <span class="context-menu-shortcut">{{ item.shortcut }}</span>
                 }

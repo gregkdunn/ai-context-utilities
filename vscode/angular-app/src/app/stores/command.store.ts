@@ -1,5 +1,5 @@
 import { computed } from '@angular/core';
-import { signalStore, withState, withMethods, withComputed } from '@ngrx/signals';
+import { signalStore, withState, withMethods, withComputed, patchState } from '@ngrx/signals';
 import { 
   CommandState, 
   CommandExecution, 
@@ -52,13 +52,16 @@ export const CommandStore = signalStore(
     // Performance analysis
     averageExecutionTime: computed(() => {
       const completedCommands = commandHistory().filter(cmd => 
-        cmd.endTime && (cmd.status === 'success' || cmd.status === 'error')
+        (cmd.endTime && (cmd.status === 'success' || cmd.status === 'error')) || cmd.duration
       );
       
       if (completedCommands.length === 0) return 0;
       
       const totalTime = completedCommands.reduce((sum, cmd) => {
-        return sum + (cmd.endTime!.getTime() - cmd.startTime.getTime());
+        // Use duration if available, otherwise calculate from dates
+        const duration = cmd.duration || 
+          (cmd.endTime ? cmd.endTime.getTime() - cmd.startTime.getTime() : 0);
+        return sum + duration;
       }, 0);
       
       return totalTime / completedCommands.length;
@@ -99,11 +102,11 @@ export const CommandStore = signalStore(
   withMethods((store) => ({
     // Queue management
     queueCommand(command: QueuedCommand) {
-      store.update(state => ({
+      patchState(store, (state) => ({
         executionQueue: [...state.executionQueue, command]
           .sort((a, b) => {
             // Sort by priority (high > normal > low), then by timestamp
-            const priorityOrder = { high: 3, normal: 2, low: 1 };
+            const priorityOrder: Record<string, number> = { high: 3, normal: 2, low: 1 };
             const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
             return priorityDiff || a.timestamp.getTime() - b.timestamp.getTime();
           })
@@ -112,12 +115,10 @@ export const CommandStore = signalStore(
     
     // Command execution lifecycle
     startCommand(execution: CommandExecution) {
-      store.update(state => {
-        const { executionQueue, ...rest } = state;
-        const remainingQueue = executionQueue.filter(q => q.id !== execution.id);
+      patchState(store, (state) => {
+        const remainingQueue = state.executionQueue.filter(q => q.id !== execution.id);
         
         return {
-          ...rest,
           executionQueue: remainingQueue,
           activeCommands: {
             ...state.activeCommands,
@@ -129,7 +130,7 @@ export const CommandStore = signalStore(
     
     // Progress tracking
     updateProgress(commandId: string, progress: number, output?: string) {
-      store.update(state => {
+      patchState(store, (state) => {
         const command = state.activeCommands[commandId];
         if (!command) return state;
         
@@ -140,7 +141,6 @@ export const CommandStore = signalStore(
         };
         
         return {
-          ...state,
           activeCommands: {
             ...state.activeCommands,
             [commandId]: updatedCommand
@@ -151,11 +151,10 @@ export const CommandStore = signalStore(
     
     // Command completion
     completeCommand(commandId: string, result: CommandResult) {
-      store.update(state => {
+      patchState(store, (state) => {
         const { [commandId]: completed, ...remainingCommands } = state.activeCommands;
         
         return {
-          ...state,
           activeCommands: remainingCommands,
           commandHistory: [
             ...state.commandHistory.slice(-49), // Keep last 50 commands
@@ -167,7 +166,7 @@ export const CommandStore = signalStore(
     
     // Command cancellation
     cancelCommand(commandId: string) {
-      store.update(state => {
+      patchState(store, (state) => {
         const command = state.activeCommands[commandId];
         if (!command) return state;
         
@@ -182,7 +181,6 @@ export const CommandStore = signalStore(
         const { [commandId]: cancelled, ...remainingCommands } = state.activeCommands;
         
         return {
-          ...state,
           activeCommands: remainingCommands,
           commandHistory: [...state.commandHistory, cancelledResult]
         };
@@ -191,15 +189,14 @@ export const CommandStore = signalStore(
     
     // Queue management
     removeFromQueue(commandId: string) {
-      store.update(state => ({
-        ...state,
+      patchState(store, (state) => ({
         executionQueue: state.executionQueue.filter(cmd => cmd.id !== commandId)
       }));
     },
     
     // Batch operations
     cancelAllCommands() {
-      store.update(state => {
+      patchState(store, (state) => {
         const cancelledCommands = Object.values(state.activeCommands).map(cmd => ({
           ...cmd,
           status: 'cancelled' as const,
@@ -209,7 +206,6 @@ export const CommandStore = signalStore(
         }));
         
         return {
-          ...state,
           activeCommands: {},
           executionQueue: [],
           commandHistory: [
@@ -222,15 +218,12 @@ export const CommandStore = signalStore(
     
     // History management
     clearHistory() {
-      store.update(state => ({
-        ...state,
-        commandHistory: []
-      }));
+      patchState(store, { commandHistory: [] });
     },
     
     // Command retry
     retryCommand(commandId: string) {
-      store.update(state => {
+      patchState(store, (state) => {
         const failedCommand = state.commandHistory.find(cmd => cmd.id === commandId);
         if (!failedCommand || failedCommand.status === 'success') return state;
         
@@ -244,10 +237,9 @@ export const CommandStore = signalStore(
         };
         
         return {
-          ...state,
           executionQueue: [...state.executionQueue, retryCommand]
             .sort((a, b) => {
-              const priorityOrder = { high: 3, normal: 2, low: 1 };
+              const priorityOrder: Record<string, number> = { high: 3, normal: 2, low: 1 };
               const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
               return priorityDiff || a.timestamp.getTime() - b.timestamp.getTime();
             })
@@ -276,12 +268,18 @@ export const CommandStore = signalStore(
     getAverageExecutionTimeByAction(action: CommandAction): number {
       const actionCommands = store.commandsByAction()[action] || [];
       const completedCommands = actionCommands.filter(cmd => 
-        cmd.endTime && (cmd.status === 'success' || cmd.status === 'error')
+        (cmd.endTime && (cmd.status === 'success' || cmd.status === 'error')) || cmd.duration
       );
       
       if (completedCommands.length === 0) return 0;
       
-      const totalTime = completedCommands.reduce((sum, cmd) => sum + cmd.duration, 0);
+      const totalTime = completedCommands.reduce((sum, cmd) => {
+        // Use duration if available, otherwise calculate from dates
+        const duration = cmd.duration || 
+          (cmd.endTime ? cmd.endTime.getTime() - cmd.startTime.getTime() : 0);
+        return sum + duration;
+      }, 0);
+      
       return totalTime / completedCommands.length;
     }
   }))

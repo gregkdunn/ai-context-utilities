@@ -4,7 +4,7 @@ import { ToastMessage, ToastAction } from '../../models';
 
 // Toast service for global toast management
 export interface ToastService {
-  toasts: ToastMessage[];
+  toasts(): ToastMessage[];
   showToast(toast: Omit<ToastMessage, 'id'>): void;
   dismissToast(id: string): void;
   clearAllToasts(): void;

@@ -178,24 +178,41 @@ describe('ContextMenuComponent', () => {
     expect(menu.style.top).toBe('200px');
   });
 
-  it('should adjust position if menu goes off-screen', () => {
+  it('should adjust position if menu goes off-screen', async () => {
     // Mock window dimensions
     Object.defineProperty(window, 'innerWidth', { value: 800 });
     Object.defineProperty(window, 'innerHeight', { value: 600 });
 
     const position = { x: 750, y: 550 };
-    component.position.set(position);
-    component.isVisible.set(true);
-    fixture.detectChanges();
+    
+    // Mock getBoundingClientRect to simulate menu size that would go off-screen
+    const mockRect = {
+      width: 200,
+      height: 100,
+      right: 950, // x + width = 750 + 200 (goes off screen at 800)
+      top: 550,
+      left: 750,
+      bottom: 650 // y + height = 550 + 100 (goes off screen at 600)
+    } as DOMRect;
+
+    jest.spyOn(Element.prototype, 'getBoundingClientRect')
+        .mockReturnValue(mockRect);
 
     // showAt method should adjust position
     const testItems: ContextMenuItem[] = [
       { id: 'test1', label: 'Test Item 1' }
     ];
+    
     component.showAt(position.x, position.y, testItems);
+    
+    // Wait for DOM update and position adjustment
+    await fixture.whenStable();
+    fixture.detectChanges();
 
-    expect(component.position().x).toBeLessThan(750);
-    expect(component.position().y).toBeLessThan(550);
+    // Position should be adjusted to fit in viewport
+    const adjustedPosition = component.position();
+    expect(adjustedPosition.x).toBeLessThan(750);
+    expect(adjustedPosition.y).toBeLessThan(550);
   });
 
   it('should handle outside clicks', () => {

@@ -4,10 +4,15 @@ import { ResultsViewerComponent } from './results-viewer.component';
 import { CommandStore } from '../../stores/command.store';
 import { CommandExecution } from '../../models';
 
+// Create a mock type that matches the CommandStore interface
+interface MockCommandStore {
+  activeCommands: ReturnType<typeof signal>;
+}
+
 describe('ResultsViewerComponent', () => {
   let component: ResultsViewerComponent;
   let fixture: ComponentFixture<ResultsViewerComponent>;
-  let mockCommandStore: jasmine.SpyObj<CommandStore>;
+  let mockCommandStore: MockCommandStore;
 
   const mockExecution: CommandExecution = {
     id: 'test-123',
@@ -21,19 +26,20 @@ describe('ResultsViewerComponent', () => {
   };
 
   beforeEach(async () => {
-    const commandStoreSpy = jasmine.createSpyObj('CommandStore', ['activeCommands']);
-    commandStoreSpy.activeCommands = signal({ 'test-123': mockExecution });
+    // Create mock for CommandStore
+    mockCommandStore = {
+      activeCommands: signal({ 'test-123': mockExecution })
+    };
 
     await TestBed.configureTestingModule({
       imports: [ResultsViewerComponent],
       providers: [
-        { provide: CommandStore, useValue: commandStoreSpy }
+        { provide: CommandStore, useValue: mockCommandStore }
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ResultsViewerComponent);
     component = fixture.componentInstance;
-    mockCommandStore = TestBed.inject(CommandStore) as jasmine.SpyObj<CommandStore>;
   });
 
   it('should create', () => {
@@ -71,7 +77,7 @@ describe('ResultsViewerComponent', () => {
   });
 
   it('should emit events on actions', () => {
-    spyOn(component.outputCleared, 'emit');
+    jest.spyOn(component.outputCleared, 'emit');
     component.clearOutput();
     expect(component.outputCleared.emit).toHaveBeenCalled();
   });
