@@ -123,7 +123,7 @@ describe('PluginManager', () => {
       await pluginManager.register(testPlugin1);
       
       await expect(pluginManager.register(testPlugin2)).rejects.toThrow(
-        'Plugin with ID \\'test-plugin\\' is already registered'
+        'Plugin with ID \'test-plugin\' is already registered'
       );
     });
 
@@ -133,6 +133,9 @@ describe('PluginManager', () => {
           id: '',
           name: '',
           version: '',
+          description: '',
+          author: '',
+          license: '',
           enabled: true,
           capabilities: []
         },
@@ -214,7 +217,7 @@ describe('PluginManager', () => {
     it('should throw error for non-existent plugin', async () => {
       await expect(
         pluginManager.executePluginCommand('non-existent', 'test-command')
-      ).rejects.toThrow('Plugin \\'non-existent\\' not found or not enabled');
+      ).rejects.toThrow('Plugin \'non-existent\' not found or not enabled');
     });
 
     it('should throw error for non-existent command', async () => {
@@ -223,7 +226,7 @@ describe('PluginManager', () => {
       
       await expect(
         pluginManager.executePluginCommand('test-plugin', 'non-existent-command')
-      ).rejects.toThrow('Command \\'non-existent-command\\' not found in plugin \\'test-plugin\\'');
+      ).rejects.toThrow('Command \'non-existent-command\' not found in plugin \'test-plugin\'');
     });
   });
 

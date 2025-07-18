@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import * as vscode from 'vscode';
 import { StatusTracker, CommandStatus } from './statusTracker';
+export type { CommandStatus };
 import { StreamingCommandRunner } from './streamingRunner';
 import { CommandResult, CommandOptions, StreamingMessage } from '../types';
 
@@ -64,7 +65,7 @@ export class CommandCoordinator extends EventEmitter {
         try {
             return await this.executeCommandInternal(commandId, command, args, options);
         } catch (error) {
-            this.statusTracker.updateStatus(commandId, 'error', error instanceof Error ? error.message : 'Unknown error');
+            this.statusTracker.updateStatus({ message: error instanceof Error ? error.message : 'Unknown error' });
             throw error;
         }
     }
@@ -74,7 +75,7 @@ export class CommandCoordinator extends EventEmitter {
      */
     cancelCommand(commandId: string): boolean {
         const runner = this.activeCommands.get(commandId);
-        if (runner && runner.isRunning()) {
+        if (runner && runner.isRunning) {
             runner.cancel();
             this.statusTracker.cancelCommand(commandId);
             this.activeCommands.delete(commandId);
@@ -89,7 +90,7 @@ export class CommandCoordinator extends EventEmitter {
      */
     cancelAllCommands(): void {
         for (const [commandId, runner] of this.activeCommands) {
-            if (runner.isRunning()) {
+            if (runner.isRunning) {
                 runner.cancel();
                 this.statusTracker.cancelCommand(commandId);
             }
@@ -223,7 +224,8 @@ ${this.generateRecommendations(status, metrics)}
         args: string[],
         options: any
     ): Promise<CommandResult> {
-        const runner = new StreamingCommandRunner();
+        const outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
+        const runner = new StreamingCommandRunner(outputChannel);
         this.activeCommands.set(commandId, runner);
 
         // Set up streaming event handlers
@@ -243,7 +245,7 @@ ${this.generateRecommendations(status, metrics)}
         });
 
         runner.on('status', (status: string) => {
-            this.statusTracker.updateStatus(commandId, 'running', status);
+            this.statusTracker.updateStatus({ message: status });
             this.emitStreamingMessage(commandId, 'status', { status });
         });
 
@@ -281,8 +283,7 @@ ${this.generateRecommendations(status, metrics)}
                         command,
                         args,
                         {
-                            cwd: options.cwd,
-                            progressSteps: this.getProgressSteps(command)
+                            cwd: options.cwd
                         }
                     );
             }
@@ -334,7 +335,9 @@ ${this.generateRecommendations(status, metrics)}
         }
 
         const next = this.commandQueue.shift();
-        if (!next) return;
+        if (!next) {
+            return;
+        }
 
         // Execute the queued command
         this.executeCommand(
@@ -372,44 +375,6 @@ ${this.generateRecommendations(status, metrics)}
         this.emit('streaming_message', message);
     }
 
-    private getProgressSteps(command: string): string[] {
-        const steps: Record<string, string[]> = {
-            aiDebug: [
-                'initializing workspace analysis',
-                'analyzing test files',
-                'running test suite',
-                'collecting coverage data',
-                'generating git diff',
-                'creating ai context',
-                'finalizing output'
-            ],
-            nxTest: [
-                'loading nx configuration',
-                'identifying test files',
-                'starting jest runner',
-                'executing tests',
-                'collecting results',
-                'generating coverage'
-            ],
-            gitDiff: [
-                'analyzing git repository',
-                'identifying changed files',
-                'computing differences',
-                'generating summary'
-            ],
-            prepareToPush: [
-                'checking workspace status',
-                'running eslint',
-                'running prettier',
-                'checking typescript',
-                'validating build',
-                'preparing summary'
-            ]
-        };
-        
-        return steps[command] || ['starting', 'processing', 'completing'];
-    }
-
     private formatActiveCommands(commands: CommandStatus[]): string {
         const active = commands.filter(c => c.status === 'running');
         
@@ -421,9 +386,9 @@ ${this.generateRecommendations(status, metrics)}
             const elapsed = cmd.startTime ? Date.now() - cmd.startTime.getTime() : 0;
             const elapsedSeconds = Math.round(elapsed / 1000);
             
-            return `🔄 ${cmd.command}${cmd.project ? ` (${cmd.project})` : ''}
+            return `🔄 ${cmd.command || cmd.action}${cmd.project ? ` (${cmd.project})` : ''}
    Progress: ${cmd.progress}% | Elapsed: ${elapsedSeconds}s
-   Status: ${cmd.message}
+   Status: ${cmd.message || cmd.output}
    ID: ${cmd.id.substring(0, 8)}...`;
         }).join('\n\n');
     }

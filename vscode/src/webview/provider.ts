@@ -3,459 +3,243 @@ import { ProjectDetector } from '../utils/projectDetector';
 import { CommandRunner } from '../utils/shellRunner';
 import { FileManager } from '../utils/fileManager';
 import { StatusTracker } from '../utils/statusTracker';
-import { CommandCoordinator } from '../utils/commandCoordinator';
-import { WebviewMessage, WebviewState, ActionButton, CommandOptions, StreamingMessage } from '../types';
+import { WebviewMessage, StreamingMessage } from '../types';
 
 export class WebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'aiDebugUtilities';
+    
     private _view?: vscode.WebviewView;
-    private _state: WebviewState;
+    private _disposables: vscode.Disposable[] = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
-        private readonly projectDetector: ProjectDetector,
-        private readonly commandRunner: CommandRunner,
-        private readonly fileManager: FileManager,
-        private readonly statusTracker: StatusTracker,
-        private readonly commandCoordinator: CommandCoordinator
-    ) {
-        this._state = {
-            projects: [],
-            actions: this.initializeActions(),
-            outputFiles: {},
-            isStreaming: false,
-            currentOutput: ''
-        };
-
-        // Initialize projects (but don't await in constructor)
-        this.initializeProjects();
-
-        // Watch for file changes
-        this.fileManager.watchFiles((type, path) => {
-            this.updateOutputFile(type, path);
-        });
-
-        // Set up status tracking event handlers
-        this.setupStatusTracking();
-        
-        // Set up streaming event handlers
-        this.setupStreamingHandlers();
-    }
+        private readonly _projectDetector: ProjectDetector,
+        private readonly _commandRunner: CommandRunner,
+        private readonly _fileManager: FileManager,
+        private readonly _statusTracker: StatusTracker
+    ) {}
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken,
+        _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
 
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [
-                this._extensionUri
-            ]
+            localResourceRoots: [this._extensionUri]
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        // Handle messages from webview
-        webviewView.webview.onDidReceiveMessage(async (message: WebviewMessage) => {
-            await this.handleMessage(message);
-        });
+        webviewView.webview.onDidReceiveMessage(
+            async (data: WebviewMessage) => {
+                // FIX: Properly handle async message processing
+                try {
+                    await this._handleMessage(data);
+                } catch (error) {
+                    console.error('Error handling webview message:', error);
+                    this._postMessage({ 
+                        type: 'error', 
+                        data: { error: (error as Error).message } 
+                    });
+                }
+            },
+            undefined,
+            this._disposables
+        );
 
-        // Send initial state
-        this.updateWebview();
-    }
-
-    public show() {
-        if (this._view) {
-            this._view.show?.(true);
-        }
-    }
-
-    public async runCommand(action: string, options: { project?: string } & CommandOptions) {
-        const actionButton = this._state.actions[action];
-        if (!actionButton) {
-            return;
-        }
-
+        // Set up file watcher
         try {
-            const project = options.project || this._state.currentProject;
+            this._fileManager.watchFiles((filePath: string, eventType: string) => {
+                this._postMessage({ type: 'fileChanged', data: { filePath, eventType } });
+            });
+        } catch (error) {
+            console.error('Error setting up file watcher:', error);
+        }
+    }
+
+    // FIX: Make _handleMessage async and add proper error handling
+    private async _handleMessage(data: WebviewMessage): Promise<void> {
+        try {
+            switch (data.command) {
+                case 'runCommand':
+                    await this._handleRunCommand(data.data);
+                    break;
+                case 'getProjects':
+                    await this._handleGetProjects();
+                    break;
+                case 'openFile':
+                    await this._handleOpenFile(data.data);
+                    break;
+                case 'clearOutput':
+                    await this._handleClearOutput();
+                    break;
+                default:
+                    console.warn('Unknown message command:', data.command);
+            }
+        } catch (error) {
+            console.error(`Error handling command ${data.command}:`, error);
+            this._postMessage({ 
+                type: 'commandError', 
+                data: { 
+                    command: data.command, 
+                    error: (error as Error).message 
+                } 
+            });
+        }
+    }
+
+    private async _handleRunCommand(data: any) {
+        const { action, project, options } = data;
+        
+        try {
+            let result;
             
-            // Remove project from options to avoid passing it twice
-            const { project: _, ...cleanOptions } = options;
-
-            // Start streaming mode
-            this._state.isStreaming = true;
-            this._state.currentAction = action;
-            this._state.currentOutput = '';
-            this.updateWebview();
-
-            let args: string[] = [];
-            let commandOptions = {
-                project,
-                commandOptions: cleanOptions,
-                cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-            };
-
-            // Prepare command arguments based on action type
             switch (action) {
                 case 'aiDebug':
-                    if (!project) {
-                        throw new Error('No project selected');
-                    }
-                    // Use the existing aiDebug implementation through command coordinator
-                    args = [project];
+                    result = await this._commandRunner.runAiDebug(project, options);
                     break;
-
                 case 'nxTest':
-                    if (!project) {
-                        throw new Error('No project selected');
-                    }
-                    args = [project];
-                    if (cleanOptions.quick) args.push('--quick');
-                    if (cleanOptions.focus) args.push(`--focus=${cleanOptions.focus}`);
+                    result = await this._commandRunner.runNxTest(project, options);
                     break;
-
                 case 'gitDiff':
-                    args = [];
-                    if (cleanOptions.noDiff) args.push('--no-diff');
+                    result = await this._commandRunner.runGitDiff(options);
                     break;
-
                 case 'prepareToPush':
-                    if (!project) {
-                        throw new Error('No project selected');
-                    }
-                    args = [project];
+                    result = await this._commandRunner.runPrepareToPush(project, options);
                     break;
-
                 default:
                     throw new Error(`Unknown action: ${action}`);
             }
-
-            // Execute command through coordinator with streaming
-            const result = await this.commandCoordinator.executeCommand(
-                action as any,
-                args,
-                commandOptions
-            );
-
-            // Update last run info
-            this._state.lastRun = {
-                action,
-                timestamp: new Date(),
-                success: result.success
-            };
-
-        } catch (error) {
-            vscode.window.showErrorMessage(`${action} failed: ${error}`);
-        } finally {
-            // End streaming mode
-            this._state.isStreaming = false;
-            this._state.currentAction = undefined;
-            this.updateWebview();
-        }
-    }
-
-    private async handleMessage(message: WebviewMessage) {
-        switch (message.command) {
-            case 'runCommand':
-                if (message.data.action) {
-                    const options = {
-                        ...message.data.options,
-                        project: message.data.project
-                    };
-                    await this.runCommand(message.data.action, options);
-                }
-                break;
-
-            case 'getStatus':
-                this.updateWebview();
-                break;
-
-            case 'openFile':
-                if (message.data.filePath) {
-                    await this.fileManager.openFile(message.data.filePath);
-                }
-                break;
-
-            case 'getProjects':
-                await this.initializeProjects();
-                this.updateWebview();
-                break;
-
-            case 'setProject':
-                if (message.data.project) {
-                    this._state.currentProject = message.data.project;
-                    this.updateWebview();
-                }
-                break;
-
-            case 'cancelCommand':
-                if (message.data.action) {
-                    // Find and cancel the running command
-                    const runningCommands = this.statusTracker.getRunningCommands();
-                    const commandToCancel = runningCommands.find(cmd => cmd.command === message.data.action);
-                    if (commandToCancel) {
-                        this.commandCoordinator.cancelCommand(commandToCancel.id);
-                    }
-                }
-                break;
-
-            case 'clearOutput':
-                this._state.currentOutput = '';
-                this.updateWebview();
-                break;
-        }
-    }
-
-    private async initializeProjects() {
-        try {
-            this._state.projects = await this.projectDetector.getProjects();
             
-            // Auto-detect current project if none selected
-            if (!this._state.currentProject && this._state.projects.length > 0) {
-                const currentProject = await this.projectDetector.detectCurrentProject();
-                this._state.currentProject = currentProject || this._state.projects[0].name;
-            }
+            this._postMessage({ 
+                type: 'commandResult', 
+                data: { action, result } 
+            });
         } catch (error) {
-            console.error('Failed to initialize projects:', error);
-        }
-    }
-
-    private initializeActions(): Record<string, ActionButton> {
-        // Get initial action states from status tracker
-        return this.statusTracker.toActionButtons();
-    }
-
-    private setupStatusTracking(): void {
-        // Listen for status changes and update action buttons
-        this.statusTracker.on('status_change', (event) => {
-            this._state.actions = this.statusTracker.toActionButtons();
-            this.updateWebview();
-        });
-
-        // Listen for history updates
-        this.statusTracker.on('history_updated', (entry) => {
-            // Could show notifications or update UI
-            this.updateWebview();
-        });
-    }
-
-    private setupStreamingHandlers(): void {
-        // Listen for streaming messages from command coordinator
-        this.commandCoordinator.on('streaming_message', (message: StreamingMessage) => {
-            this.handleStreamingMessage(message);
-        });
-
-        // Listen for queue updates
-        this.commandCoordinator.on('queue_update', (data) => {
-            // Could update UI to show queue status
-            this.updateWebview();
-        });
-    }
-
-    private handleStreamingMessage(message: StreamingMessage): void {
-        switch (message.type) {
-            case 'output':
-                if (message.data.text) {
-                    this._state.currentOutput += message.data.text;
-                }
-                break;
-
-            case 'error':
-                if (message.data.text) {
-                    this._state.currentOutput += `ERROR: ${message.data.text}`;
-                }
-                break;
-
-            case 'progress':
-                // Progress is handled by status tracker
-                break;
-
-            case 'status':
-                // Status updates are handled by status tracker
-                break;
-
-            case 'complete':
-                // Command completion is handled by status tracker
-                break;
-        }
-
-        // Send streaming update to webview
-        if (this._view) {
-            this._view.webview.postMessage({
-                command: 'streamingUpdate',
-                message
+            console.error(`Error executing command ${action}:`, error);
+            this._postMessage({ 
+                type: 'commandError', 
+                data: { action, error: (error as Error).message } 
             });
         }
     }
 
-    private async updateOutputFile(type: string, path: string) {
+    private async _handleGetProjects() {
         try {
-            const content = await this.fileManager.getFileContent(type as any);
-            if (content) {
-                this._state.outputFiles[type] = content;
-                this.updateWebview();
-            }
+            const projects = await this._projectDetector.getProjects();
+            this._postMessage({ 
+                type: 'projects', 
+                data: { projects } 
+            });
         } catch (error) {
-            console.error(`Failed to update output file ${type}:`, error);
-        }
-    }
-
-    private updateWebview() {
-        if (this._view) {
-            this._view.webview.postMessage({
-                command: 'updateState',
-                state: this._state
+            console.error('Error getting projects:', error);
+            this._postMessage({ 
+                type: 'error', 
+                data: { error: (error as Error).message } 
             });
         }
     }
 
-    private _getHtmlForWebview(webview: vscode.Webview) {
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'main.js'));
-        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'styles.css'));
+    private async _handleOpenFile(data: any) {
+        const { filePath } = data;
+        
+        try {
+            await this._fileManager.openFile(filePath);
+            this._postMessage({ 
+                type: 'fileOpened', 
+                data: { filePath } 
+            });
+        } catch (error) {
+            console.error(`Error opening file ${filePath}:`, error);
+            this._postMessage({ 
+                type: 'error', 
+                data: { error: (error as Error).message } 
+            });
+        }
+    }
+
+    // FIX: Make _handleClearOutput async for consistency
+    private async _handleClearOutput(): Promise<void> {
+        try {
+            // Clear output in status tracker or file manager
+            this._statusTracker.clearHistory();
+            this._postMessage({ 
+                type: 'outputCleared', 
+                data: {} 
+            });
+        } catch (error) {
+            console.error('Error clearing output:', error);
+            this._postMessage({ 
+                type: 'error', 
+                data: { error: (error as Error).message } 
+            });
+        }
+    }
+
+    // Public methods for external use
+    public show(): void {
+        if (this._view) {
+            try {
+                this._view.show();
+            } catch (error) {
+                console.error('Error showing webview:', error);
+            }
+        }
+    }
+
+    // FIX: Ensure runCommand is properly async
+    public async runCommand(action: string, data: any): Promise<void> {
+        try {
+            await this._handleRunCommand({ action, ...data });
+        } catch (error) {
+            console.error(`Error running command ${action}:`, error);
+            throw error;
+        }
+    }
+
+    private _postMessage(message: any): void {
+        if (this._view) {
+            try {
+                this._view.webview.postMessage(message);
+            } catch (error) {
+                console.error('Error posting message to webview:', error);
+            }
+        }
+    }
+
+    private _getHtmlForWebview(webview: vscode.Webview): string {
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'main.js')
+        );
+
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'styles.css')
+        );
 
         return `<!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link href="${styleUri}" rel="stylesheet">
-                <title>AI Debug Utilities</title>
-            </head>
-            <body>
-                <div id="app">
-                    <div class="header">
-                        <h2>🤖 AI Debug Assistant</h2>
-                    </div>
-                    
-                    <div class="project-selector">
-                        <label for="project-select">Project:</label>
-                        <select id="project-select">
-                            <option value="">Select a project...</option>
-                        </select>
-                    </div>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link href="${styleUri}" rel="stylesheet">
+            <title>AI Debug Utilities</title>
+        </head>
+        <body>
+            <div id="root"></div>
+            <script src="${scriptUri}"></script>
+        </body>
+        </html>`;
+    }
 
-                    <div class="actions">
-                        <div class="action-buttons">
-                            <!-- Action buttons will be populated by JavaScript -->
-                        </div>
-                    </div>
+    public setupStreamingListeners() {
+        // Method for streaming integration - placeholder implementation
+        // This method would set up listeners for streaming events
+    }
 
-                    <!-- Real-time output section -->
-                    <div class="streaming-output" id="streaming-section" style="display: none;">
-                        <div class="output-header">
-                            <h3>🔄 Live Output</h3>
-                            <div class="output-controls">
-                                <button id="cancel-command" class="cancel-button">❌ Cancel</button>
-                                <button id="clear-output" class="clear-button">🗑️ Clear</button>
-                            </div>
-                        </div>
-                        <div class="progress-container">
-                            <div class="progress-bar">
-                                <div id="progress-fill" class="progress-fill"></div>
-                            </div>
-                            <div id="progress-text" class="progress-text">Initializing...</div>
-                        </div>
-                        <div class="live-output" id="live-output">
-                            <!-- Real-time output will appear here -->
-                        </div>
-                    </div>
-
-                    <!-- Status tracking section -->
-                    <div class="status-section">
-                        <div class="status-summary">
-                            <span id="status-indicator" class="status-idle">⚪ Ready</span>
-                            <span id="queue-status" style="display: none;">Queue: 0</span>
-                        </div>
-                    </div>
-
-                    <div class="results">
-                        <div class="tabs">
-                            <button class="tab-button active" data-tab="output">Output</button>
-                            <button class="tab-button" data-tab="files">Files</button>
-                            <button class="tab-button" data-tab="help">Help</button>
-                        </div>
-                        
-                        <div class="tab-content">
-                            <div id="output-tab" class="tab-pane active">
-                                <div id="output-content">
-                                    <p>Run a command to see results here...</p>
-                                </div>
-                            </div>
-                            
-                            <div id="files-tab" class="tab-pane">
-                                <div id="files-content">
-                                    <!-- Output files will be listed here -->
-                                </div>
-                            </div>
-                            
-                            <div id="help-tab" class="tab-pane">
-                                <div class="help-content">
-                                    <h3>AI Debug Utilities</h3>
-                                    <p>This extension provides AI-optimized debugging tools for Angular NX projects with advanced status tracking and real-time streaming.</p>
-                                    
-                                    <h4>Commands:</h4>
-                                    <ul>
-                                        <li><strong>AI Debug Analysis:</strong> Complete workflow with test analysis</li>
-                                        <li><strong>Run Tests:</strong> Execute Jest tests with AI-optimized output</li>
-                                        <li><strong>Analyze Changes:</strong> Smart git diff analysis</li>
-                                        <li><strong>Prepare to Push:</strong> Lint and format code</li>
-                                    </ul>
-                                    
-                                    <h4>Status Tracking Features:</h4>
-                                    <ul>
-                                        <li><strong>Real-time Progress:</strong> See command progress with visual indicators</li>
-                                        <li><strong>Command History:</strong> Track execution history and success rates</li>
-                                        <li><strong>Concurrent Execution:</strong> Run multiple commands simultaneously</li>
-                                        <li><strong>Queue Management:</strong> Commands are queued when at capacity</li>
-                                        <li><strong>Status Bar Integration:</strong> See active commands in VS Code status bar</li>
-                                        <li><strong>Cancellation Support:</strong> Stop long-running operations anytime</li>
-                                    </ul>
-                                    
-                                    <h4>Streaming Features:</h4>
-                                    <ul>
-                                        <li><strong>Live Output:</strong> See command output in real-time</li>
-                                        <li><strong>Progress Tracking:</strong> Visual progress bars with status messages</li>
-                                        <li><strong>Error Highlighting:</strong> Immediate feedback on errors</li>
-                                        <li><strong>Output Management:</strong> Clear output, cancel commands</li>
-                                    </ul>
-                                    
-                                    <h4>Tips:</h4>
-                                    <ul>
-                                        <li>Select a project before running commands</li>
-                                        <li>Use Ctrl+Shift+D to open this panel</li>
-                                        <li>Watch the live output for real-time feedback</li>
-                                        <li>Cancel commands anytime if they take too long</li>
-                                        <li>Check status bar for active command count</li>
-                                        <li>Output files are saved to your configured directory</li>
-                                        <li>Click on file names to open them in the editor</li>
-                                        <li>Multiple commands can run concurrently (up to 3 by default)</li>
-                                        <li>Commands are queued when hitting the concurrent limit</li>
-                                    </ul>
-                                    
-                                    <h4>Status Indicators:</h4>
-                                    <ul>
-                                        <li><strong>⚪ Ready:</strong> No commands running</li>
-                                        <li><strong>🔄 Running:</strong> Commands actively executing</li>
-                                        <li><strong>✅ Success:</strong> Last command completed successfully</li>
-                                        <li><strong>❌ Error:</strong> Last command failed</li>
-                                        <li><strong>🟡 Queued:</strong> Commands waiting to execute</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="footer">
-                        <button id="copy-for-ai" class="secondary-button">📎 Copy for AI</button>
-                        <button id="open-output-dir" class="secondary-button">📁 Open Output Dir</button>
-                    </div>
-                </div>
-
-                <script src="${scriptUri}"></script>
-            </body>
-            </html>`;
+    public dispose() {
+        this._disposables.forEach(d => d.dispose());
     }
 }

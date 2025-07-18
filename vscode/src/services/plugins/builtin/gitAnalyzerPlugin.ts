@@ -27,13 +27,7 @@ export class GitAnalyzerPlugin implements Plugin {
         type: 'analyzer',
         name: 'git-analyzer',
         description: 'Analyze Git repositories and commits',
-        permissions: [
-          {
-            type: 'workspace-access',
-            scope: 'git',
-            reason: 'Analyze Git repository status and history'
-          }
-        ]
+        permissions: ['workspace-access:git:Analyze Git repository status and history']
       },
       {
         type: 'command',
@@ -79,15 +73,15 @@ export class GitAnalyzerPlugin implements Plugin {
             
           } catch (error) {
             issues.push({
-              id: 'git-analysis-error',
               type: 'error',
-              message: `Git analysis failed: ${error.message}`,
-              severity: 'medium',
-              fixable: false
+              message: `Git analysis failed: ${(error as Error).message}`,
+              severity: 'medium'
             });
           }
           
           return {
+            id: 'git-analysis',
+            summary: 'Git repository analysis completed',
             issues,
             metrics,
             suggestions,
@@ -161,25 +155,25 @@ export class GitAnalyzerPlugin implements Plugin {
     
     // Register analyzers
     for (const analyzer of this.analyzers) {
-      api.registerAnalyzer(analyzer);
+      api.registerAnalyzer?.(analyzer);
     }
     
     // Register commands
     for (const command of this.commands) {
-      api.registerCommand(command);
+      api.registerCommand(command.id, command.execute);
     }
     
     // Listen for Git events
-    api.on('git:commit', (data) => this.onGitCommit(data, context));
-    api.on('git:branch-changed', (data) => this.onBranchChanged(data, context));
+    api.on?.('git:commit', (data) => this.onGitCommit(data, context));
+    api.on?.('git:branch-changed', (data) => this.onBranchChanged(data, context));
     
     console.log('Git Analyzer Plugin activated');
   }
 
   async deactivate(api: PluginAPI, context: PluginContext): Promise<void> {
     // Cleanup
-    api.off('git:commit');
-    api.off('git:branch-changed');
+    api.off?.('git:commit');
+    api.off?.('git:branch-changed');
     
     console.log('Git Analyzer Plugin deactivated');
   }
@@ -212,12 +206,9 @@ export class GitAnalyzerPlugin implements Plugin {
     
     if (poorCommitMessages > 0) {
       issues.push({
-        id: 'poor-commit-messages',
         type: 'warning',
         message: `Found ${poorCommitMessages} commit(s) with poor messages`,
-        severity: 'low',
-        fixable: false,
-        suggestedFix: 'Write more descriptive commit messages'
+        severity: 'low'
       });
       
       suggestions.push('Use conventional commit format: type(scope): description');
@@ -225,12 +216,9 @@ export class GitAnalyzerPlugin implements Plugin {
     
     if (longCommitMessages > 0) {
       issues.push({
-        id: 'long-commit-messages',
         type: 'info',
         message: `Found ${longCommitMessages} commit(s) with long messages`,
-        severity: 'low',
-        fixable: false,
-        suggestedFix: 'Keep commit messages under 72 characters'
+        severity: 'low'
       });
     }
     
@@ -244,6 +232,8 @@ export class GitAnalyzerPlugin implements Plugin {
     }
     
     return {
+      id: 'commit-analysis',
+      summary: 'Commit history analysis completed',
       issues,
       metrics,
       suggestions,
@@ -265,12 +255,9 @@ export class GitAnalyzerPlugin implements Plugin {
     
     if (staleBranches.length > 0) {
       issues.push({
-        id: 'stale-branches',
         type: 'warning',
         message: `Found ${staleBranches.length} stale branch(es)`,
-        severity: 'medium',
-        fixable: true,
-        suggestedFix: 'Delete or merge stale branches'
+        severity: 'medium'
       });
       
       suggestions.push('Clean up old branches to maintain a tidy repository');
@@ -278,16 +265,15 @@ export class GitAnalyzerPlugin implements Plugin {
     
     if (branches.length > 20) {
       issues.push({
-        id: 'too-many-branches',
         type: 'info',
         message: `Repository has ${branches.length} branches`,
-        severity: 'low',
-        fixable: true,
-        suggestedFix: 'Consider cleaning up unnecessary branches'
+        severity: 'low'
       });
     }
     
     return {
+      id: 'branch-analysis',
+      summary: 'Branch analysis completed',
       issues,
       metrics,
       suggestions,
@@ -306,12 +292,9 @@ export class GitAnalyzerPlugin implements Plugin {
     
     if (uncommittedFiles.length > 10) {
       issues.push({
-        id: 'too-many-uncommitted-files',
         type: 'warning',
         message: `${uncommittedFiles.length} files with uncommitted changes`,
-        severity: 'medium',
-        fixable: true,
-        suggestedFix: 'Commit or stash your changes'
+        severity: 'medium'
       });
     }
     
@@ -321,18 +304,17 @@ export class GitAnalyzerPlugin implements Plugin {
     
     if (largeFiles.length > 0) {
       issues.push({
-        id: 'large-uncommitted-files',
         type: 'warning',
         message: `${largeFiles.length} large file(s) with uncommitted changes`,
-        severity: 'high',
-        fixable: false,
-        suggestedFix: 'Consider using Git LFS for large files'
+        severity: 'high'
       });
       
       suggestions.push('Use Git LFS for files larger than 100MB');
     }
     
     return {
+      id: 'changes-analysis',
+      summary: 'Changes analysis completed',
       issues,
       metrics,
       suggestions,
@@ -469,17 +451,17 @@ export class GitAnalyzerPlugin implements Plugin {
   }
 
   private calculateCommitQualityScore(analysis: AnalysisResult): number {
-    const totalCommits = analysis.metrics['total-commits'] || 1;
-    const poorCommits = analysis.metrics['poor-commit-messages'] || 0;
-    const longCommits = analysis.metrics['long-commit-messages'] || 0;
+    const totalCommits = analysis.metrics?.['total-commits'] || 1;
+    const poorCommits = analysis.metrics?.['poor-commit-messages'] || 0;
+    const longCommits = analysis.metrics?.['long-commit-messages'] || 0;
     
     const qualityScore = 1 - (poorCommits + longCommits * 0.5) / totalCommits;
     return Math.max(0, Math.min(1, qualityScore));
   }
 
   private calculateBranchHealthScore(analysis: AnalysisResult): number {
-    const totalBranches = analysis.metrics['total-branches'] || 1;
-    const staleBranches = analysis.metrics['stale-branches'] || 0;
+    const totalBranches = analysis.metrics?.['total-branches'] || 1;
+    const staleBranches = analysis.metrics?.['stale-branches'] || 0;
     
     const healthScore = 1 - (staleBranches / totalBranches);
     return Math.max(0, Math.min(1, healthScore));
@@ -498,7 +480,7 @@ export class GitAnalyzerPlugin implements Plugin {
 - **Workflow Efficiency**: ${Math.round(health.scores.workflowEfficiency * 100)}%
 
 ## Recommendations
-${health.recommendations.map(rec => `- ${rec}`).join('\n')}
+${health.recommendations.map((rec: any) => `- ${rec}`).join('\n')}
 
 ---
 *Generated by AI Debug Git Analyzer Plugin*
@@ -507,17 +489,17 @@ ${health.recommendations.map(rec => `- ${rec}`).join('\n')}
 
   private async setupGitHooks(context: PluginContext): Promise<void> {
     // Implementation for setting up Git hooks
-    this.api?.showNotification('Git hooks setup completed', 'info');
+    this.api?.showNotification?.('Git hooks setup completed', 'info');
   }
 
   private async setupBranchProtection(context: PluginContext): Promise<void> {
     // Implementation for setting up branch protection
-    this.api?.showNotification('Branch protection configured', 'info');
+    this.api?.showNotification?.('Branch protection configured', 'info');
   }
 
   private async optimizeGitignore(context: PluginContext): Promise<void> {
     // Implementation for optimizing .gitignore
-    this.api?.showNotification('.gitignore optimized', 'info');
+    this.api?.showNotification?.('.gitignore optimized', 'info');
   }
 
   private async onGitCommit(data: any, context: PluginContext): Promise<void> {

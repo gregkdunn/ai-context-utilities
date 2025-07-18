@@ -324,7 +324,7 @@ export class NaturalLanguageQueryEngine {
         entities: Record<string, any>, 
         context?: AnalysisData
     ): Promise<any> {
-        if (!context) return null;
+        if (!context) {return null;}
         
         const data: any = {};
         

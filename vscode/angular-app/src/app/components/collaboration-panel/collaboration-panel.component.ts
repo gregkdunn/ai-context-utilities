@@ -1,1 +1,418 @@
-import { Component, OnInit, OnDestroy, inject, signal, ChangeDetectionStrategy } from '@angular/core';\nimport { CommonModule } from '@angular/common';\nimport { FormsModule } from '@angular/forms';\nimport { WebviewService } from '../../services/webview.service';\n\n/**\n * CollaborationPanelComponent - Phase 4.1 Real-time Collaboration UI\n * Provides interface for creating, joining, and managing collaboration sessions\n */\n@Component({\n  selector: 'app-collaboration-panel',\n  standalone: true,\n  imports: [CommonModule, FormsModule],\n  changeDetection: ChangeDetectionStrategy.OnPush,\n  template: `\n    <div class=\"collaboration-panel bg-vscode-editor-background text-vscode-editor-foreground p-4\">\n      <!-- Header -->\n      <div class=\"flex items-center justify-between mb-4\">\n        <h2 class=\"text-lg font-semibold flex items-center\">\n          <span class=\"mr-2\">🤝</span>\n          Collaboration\n        </h2>\n        <button \n          (click)=\"showCreateSession.set(!showCreateSession())\"\n          class=\"px-3 py-1 bg-vscode-button-background hover:bg-vscode-button-hoverBackground \n                 text-vscode-button-foreground rounded text-sm transition-colors\"\n          [class.bg-vscode-button-hoverBackground]=\"showCreateSession()\">\n          {{ showCreateSession() ? 'Cancel' : 'New Session' }}\n        </button>\n      </div>\n\n      <!-- Create Session Form -->\n      @if (showCreateSession()) {\n        <div class=\"mb-4 p-3 border border-vscode-widget-border rounded\">\n          <h3 class=\"font-medium mb-2\">Create Collaboration Session</h3>\n          <form (ngSubmit)=\"createSession()\" class=\"space-y-3\">\n            <div>\n              <label class=\"block text-sm font-medium mb-1\">Session Name</label>\n              <input \n                type=\"text\" \n                [(ngModel)]=\"newSession.name\" \n                name=\"sessionName\"\n                class=\"w-full px-3 py-2 bg-vscode-input-background text-vscode-input-foreground \n                       border border-vscode-input-border rounded text-sm\"\n                placeholder=\"Enter session name\"\n                required>\n            </div>\n            <div class=\"flex space-x-2\">\n              <button \n                type=\"submit\" \n                [disabled]=\"!newSession.name.trim()\"\n                class=\"px-4 py-2 bg-vscode-button-background hover:bg-vscode-button-hoverBackground \n                       text-vscode-button-foreground rounded text-sm transition-colors\n                       disabled:opacity-50 disabled:cursor-not-allowed\">\n                Create Session\n              </button>\n              <button \n                type=\"button\" \n                (click)=\"showCreateSession.set(false)\"\n                class=\"px-4 py-2 bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground \n                       text-vscode-button-secondaryForeground rounded text-sm transition-colors\">\n                Cancel\n              </button>\n            </div>\n          </form>\n        </div>\n      }\n\n      <!-- Join Session -->\n      <div class=\"mb-4 p-3 border border-vscode-widget-border rounded\">\n        <h3 class=\"font-medium mb-2\">Join Session</h3>\n        <div class=\"flex space-x-2\">\n          <input \n            type=\"text\" \n            [(ngModel)]=\"joinSessionId\" \n            placeholder=\"Enter session ID\"\n            class=\"flex-1 px-3 py-2 bg-vscode-input-background text-vscode-input-foreground \n                   border border-vscode-input-border rounded text-sm\">\n          <button \n            (click)=\"joinSession()\"\n            [disabled]=\"!joinSessionId.trim()\"\n            class=\"px-4 py-2 bg-vscode-button-background hover:bg-vscode-button-hoverBackground \n                   text-vscode-button-foreground rounded text-sm transition-colors\n                   disabled:opacity-50 disabled:cursor-not-allowed\">\n            Join\n          </button>\n        </div>\n      </div>\n\n      <!-- AI Insights Panel -->\n      <div class=\"mb-4 p-3 border border-vscode-widget-border rounded\">\n        <h3 class=\"font-medium mb-2 flex items-center\">\n          <span class=\"mr-2\">🤖</span>\n          AI Insights\n        </h3>\n        \n        <!-- Natural Language Query -->\n        <div class=\"mb-3\">\n          <div class=\"flex space-x-2\">\n            <input \n              type=\"text\" \n              [(ngModel)]=\"aiQuery\" \n              placeholder=\"Ask me anything about your debugging workflow...\"\n              class=\"flex-1 px-3 py-2 bg-vscode-input-background text-vscode-input-foreground \n                     border border-vscode-input-border rounded text-sm\"\n              (keyup.enter)=\"processAIQuery()\">\n            <button \n              (click)=\"processAIQuery()\"\n              [disabled]=\"!aiQuery.trim() || isProcessingQuery()\"\n              class=\"px-4 py-2 bg-vscode-button-background hover:bg-vscode-button-hoverBackground \n                     text-vscode-button-foreground rounded text-sm transition-colors\n                     disabled:opacity-50 disabled:cursor-not-allowed\">\n              @if (isProcessingQuery()) {\n                <div class=\"animate-spin rounded-full h-4 w-4 border-b-2 border-current\"></div>\n              } @else {\n                Ask\n              }\n            </button>\n          </div>\n        </div>\n\n        <!-- AI Response -->\n        @if (aiResponse()) {\n          <div class=\"mb-3 p-3 bg-vscode-textCodeBlock-background rounded\">\n            <p class=\"text-sm mb-2\">{{ aiResponse()?.response }}</p>\n            @if (aiResponse()?.suggestedActions?.length > 0) {\n              <div class=\"space-y-1\">\n                <p class=\"text-xs font-medium text-vscode-descriptionForeground\">Suggested Actions:</p>\n                @for (action of aiResponse()?.suggestedActions; track action.id) {\n                  <button \n                    (click)=\"executeAIAction(action)\"\n                    class=\"block w-full text-left px-2 py-1 text-xs bg-vscode-button-secondaryBackground \n                           hover:bg-vscode-button-secondaryHoverBackground rounded\">\n                    <span class=\"font-medium\">{{ action.title }}</span>\n                    <span class=\"text-vscode-descriptionForeground ml-2\">{{ action.description }}</span>\n                  </button>\n                }\n              </div>\n            }\n          </div>\n        }\n\n        <!-- Command Suggestions -->\n        @if (commandSuggestions().length > 0) {\n          <div class=\"mb-3\">\n            <p class=\"text-xs font-medium text-vscode-descriptionForeground mb-2\">Smart Suggestions:</p>\n            <div class=\"space-y-1\">\n              @for (suggestion of commandSuggestions(); track suggestion.command) {\n                <div class=\"flex items-center justify-between p-2 bg-vscode-textCodeBlock-background rounded\">\n                  <div class=\"flex-1\">\n                    <div class=\"text-sm font-medium\">{{ suggestion.command }}</div>\n                    <div class=\"text-xs text-vscode-descriptionForeground\">{{ suggestion.reason }}</div>\n                  </div>\n                  <div class=\"flex items-center space-x-2\">\n                    <div class=\"text-xs\">\n                      <span class=\"text-vscode-descriptionForeground\">Confidence:</span>\n                      <span class=\"font-medium\">{{ (suggestion.confidence * 100).toFixed(0) }}%</span>\n                    </div>\n                    <button \n                      (click)=\"executeSuggestion(suggestion)\"\n                      class=\"px-2 py-1 bg-vscode-button-background hover:bg-vscode-button-hoverBackground \n                             text-vscode-button-foreground rounded text-xs\">\n                      Run\n                    </button>\n                  </div>\n                </div>\n              }\n            </div>\n          </div>\n        }\n\n        <!-- Demo Insights -->\n        <div class=\"space-y-2\">\n          <div class=\"p-2 border-l-4 border-l-orange-500 bg-vscode-textCodeBlock-background rounded\">\n            <div class=\"flex items-center mb-1\">\n              <span class=\"mr-2\">⚡</span>\n              <span class=\"font-medium text-sm\">Performance Issue Detected</span>\n              <span class=\"ml-2 px-2 py-0.5 rounded text-xs bg-orange-600 text-white\">medium</span>\n            </div>\n            <p class=\"text-sm text-vscode-descriptionForeground mb-2\">\n              Command execution is 40% slower than average. Consider optimizing test selection.\n            </p>\n            <button class=\"px-2 py-1 text-xs bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground rounded\">\n              Optimize Tests\n            </button>\n          </div>\n          \n          <div class=\"p-2 border-l-4 border-l-blue-500 bg-vscode-textCodeBlock-background rounded\">\n            <div class=\"flex items-center mb-1\">\n              <span class=\"mr-2\">💡</span>\n              <span class=\"font-medium text-sm\">Smart Suggestion</span>\n              <span class=\"ml-2 px-2 py-0.5 rounded text-xs bg-blue-600 text-white\">low</span>\n            </div>\n            <p class=\"text-sm text-vscode-descriptionForeground mb-2\">\n              Based on your patterns, consider running prepareToPush after making changes.\n            </p>\n            <button class=\"px-2 py-1 text-xs bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground rounded\">\n              Set up Auto-run\n            </button>\n          </div>\n        </div>\n      </div>\n    </div>\n  `,\n  styles: [`\n    .collaboration-panel {\n      height: 100%;\n      overflow-y: auto;\n    }\n    \n    .collaboration-panel::-webkit-scrollbar {\n      width: 6px;\n    }\n    \n    .collaboration-panel::-webkit-scrollbar-track {\n      background: var(--vscode-scrollbarSlider-background);\n    }\n    \n    .collaboration-panel::-webkit-scrollbar-thumb {\n      background: var(--vscode-scrollbarSlider-activeBackground);\n      border-radius: 3px;\n    }\n  `]\n})\nexport class CollaborationPanelComponent implements OnInit, OnDestroy {\n  private webviewService = inject(WebviewService);\n  \n  // Signals for reactive state management\n  showCreateSession = signal(false);\n  joinSessionId = signal('');\n  aiQuery = signal('');\n  aiResponse = signal<any>(null);\n  commandSuggestions = signal<any[]>([]);\n  isProcessingQuery = signal(false);\n  \n  // New session form data\n  newSession = {\n    name: '',\n    description: '',\n    maxParticipants: 5,\n    duration: 240,\n    permissions: {\n      canExecuteCommands: true,\n      canEditFiles: false,\n      canAddAnnotations: true,\n      canInviteOthers: true\n    },\n    autoShareCommands: true\n  };\n  \n  ngOnInit() {\n    this.loadCommandSuggestions();\n    \n    // Set up periodic refresh\n    setInterval(() => {\n      this.loadCommandSuggestions();\n    }, 10000);\n  }\n  \n  ngOnDestroy() {\n    // Cleanup handled automatically\n  }\n  \n  async createSession() {\n    if (!this.newSession.name.trim()) return;\n    \n    try {\n      await this.webviewService.postMessage('createCollaborationSession', this.newSession);\n      \n      // Reset form\n      this.newSession.name = '';\n      this.newSession.description = '';\n      this.showCreateSession.set(false);\n      \n      console.log('Collaboration session created successfully');\n      \n    } catch (error) {\n      console.error('Failed to create session:', error);\n    }\n  }\n  \n  async joinSession() {\n    const sessionId = this.joinSessionId().trim();\n    if (!sessionId) return;\n    \n    try {\n      await this.webviewService.postMessage('joinCollaborationSession', { sessionId });\n      this.joinSessionId.set('');\n      \n      console.log('Joined collaboration session successfully');\n      \n    } catch (error) {\n      console.error('Failed to join session:', error);\n    }\n  }\n  \n  async processAIQuery() {\n    const query = this.aiQuery().trim();\n    if (!query) return;\n    \n    this.isProcessingQuery.set(true);\n    \n    try {\n      // Simulate AI processing\n      await new Promise(resolve => setTimeout(resolve, 1500));\n      \n      const mockResponse = {\n        response: this.generateMockResponse(query),\n        suggestedActions: this.generateMockActions(query)\n      };\n      \n      this.aiResponse.set(mockResponse);\n      this.aiQuery.set('');\n      \n    } catch (error) {\n      console.error('Failed to process AI query:', error);\n      this.aiResponse.set({\n        response: 'Sorry, I encountered an error processing your query. Please try again.',\n        suggestedActions: []\n      });\n    } finally {\n      this.isProcessingQuery.set(false);\n    }\n  }\n  \n  async executeAIAction(action: any) {\n    try {\n      await this.webviewService.postMessage('executeAIAction', { action });\n      console.log('Executed AI action:', action.title);\n    } catch (error) {\n      console.error('Failed to execute AI action:', error);\n    }\n  }\n  \n  async executeSuggestion(suggestion: any) {\n    try {\n      await this.webviewService.postMessage('executeCommandSuggestion', { suggestion });\n      console.log('Executed suggestion:', suggestion.command);\n    } catch (error) {\n      console.error('Failed to execute suggestion:', error);\n    }\n  }\n  \n  private async loadCommandSuggestions() {\n    // Mock suggestions for demo\n    const mockSuggestions = [\n      {\n        command: 'nxTest',\n        reason: 'Files changed in core module',\n        confidence: 0.85,\n        estimatedImpact: 'high'\n      },\n      {\n        command: 'gitDiff',\n        reason: 'Uncommitted changes detected',\n        confidence: 0.92,\n        estimatedImpact: 'medium'\n      }\n    ];\n    \n    this.commandSuggestions.set(mockSuggestions);\n  }\n  \n  private generateMockResponse(query: string): string {\n    const lowerQuery = query.toLowerCase();\n    \n    if (lowerQuery.includes('test')) {\n      return 'I can see you\\'re asking about tests. Your current test suite has a 94% pass rate with 3 failing tests in the user authentication module. The average test execution time is 2.3 seconds.';\n    }\n    \n    if (lowerQuery.includes('performance')) {\n      return 'Performance analysis shows your debugging workflow is 15% slower than optimal. The main bottleneck is in the test execution phase, taking an average of 45 seconds.';\n    }\n    \n    if (lowerQuery.includes('error')) {\n      return 'I\\'ve identified 3 recurring error patterns in your recent sessions. The most frequent is \"Module not found\" errors, occurring 8 times in the last week.';\n    }\n    \n    return 'I can help you analyze your debugging patterns, suggest workflow optimizations, and provide insights about your development process. What specific aspect would you like to explore?';\n  }\n  \n  private generateMockActions(query: string): any[] {\n    const lowerQuery = query.toLowerCase();\n    \n    if (lowerQuery.includes('test')) {\n      return [\n        {\n          id: '1',\n          title: 'Run Failing Tests',\n          description: 'Execute only the 3 failing tests to debug issues'\n        },\n        {\n          id: '2',\n          title: 'Generate Test Report',\n          description: 'Create detailed analysis of test failures'\n        }\n      ];\n    }\n    \n    if (lowerQuery.includes('performance')) {\n      return [\n        {\n          id: '3',\n          title: 'Optimize Test Selection',\n          description: 'Run focused tests to reduce execution time'\n        }\n      ];\n    }\n    \n    return [\n      {\n        id: '4',\n        title: 'Analyze Patterns',\n        description: 'Generate comprehensive workflow analysis'\n      }\n    ];\n  }\n}\n
+import { Component, OnInit, OnDestroy, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { WebviewService } from '../../services/webview.service';
+
+/**
+ * CollaborationPanelComponent - Phase 4.1 Real-time Collaboration UI
+ * Provides interface for creating, joining, and managing collaboration sessions
+ */
+@Component({
+  selector: 'app-collaboration-panel',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <div class="collaboration-panel bg-vscode-editor-background text-vscode-editor-foreground p-4">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold flex items-center">
+          <span class="mr-2">🤝</span>
+          Collaboration
+        </h2>
+        <button 
+          (click)="showCreateSession.set(!showCreateSession())"
+          class="px-3 py-1 bg-vscode-button-background hover:bg-vscode-button-hoverBackground 
+                 text-vscode-button-foreground rounded text-sm transition-colors"
+          [class.bg-vscode-button-hoverBackground]="showCreateSession()">
+          {{ showCreateSession() ? 'Cancel' : 'New Session' }}
+        </button>
+      </div>
+
+      <!-- Create Session Form -->
+      @if (showCreateSession()) {
+        <div class="mb-4 p-3 border border-vscode-widget-border rounded">
+          <h3 class="font-medium mb-2">Create Collaboration Session</h3>
+          <form (ngSubmit)="createSession()" class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium mb-1">Session Name</label>
+              <input 
+                type="text" 
+                [(ngModel)]="newSession.name" 
+                name="sessionName"
+                class="w-full px-3 py-2 bg-vscode-input-background text-vscode-input-foreground 
+                       border border-vscode-input-border rounded text-sm"
+                placeholder="Enter session name"
+                required>
+            </div>
+            <div class="flex space-x-2">
+              <button 
+                type="submit" 
+                [disabled]="!newSession.name.trim()"
+                class="px-4 py-2 bg-vscode-button-background hover:bg-vscode-button-hoverBackground 
+                       text-vscode-button-foreground rounded text-sm transition-colors
+                       disabled:opacity-50 disabled:cursor-not-allowed">
+                Create Session
+              </button>
+              <button 
+                type="button" 
+                (click)="showCreateSession.set(false)"
+                class="px-4 py-2 bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground 
+                       text-vscode-button-secondaryForeground rounded text-sm transition-colors">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+
+      <!-- Join Session -->
+      <div class="mb-4 p-3 border border-vscode-widget-border rounded">
+        <h3 class="font-medium mb-2">Join Session</h3>
+        <div class="flex space-x-2">
+          <input 
+            type="text" 
+            [(ngModel)]="joinSessionId" 
+            placeholder="Enter session ID"
+            class="flex-1 px-3 py-2 bg-vscode-input-background text-vscode-input-foreground 
+                   border border-vscode-input-border rounded text-sm">
+          <button 
+            (click)="joinSession()"
+            [disabled]="!joinSessionId.trim()"
+            class="px-4 py-2 bg-vscode-button-background hover:bg-vscode-button-hoverBackground 
+                   text-vscode-button-foreground rounded text-sm transition-colors
+                   disabled:opacity-50 disabled:cursor-not-allowed">
+            Join
+          </button>
+        </div>
+      </div>
+
+      <!-- AI Insights Panel -->
+      <div class="mb-4 p-3 border border-vscode-widget-border rounded">
+        <h3 class="font-medium mb-2 flex items-center">
+          <span class="mr-2">🤖</span>
+          AI Insights
+        </h3>
+        
+        <!-- Natural Language Query -->
+        <div class="mb-3">
+          <div class="flex space-x-2">
+            <input 
+              type="text" 
+              [(ngModel)]="aiQuery" 
+              placeholder="Ask me anything about your debugging workflow..."
+              class="flex-1 px-3 py-2 bg-vscode-input-background text-vscode-input-foreground 
+                     border border-vscode-input-border rounded text-sm"
+              (keyup.enter)="processAIQuery()">
+            <button 
+              (click)="processAIQuery()"
+              [disabled]="!aiQuery.trim() || isProcessingQuery()"
+              class="px-4 py-2 bg-vscode-button-background hover:bg-vscode-button-hoverBackground 
+                     text-vscode-button-foreground rounded text-sm transition-colors
+                     disabled:opacity-50 disabled:cursor-not-allowed">
+              @if (isProcessingQuery()) {
+                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+              } @else {
+                Ask
+              }
+            </button>
+          </div>
+        </div>
+
+        <!-- AI Response -->
+        @if (aiResponse()) {
+          <div class="mb-3 p-3 bg-vscode-textCodeBlock-background rounded">
+            <p class="text-sm mb-2">{{ aiResponse()?.response }}</p>
+            @if (aiResponse()?.suggestedActions?.length > 0) {
+              <div class="space-y-1">
+                <p class="text-xs font-medium text-vscode-descriptionForeground">Suggested Actions:</p>
+                @for (action of aiResponse()?.suggestedActions; track action.id) {
+                  <button 
+                    (click)="executeAIAction(action)"
+                    class="block w-full text-left px-2 py-1 text-xs bg-vscode-button-secondaryBackground 
+                           hover:bg-vscode-button-secondaryHoverBackground rounded">
+                    <span class="font-medium">{{ action.title }}</span>
+                    <span class="text-vscode-descriptionForeground ml-2">{{ action.description }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Command Suggestions -->
+        @if (commandSuggestions().length > 0) {
+          <div class="mb-3">
+            <p class="text-xs font-medium text-vscode-descriptionForeground mb-2">Smart Suggestions:</p>
+            <div class="space-y-1">
+              @for (suggestion of commandSuggestions(); track suggestion.command) {
+                <div class="flex items-center justify-between p-2 bg-vscode-textCodeBlock-background rounded">
+                  <div class="flex-1">
+                    <div class="text-sm font-medium">{{ suggestion.command }}</div>
+                    <div class="text-xs text-vscode-descriptionForeground">{{ suggestion.reason }}</div>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <div class="text-xs">
+                      <span class="text-vscode-descriptionForeground">Confidence:</span>
+                      <span class="font-medium">{{ (suggestion.confidence * 100).toFixed(0) }}%</span>
+                    </div>
+                    <button 
+                      (click)="executeSuggestion(suggestion)"
+                      class="px-2 py-1 bg-vscode-button-background hover:bg-vscode-button-hoverBackground 
+                             text-vscode-button-foreground rounded text-xs">
+                      Run
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Demo Insights -->
+        <div class="space-y-2">
+          <div class="p-2 border-l-4 border-l-orange-500 bg-vscode-textCodeBlock-background rounded">
+            <div class="flex items-center mb-1">
+              <span class="mr-2">⚡</span>
+              <span class="font-medium text-sm">Performance Issue Detected</span>
+              <span class="ml-2 px-2 py-0.5 rounded text-xs bg-orange-600 text-white">medium</span>
+            </div>
+            <p class="text-sm text-vscode-descriptionForeground mb-2">
+              Command execution is 40% slower than average. Consider optimizing test selection.
+            </p>
+            <button class="px-2 py-1 text-xs bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground rounded">
+              Optimize Tests
+            </button>
+          </div>
+          
+          <div class="p-2 border-l-4 border-l-blue-500 bg-vscode-textCodeBlock-background rounded">
+            <div class="flex items-center mb-1">
+              <span class="mr-2">💡</span>
+              <span class="font-medium text-sm">Smart Suggestion</span>
+              <span class="ml-2 px-2 py-0.5 rounded text-xs bg-blue-600 text-white">low</span>
+            </div>
+            <p class="text-sm text-vscode-descriptionForeground mb-2">
+              Based on your patterns, consider running prepareToPush after making changes.
+            </p>
+            <button class="px-2 py-1 text-xs bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground rounded">
+              Set up Auto-run
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .collaboration-panel {
+      height: 100%;
+      overflow-y: auto;
+    }
+    
+    .collaboration-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .collaboration-panel::-webkit-scrollbar-track {
+      background: var(--vscode-scrollbarSlider-background);
+    }
+    
+    .collaboration-panel::-webkit-scrollbar-thumb {
+      background: var(--vscode-scrollbarSlider-activeBackground);
+      border-radius: 3px;
+    }
+  `]
+})
+export class CollaborationPanelComponent implements OnInit, OnDestroy {
+  private webviewService = inject(WebviewService);
+  
+  // Signals for reactive state management
+  showCreateSession = signal(false);
+  joinSessionId = signal('');
+  aiQuery = signal('');
+  aiResponse = signal<any>(null);
+  commandSuggestions = signal<any[]>([]);
+  isProcessingQuery = signal(false);
+  
+  // New session form data
+  newSession = {
+    name: '',
+    description: '',
+    maxParticipants: 5,
+    duration: 240,
+    permissions: {
+      canExecuteCommands: true,
+      canEditFiles: false,
+      canAddAnnotations: true,
+      canInviteOthers: true
+    },
+    autoShareCommands: true
+  };
+  
+  ngOnInit() {
+    this.loadCommandSuggestions();
+    
+    // Set up periodic refresh
+    setInterval(() => {
+      this.loadCommandSuggestions();
+    }, 10000);
+  }
+  
+  ngOnDestroy() {
+    // Cleanup handled automatically
+  }
+  
+  async createSession() {
+    if (!this.newSession.name.trim()) return;
+    
+    try {
+      await this.webviewService.postMessage('createCollaborationSession', this.newSession);
+      
+      // Reset form
+      this.newSession.name = '';
+      this.newSession.description = '';
+      this.showCreateSession.set(false);
+      
+      console.log('Collaboration session created successfully');
+      
+    } catch (error) {
+      console.error('Failed to create session:', error);
+    }
+  }
+  
+  async joinSession() {
+    const sessionId = this.joinSessionId().trim();
+    if (!sessionId) return;
+    
+    try {
+      await this.webviewService.postMessage('joinCollaborationSession', { sessionId });
+      this.joinSessionId.set('');
+      
+      console.log('Joined collaboration session successfully');
+      
+    } catch (error) {
+      console.error('Failed to join session:', error);
+    }
+  }
+  
+  async processAIQuery() {
+    const query = this.aiQuery().trim();
+    if (!query) return;
+    
+    this.isProcessingQuery.set(true);
+    
+    try {
+      // Simulate AI processing
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const mockResponse = {
+        response: this.generateMockResponse(query),
+        suggestedActions: this.generateMockActions(query)
+      };
+      
+      this.aiResponse.set(mockResponse);
+      this.aiQuery.set('');
+      
+    } catch (error) {
+      console.error('Failed to process AI query:', error);
+      this.aiResponse.set({
+        response: 'Sorry, I encountered an error processing your query. Please try again.',
+        suggestedActions: []
+      });
+    } finally {
+      this.isProcessingQuery.set(false);
+    }
+  }
+  
+  async executeAIAction(action: any) {
+    try {
+      await this.webviewService.postMessage('executeAIAction', { action });
+      console.log('Executed AI action:', action.title);
+    } catch (error) {
+      console.error('Failed to execute AI action:', error);
+    }
+  }
+  
+  async executeSuggestion(suggestion: any) {
+    try {
+      await this.webviewService.postMessage('executeCommandSuggestion', { suggestion });
+      console.log('Executed suggestion:', suggestion.command);
+    } catch (error) {
+      console.error('Failed to execute suggestion:', error);
+    }
+  }
+  
+  private async loadCommandSuggestions() {
+    // Mock suggestions for demo
+    const mockSuggestions = [
+      {
+        command: 'nxTest',
+        reason: 'Files changed in core module',
+        confidence: 0.85,
+        estimatedImpact: 'high'
+      },
+      {
+        command: 'gitDiff',
+        reason: 'Uncommitted changes detected',
+        confidence: 0.92,
+        estimatedImpact: 'medium'
+      }
+    ];
+    
+    this.commandSuggestions.set(mockSuggestions);
+  }
+  
+  private generateMockResponse(query: string): string {
+    const lowerQuery = query.toLowerCase();
+    
+    if (lowerQuery.includes('test')) {
+      return 'I can see you\'re asking about tests. Your current test suite has a 94% pass rate with 3 failing tests in the user authentication module. The average test execution time is 2.3 seconds.';
+    }
+    
+    if (lowerQuery.includes('performance')) {
+      return 'Performance analysis shows your debugging workflow is 15% slower than optimal. The main bottleneck is in the test execution phase, taking an average of 45 seconds.';
+    }
+    
+    if (lowerQuery.includes('error')) {
+      return 'I\'ve identified 3 recurring error patterns in your recent sessions. The most frequent is "Module not found" errors, occurring 8 times in the last week.';
+    }
+    
+    return 'I can help you analyze your debugging patterns, suggest workflow optimizations, and provide insights about your development process. What specific aspect would you like to explore?';
+  }
+  
+  private generateMockActions(query: string): any[] {
+    const lowerQuery = query.toLowerCase();
+    
+    if (lowerQuery.includes('test')) {
+      return [
+        {
+          id: '1',
+          title: 'Run Failing Tests',
+          description: 'Execute only the 3 failing tests to debug issues'
+        },
+        {
+          id: '2',
+          title: 'Generate Test Report',
+          description: 'Create detailed analysis of test failures'
+        }
+      ];
+    }
+    
+    if (lowerQuery.includes('performance')) {
+      return [
+        {
+          id: '3',
+          title: 'Optimize Test Selection',
+          description: 'Run focused tests to reduce execution time'
+        }
+      ];
+    }
+    
+    return [
+      {
+        id: '4',
+        title: 'Analyze Patterns',
+        description: 'Generate comprehensive workflow analysis'
+      }
+    ];
+  }
+}

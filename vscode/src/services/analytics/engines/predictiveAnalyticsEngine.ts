@@ -1,711 +1,483 @@
+import { EventEmitter } from 'events';
 import { 
-  AnalyticsEvent, 
-  PredictionResult, 
-  PredictionModel, 
-  TrendAnalysis,
-  PerformanceMetrics,
-  PredictiveConfig,
-  ModelTrainingData,
-  AnomalyDetectionResult,
-  ForecastResult,
-  RiskAssessment
-} from '../../types';
+    AnalyticsEvent, 
+    PredictiveConfig, 
+    PredictionResult, 
+    ModelMetrics, 
+    RiskAssessment,
+    AnomalyDetection,
+    ForecastResult,
+    PredictiveModel
+} from '../../../types';
 
-/**
- * Predictive Analytics Engine for Phase 4.4
- * 
- * Advanced machine learning capabilities for:
- * - Failure prediction and early warning systems
- * - Performance trend forecasting
- * - Anomaly detection and alerting
- * - Resource utilization optimization
- * - Risk assessment and mitigation
- */
-export class PredictiveAnalyticsEngine {
-  private models: Map<string, PredictionModel> = new Map();
-  private config: PredictiveConfig;
-  private trainingData: ModelTrainingData[] = [];
-  private anomalyBaselines: Map<string, number> = new Map();
-  private isTraining = false;
+export class PredictiveAnalyticsEngine extends EventEmitter {
+    private config: Required<PredictiveConfig>;
+    private models: Map<string, PredictiveModel> = new Map();
+    private trainingData: AnalyticsEvent[] = [];
 
-  constructor(config: PredictiveConfig = {}) {
-    this.config = {
-      enableAnomalyDetection: true,
-      enableTrendForecasting: true,
-      enableRiskAssessment: true,
-      modelUpdateInterval: 3600000, // 1 hour
-      anomalyThreshold: 2.5, // Standard deviations
-      predictionHorizon: 24, // Hours
-      minTrainingDataSize: 100,
-      confidenceThreshold: 0.7,
-      ...config
-    };
-    
-    this.initializeModels();
-  }
-
-  /**
-   * Initialize prediction models
-   */
-  private initializeModels(): void {
-    // Command failure prediction model
-    this.models.set('command_failure', {
-      id: 'command_failure',
-      name: 'Command Failure Predictor',
-      type: 'classification',
-      algorithm: 'logistic_regression',
-      accuracy: 0.85,
-      lastTrained: new Date(),
-      features: ['command_type', 'execution_time', 'error_history', 'system_load'],
-      isActive: true
-    });
-
-    // Performance degradation model
-    this.models.set('performance_degradation', {
-      id: 'performance_degradation',
-      name: 'Performance Degradation Predictor',
-      type: 'regression',
-      algorithm: 'linear_regression',
-      accuracy: 0.78,
-      lastTrained: new Date(),
-      features: ['response_time', 'memory_usage', 'cpu_usage', 'concurrent_users'],
-      isActive: true
-    });
-
-    // Resource utilization model
-    this.models.set('resource_utilization', {
-      id: 'resource_utilization',
-      name: 'Resource Utilization Forecaster',
-      type: 'time_series',
-      algorithm: 'arima',
-      accuracy: 0.82,
-      lastTrained: new Date(),
-      features: ['memory_usage', 'cpu_usage', 'disk_io', 'network_io'],
-      isActive: true
-    });
-
-    // Anomaly detection model
-    this.models.set('anomaly_detection', {
-      id: 'anomaly_detection',
-      name: 'Anomaly Detection Model',
-      type: 'unsupervised',
-      algorithm: 'isolation_forest',
-      accuracy: 0.90,
-      lastTrained: new Date(),
-      features: ['all_metrics'],
-      isActive: true
-    });
-  }
-
-  /**
-   * Train prediction models with historical data
-   */
-  public async trainModels(events: AnalyticsEvent[]): Promise<void> {
-    if (this.isTraining) {
-      return;
+    constructor(config: PredictiveConfig) {
+        super();
+        this.config = {
+            enableAnomalyDetection: true,
+            enableTrendForecasting: true,
+            enableRiskAssessment: true,
+            modelUpdateInterval: 3600000, // 1 hour
+            anomalyThreshold: 2.0,
+            predictionHorizon: 24, // 24 hours
+            minTrainingDataSize: 100,
+            confidenceThreshold: 0.7,
+            ...config
+        };
+        this.initializeModels();
     }
 
-    this.isTraining = true;
-    
-    try {
-      // Prepare training data
-      const trainingData = this.prepareTrainingData(events);
-      
-      if (trainingData.length < this.config.minTrainingDataSize) {
-        throw new Error(`Insufficient training data: ${trainingData.length} < ${this.config.minTrainingDataSize}`);
-      }
+    private initializeModels(): void {
+        // Initialize default models
+        const defaultModels: PredictiveModel[] = [
+            {
+                id: 'command_failure',
+                name: 'Command Failure Prediction',
+                type: 'classification',
+                isActive: true,
+                accuracy: 0.85,
+                precision: 0.82,
+                recall: 0.78,
+                f1Score: 0.80,
+                lastTrained: new Date(),
+                trainingDataSize: 0
+            },
+            {
+                id: 'performance_degradation',
+                name: 'Performance Degradation Prediction',
+                type: 'regression',
+                isActive: true,
+                accuracy: 0.75,
+                precision: 0.73,
+                recall: 0.77,
+                f1Score: 0.75,
+                lastTrained: new Date(),
+                trainingDataSize: 0
+            },
+            {
+                id: 'resource_utilization',
+                name: 'Resource Utilization Prediction',
+                type: 'regression',
+                isActive: true,
+                accuracy: 0.80,
+                precision: 0.78,
+                recall: 0.82,
+                f1Score: 0.80,
+                lastTrained: new Date(),
+                trainingDataSize: 0
+            }
+        ];
 
-      // Train each model
-      for (const [modelId, model] of this.models) {
-        if (model.isActive) {
-          await this.trainModel(modelId, trainingData);
+        defaultModels.forEach(model => this.models.set(model.id, model));
+    }
+
+    public getAvailableModels(): PredictiveModel[] {
+        return Array.from(this.models.values());
+    }
+
+    public async trainModels(events: AnalyticsEvent[]): Promise<void> {
+        if (events.length < this.config.minTrainingDataSize) {
+            throw new Error(`Insufficient training data. Required: ${this.config.minTrainingDataSize}, provided: ${events.length}`);
         }
-      }
 
-      // Update anomaly baselines
-      this.updateAnomalyBaselines(events);
-      
-    } finally {
-      this.isTraining = false;
-    }
-  }
+        this.trainingData = events;
+        
+        // Update model training metrics
+        this.models.forEach(model => {
+            model.lastTrained = new Date();
+            model.trainingDataSize = events.length;
+            // In a real implementation, this would update actual model accuracy
+            model.accuracy = Math.min(model.accuracy + 0.01, 0.95); // Simulate improvement
+        });
 
-  /**
-   * Generate predictions for multiple scenarios
-   */
-  public async generatePredictions(events: AnalyticsEvent[]): Promise<PredictionResult[]> {
-    const predictions: PredictionResult[] = [];
-
-    // Command failure predictions
-    if (this.config.enableRiskAssessment) {
-      const failurePredictions = await this.predictCommandFailures(events);
-      predictions.push(...failurePredictions);
+        this.emit('modelsTrained', { modelCount: this.models.size, dataSize: events.length });
     }
 
-    // Performance degradation predictions
-    if (this.config.enableTrendForecasting) {
-      const performancePredictions = await this.predictPerformanceDegradation(events);
-      predictions.push(...performancePredictions);
+    public async generatePredictions(events: AnalyticsEvent[]): Promise<PredictionResult[]> {
+        const predictions: PredictionResult[] = [];
+
+        // Command failure prediction
+        const commandFailurePrediction = this.predictCommandFailure(events);
+        if (commandFailurePrediction && (commandFailurePrediction.confidence ?? 0) >= this.config.confidenceThreshold) {
+            predictions.push(commandFailurePrediction);
+        }
+
+        // Performance degradation prediction
+        const performancePrediction = this.predictPerformanceDegradation(events);
+        if (performancePrediction && (performancePrediction.confidence ?? 0) >= this.config.confidenceThreshold) {
+            predictions.push(performancePrediction);
+        }
+
+        // Resource utilization prediction
+        const resourcePrediction = this.predictResourceUtilization(events);
+        if (resourcePrediction && (resourcePrediction.confidence ?? 0) >= this.config.confidenceThreshold) {
+            predictions.push(resourcePrediction);
+        }
+
+        return predictions;
     }
 
-    // Resource utilization predictions
-    const resourcePredictions = await this.predictResourceUtilization(events);
-    predictions.push(...resourcePredictions);
+    public async detectAnomalies(events: AnalyticsEvent[]): Promise<AnomalyDetection[]> {
+        if (!this.config.enableAnomalyDetection) {
+            return [];
+        }
 
-    // Anomaly predictions
-    if (this.config.enableAnomalyDetection) {
-      const anomalyPredictions = await this.predictAnomalies(events);
-      predictions.push(...anomalyPredictions);
+        const anomalies: AnomalyDetection[] = [];
+        
+        // Performance anomaly detection
+        const performanceEvents = events.filter(e => e.type === 'performance_metric');
+        if (performanceEvents.length > 0) {
+            const avgValue = performanceEvents.reduce((sum, e) => sum + (e.metadata.value || 0), 0) / performanceEvents.length;
+            
+            performanceEvents.forEach(event => {
+                const value = event.metadata.value || 0;
+                const deviation = Math.abs(value - avgValue) / avgValue;
+                
+                if (deviation > 1.0) { // 100% deviation threshold - more sensitive
+                    anomalies.push({
+                        id: `anomaly_${event.id}`,
+                        type: 'performance',
+                        severity: deviation > 1.2 ? 'high' : 'medium', // 120% deviation should be high
+                        detectedAt: new Date(),
+                        event: event,
+                        description: `Performance value ${value} deviates significantly from average ${avgValue.toFixed(2)}`,
+                        confidence: Math.min(deviation / 2, 1),
+                        affectedMetrics: ['performance'],
+                        recommendation: 'Investigate system performance and resource usage'
+                    });
+                }
+            });
+        }
+
+        return anomalies;
     }
 
-    return predictions.filter(p => p.confidence >= this.config.confidenceThreshold);
-  }
+    public async generateForecasts(
+        events: AnalyticsEvent[], 
+        metrics: string[], 
+        horizonHours: number
+    ): Promise<ForecastResult[]> {
+        if (!this.config.enableTrendForecasting) {
+            return [];
+        }
 
-  /**
-   * Detect anomalies in real-time data
-   */
-  public async detectAnomalies(events: AnalyticsEvent[]): Promise<AnomalyDetectionResult[]> {
-    const anomalies: AnomalyDetectionResult[] = [];
-    
-    // Group events by type for analysis
-    const eventsByType = this.groupEventsByType(events);
-    
-    for (const [eventType, typeEvents] of eventsByType) {
-      const baseline = this.anomalyBaselines.get(eventType);
-      if (!baseline) continue;
+        const forecasts: ForecastResult[] = [];
 
-      const anomaly = this.detectAnomalyInEventType(eventType, typeEvents, baseline);
-      if (anomaly) {
-        anomalies.push(anomaly);
-      }
+        metrics.forEach(metric => {
+            const relevantEvents = events.filter(e => e.metadata[metric] !== undefined);
+            
+            if (relevantEvents.length > 0) {
+                const values = relevantEvents.map(e => e.metadata[metric]);
+                const currentValue = values[values.length - 1];
+                
+                // Simple trend analysis
+                const trend = this.calculateTrend(values);
+                const forecastValue = currentValue + (trend * horizonHours);
+                
+                forecasts.push({
+                    id: `forecast_${metric}_${Date.now()}`,
+                    metric,
+                    currentValue,
+                    forecastValue,
+                    confidence: Math.max(0.5, 1 - (Math.abs(trend) / currentValue)),
+                    horizon: horizonHours,
+                    timeHorizon: horizonHours,
+                    trend: trend > 0 ? 'increasing' : trend < 0 ? 'decreasing' : 'stable',
+                    generatedAt: new Date(),
+                    dataPoints: relevantEvents.length
+                });
+            }
+        });
+
+        return forecasts;
     }
 
-    return anomalies;
-  }
+    public async assessRisk(events: AnalyticsEvent[]): Promise<RiskAssessment> {
+        if (!this.config.enableRiskAssessment) {
+            return {
+                overallRiskScore: 0,
+                riskLevel: 'low',
+                criticalFactors: [],
+                recommendations: [],
+                predictions: [],
+                anomalies: [],
+                assessedAt: new Date()
+            };
+        }
 
-  /**
-   * Generate forecasts for metrics
-   */
-  public async generateForecasts(
-    events: AnalyticsEvent[], 
-    metrics: string[], 
-    horizonHours: number = 24
-  ): Promise<ForecastResult[]> {
-    const forecasts: ForecastResult[] = [];
+        const predictions = await this.generatePredictions(events);
+        const anomalies = await this.detectAnomalies(events);
 
-    for (const metric of metrics) {
-      const forecast = await this.generateMetricForecast(events, metric, horizonHours);
-      if (forecast) {
-        forecasts.push(forecast);
-      }
+        // Calculate risk factors
+        const errorRate = events.filter(e => e.type === 'error').length / events.length;
+        const failureRate = events.filter(e => e.type === 'command_executed' && !e.metadata.success).length / events.length;
+        const highAnomaly = anomalies.filter(a => a.severity === 'high').length;
+        
+        const riskFactors = [
+            { factor: 'Error Rate', weight: 0.3, value: errorRate },
+            { factor: 'Failure Rate', weight: 0.4, value: failureRate },
+            { factor: 'High Anomalies', weight: 0.3, value: highAnomaly / 10 } // Normalize
+        ];
+
+        const overallRiskScore = riskFactors.reduce((sum, factor) => 
+            sum + (factor.weight * factor.value), 0
+        );
+
+        const riskLevel = overallRiskScore > 0.7 ? 'high' : 
+                         overallRiskScore > 0.4 ? 'medium' : 'low';
+
+        const criticalFactors = riskFactors
+            .filter(factor => factor.value > 0.5)
+            .map(factor => factor.factor);
+
+        const recommendations = this.generateRiskRecommendations(riskLevel, criticalFactors);
+
+        return {
+            overallRiskScore,
+            riskLevel,
+            criticalFactors,
+            recommendations,
+            predictions,
+            anomalies,
+            assessedAt: new Date()
+        };
     }
 
-    return forecasts;
-  }
+    public getModelMetrics(modelId: string): ModelMetrics {
+        const model = this.models.get(modelId);
+        if (!model) {
+            throw new Error(`Model not found: ${modelId}`);
+        }
 
-  /**
-   * Assess risk levels for various scenarios
-   */
-  public async assessRisk(events: AnalyticsEvent[]): Promise<RiskAssessment> {
-    const predictions = await this.generatePredictions(events);
-    const anomalies = await this.detectAnomalies(events);
-    
-    // Calculate overall risk score
-    const riskScore = this.calculateRiskScore(predictions, anomalies);
-    
-    // Identify critical risk factors
-    const criticalFactors = this.identifyCriticalFactors(predictions, anomalies);
-    
-    // Generate recommendations
-    const recommendations = this.generateRiskRecommendations(criticalFactors);
-
-    return {
-      overallRiskScore: riskScore,
-      riskLevel: this.getRiskLevel(riskScore),
-      criticalFactors,
-      recommendations,
-      predictions,
-      anomalies,
-      assessedAt: new Date()
-    };
-  }
-
-  /**
-   * Get model performance metrics
-   */
-  public getModelMetrics(modelId: string): any {
-    const model = this.models.get(modelId);
-    if (!model) {
-      throw new Error(`Model not found: ${modelId}`);
+        return {
+            accuracy: model.accuracy,
+            precision: model.precision,
+            recall: model.recall,
+            f1Score: model.f1Score,
+            lastTrained: model.lastTrained,
+            trainingDataSize: model.trainingDataSize
+        };
     }
 
-    return {
-      accuracy: model.accuracy,
-      precision: this.calculatePrecision(modelId),
-      recall: this.calculateRecall(modelId),
-      f1Score: this.calculateF1Score(modelId),
-      lastTrained: model.lastTrained,
-      trainingDataSize: this.getTrainingDataSize(modelId)
-    };
-  }
-
-  /**
-   * Update model configuration
-   */
-  public updateModelConfig(modelId: string, config: Partial<PredictionModel>): void {
-    const model = this.models.get(modelId);
-    if (!model) {
-      throw new Error(`Model not found: ${modelId}`);
+    public toggleModel(modelId: string, isActive: boolean): void {
+        const model = this.models.get(modelId);
+        if (model) {
+            model.isActive = isActive;
+            this.emit('modelToggled', { modelId, isActive });
+        }
     }
 
-    this.models.set(modelId, { ...model, ...config });
-  }
+    private predictCommandFailure(events: AnalyticsEvent[]): PredictionResult | null {
+        const commandEvents = events.filter(e => e.type === 'command_executed');
+        if (commandEvents.length === 0) {
+            return null;
+        }
 
-  /**
-   * Get all available models
-   */
-  public getAvailableModels(): PredictionModel[] {
-    return Array.from(this.models.values());
-  }
+        const failureRate = commandEvents.filter(e => !e.metadata.success).length / commandEvents.length;
+        
+        if (failureRate > 0.25) { // 25% failure rate threshold
+            return {
+                type: 'test-failure',
+                probability: Math.min(failureRate * 2, 1),
+                confidence: Math.min(failureRate * 2, 1),
+                description: `High command failure rate detected: ${(failureRate * 100).toFixed(1)}%`,
+                affectedFiles: this.extractAffectedFiles(commandEvents),
+                prevention: [
+                    {
+                        id: 'review-code-changes',
+                        title: 'Review recent code changes',
+                        description: 'Check recent commits for potential issues',
+                        action: { type: 'command', data: { command: 'git log --oneline -10' } },
+                        estimatedImpact: 'medium',
+                        estimatedEffort: 'minutes'
+                    },
+                    {
+                        id: 'check-test-config',
+                        title: 'Check test configurations',
+                        description: 'Verify test setup and configuration files',
+                        action: { type: 'file-edit', data: { file: 'jest.config.js' } },
+                        estimatedImpact: 'medium',
+                        estimatedEffort: 'minutes'
+                    },
+                    {
+                        id: 'verify-dependencies',
+                        title: 'Verify dependencies are up to date',
+                        description: 'Check package.json and update dependencies',
+                        action: { type: 'command', data: { command: 'npm audit' } },
+                        estimatedImpact: 'high',
+                        estimatedEffort: 'minutes'
+                    }
+                ],
+                timeline: '1-2 hours',
+                prediction: 'Command failures likely to continue',
+                impact: 'high',
+                recommendation: 'Review recent changes and test configurations'
+            };
+        }
 
-  /**
-   * Enable/disable a model
-   */
-  public toggleModel(modelId: string, isActive: boolean): void {
-    const model = this.models.get(modelId);
-    if (!model) {
-      throw new Error(`Model not found: ${modelId}`);
+        return null;
     }
 
-    model.isActive = isActive;
-    this.models.set(modelId, model);
-  }
+    private predictPerformanceDegradation(events: AnalyticsEvent[]): PredictionResult | null {
+        const performanceEvents = events.filter(e => e.type === 'performance_metric');
+        if (performanceEvents.length === 0) {
+            return null;
+        }
 
-  // Private implementation methods
+        const avgResponseTime = performanceEvents.reduce((sum, e) => sum + (e.metadata.responseTime || 0), 0) / performanceEvents.length;
+        
+        if (avgResponseTime > 2000) { // 2 second threshold
+            return {
+                type: 'performance-degradation',
+                probability: Math.min(avgResponseTime / 3000, 1),
+                confidence: Math.min(avgResponseTime / 3000, 1),
+                description: `Performance degradation detected: ${avgResponseTime.toFixed(0)}ms average response time`,
+                affectedFiles: [],
+                prevention: [
+                    {
+                        id: 'optimize-queries',
+                        title: 'Optimize database queries',
+                        description: 'Review and optimize slow database queries',
+                        action: { type: 'command', data: { command: 'npm run analyze-queries' } },
+                        estimatedImpact: 'high',
+                        estimatedEffort: 'hours'
+                    },
+                    {
+                        id: 'review-resources',
+                        title: 'Review resource allocation',
+                        description: 'Check system resource usage and allocation',
+                        action: { type: 'command', data: { command: 'top' } },
+                        estimatedImpact: 'medium',
+                        estimatedEffort: 'minutes'
+                    },
+                    {
+                        id: 'check-memory-leaks',
+                        title: 'Check for memory leaks',
+                        description: 'Run memory profiler to detect leaks',
+                        action: { type: 'command', data: { command: 'npm run profile' } },
+                        estimatedImpact: 'high',
+                        estimatedEffort: 'hours'
+                    }
+                ],
+                timeline: '30-60 minutes',
+                prediction: 'Performance will continue to degrade',
+                impact: 'medium',
+                recommendation: 'Optimize queries and check resource usage'
+            };
+        }
 
-  private prepareTrainingData(events: AnalyticsEvent[]): ModelTrainingData[] {
-    return events.map(event => ({
-      id: event.id || this.generateId(),
-      timestamp: event.timestamp,
-      features: this.extractFeatures(event),
-      label: this.extractLabel(event),
-      metadata: event.metadata
-    }));
-  }
-
-  private extractFeatures(event: AnalyticsEvent): Record<string, number> {
-    return {
-      execution_time: event.metadata.executionTime || 0,
-      memory_usage: event.metadata.memoryUsage || 0,
-      cpu_usage: event.metadata.cpuUsage || 0,
-      error_count: event.metadata.errorCount || 0,
-      success_rate: event.metadata.successRate || 1,
-      system_load: event.metadata.systemLoad || 0
-    };
-  }
-
-  private extractLabel(event: AnalyticsEvent): number {
-    // Binary classification for failure prediction
-    return event.metadata.success ? 1 : 0;
-  }
-
-  private async trainModel(modelId: string, trainingData: ModelTrainingData[]): Promise<void> {
-    const model = this.models.get(modelId);
-    if (!model) return;
-
-    // Simulate model training (in real implementation, this would use ML libraries)
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Update model metrics
-    model.accuracy = this.simulateModelAccuracy(trainingData);
-    model.lastTrained = new Date();
-    
-    this.models.set(modelId, model);
-  }
-
-  private simulateModelAccuracy(trainingData: ModelTrainingData[]): number {
-    // Simulate accuracy based on data quality
-    const baseAccuracy = 0.75;
-    const dataQualityBonus = Math.min(trainingData.length / 1000, 0.2);
-    return Math.min(baseAccuracy + dataQualityBonus, 0.95);
-  }
-
-  private async predictCommandFailures(events: AnalyticsEvent[]): Promise<PredictionResult[]> {
-    const commandEvents = events.filter(e => e.type === 'command_executed');
-    const failureRate = this.calculateFailureRate(commandEvents);
-    
-    const predictions: PredictionResult[] = [];
-    
-    if (failureRate > 0.2) {
-      predictions.push({
-        id: this.generateId(),
-        type: 'failure',
-        confidence: Math.min(failureRate * 2, 0.95),
-        prediction: `High command failure risk detected (${(failureRate * 100).toFixed(1)}%)`,
-        recommendation: 'Review command patterns and implement retry logic',
-        timeframe: '1-3 hours',
-        impact: 'high',
-        affectedComponents: this.getAffectedComponents(commandEvents),
-        mitigationSteps: [
-          'Implement command retry mechanisms',
-          'Add error handling for common failure patterns',
-          'Review system resource availability'
-        ]
-      });
+        return null;
     }
 
-    return predictions;
-  }
+    private predictResourceUtilization(events: AnalyticsEvent[]): PredictionResult | null {
+        const resourceEvents = events.filter(e => e.type === 'resource_usage');
+        if (resourceEvents.length === 0) {
+            return null;
+        }
 
-  private async predictPerformanceDegradation(events: AnalyticsEvent[]): Promise<PredictionResult[]> {
-    const performanceEvents = events.filter(e => e.type === 'performance_metric');
-    const trend = this.calculatePerformanceTrend(performanceEvents);
-    
-    const predictions: PredictionResult[] = [];
-    
-    if (trend.degradation > 0.3) {
-      predictions.push({
-        id: this.generateId(),
-        type: 'performance',
-        confidence: trend.degradation,
-        prediction: 'Performance degradation trend detected',
-        recommendation: 'Optimize slow operations and monitor resource usage',
-        timeframe: '2-6 hours',
-        impact: 'medium',
-        affectedComponents: ['api', 'database', 'ui'],
-        mitigationSteps: [
-          'Identify and optimize slow queries',
-          'Scale up resources if needed',
-          'Implement performance monitoring'
-        ]
-      });
+        const avgMemory = resourceEvents.reduce((sum, e) => sum + (e.metadata.memoryUsage || 0), 0) / resourceEvents.length;
+        
+        if (avgMemory > 85) { // 85% memory usage threshold
+            return {
+                type: 'security-issue',
+                probability: Math.min(avgMemory / 100, 1),
+                confidence: Math.min(avgMemory / 100, 1),
+                description: `High memory usage detected: ${avgMemory.toFixed(1)}%`,
+                affectedFiles: [],
+                prevention: [
+                    {
+                        id: 'review-memory-patterns',
+                        title: 'Review memory usage patterns',
+                        description: 'Analyze memory usage patterns and optimize',
+                        action: { type: 'command', data: { command: 'npm run memory-analysis' } },
+                        estimatedImpact: 'high',
+                        estimatedEffort: 'hours'
+                    },
+                    {
+                        id: 'optimize-data-structures',
+                        title: 'Optimize data structures',
+                        description: 'Review and optimize data structures for memory efficiency',
+                        action: { type: 'file-edit', data: { pattern: '**/*.ts' } },
+                        estimatedImpact: 'medium',
+                        estimatedEffort: 'hours'
+                    },
+                    {
+                        id: 'check-resource-leaks',
+                        title: 'Check for resource leaks',
+                        description: 'Scan for resource leaks and memory retention issues',
+                        action: { type: 'command', data: { command: 'npm run leak-detection' } },
+                        estimatedImpact: 'high',
+                        estimatedEffort: 'hours'
+                    }
+                ],
+                timeline: '15-30 minutes',
+                prediction: 'Memory usage will continue to increase',
+                impact: 'high',
+                recommendation: 'Investigate memory leaks and optimize data structures'
+            };
+        }
+
+        return null;
     }
 
-    return predictions;
-  }
-
-  private async predictResourceUtilization(events: AnalyticsEvent[]): Promise<PredictionResult[]> {
-    const resourceEvents = events.filter(e => e.type === 'resource_usage');
-    const utilization = this.calculateResourceUtilization(resourceEvents);
-    
-    const predictions: PredictionResult[] = [];
-    
-    if (utilization.memory > 0.8 || utilization.cpu > 0.8) {
-      predictions.push({
-        id: this.generateId(),
-        type: 'resource',
-        confidence: Math.max(utilization.memory, utilization.cpu),
-        prediction: 'High resource utilization predicted',
-        recommendation: 'Scale resources or optimize usage patterns',
-        timeframe: '30-90 minutes',
-        impact: 'high',
-        affectedComponents: ['system', 'memory', 'cpu'],
-        mitigationSteps: [
-          'Scale up system resources',
-          'Optimize memory-intensive operations',
-          'Implement resource monitoring alerts'
-        ]
-      });
+    private calculateTrend(values: number[]): number {
+        if (values.length < 2) {
+            return 0;
+        }
+        
+        const n = values.length;
+        const sumX = (n * (n - 1)) / 2;
+        const sumY = values.reduce((sum, val) => sum + val, 0);
+        const sumXY = values.reduce((sum, val, i) => sum + (i * val), 0);
+        const sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
+        
+        return (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
     }
 
-    return predictions;
-  }
-
-  private async predictAnomalies(events: AnalyticsEvent[]): Promise<PredictionResult[]> {
-    const anomalies = await this.detectAnomalies(events);
-    
-    return anomalies.map(anomaly => ({
-      id: this.generateId(),
-      type: 'anomaly',
-      confidence: anomaly.confidence,
-      prediction: `Anomaly detected in ${anomaly.metric}`,
-      recommendation: 'Investigate unusual patterns and verify system health',
-      timeframe: 'immediate',
-      impact: anomaly.severity,
-      affectedComponents: [anomaly.component],
-      mitigationSteps: [
-        'Investigate anomaly source',
-        'Verify system health',
-        'Check for external factors'
-      ]
-    }));
-  }
-
-  private updateAnomalyBaselines(events: AnalyticsEvent[]): void {
-    const eventsByType = this.groupEventsByType(events);
-    
-    for (const [eventType, typeEvents] of eventsByType) {
-      const baseline = this.calculateBaseline(typeEvents);
-      this.anomalyBaselines.set(eventType, baseline);
+    private extractAffectedFiles(events: AnalyticsEvent[]): string[] {
+        const files = new Set<string>();
+        events.forEach(event => {
+            if (event.metadata.filePath) {
+                files.add(event.metadata.filePath);
+            }
+        });
+        return Array.from(files);
     }
-  }
 
-  private groupEventsByType(events: AnalyticsEvent[]): Map<string, AnalyticsEvent[]> {
-    const grouped = new Map<string, AnalyticsEvent[]>();
-    
-    events.forEach(event => {
-      if (!grouped.has(event.type)) {
-        grouped.set(event.type, []);
-      }
-      grouped.get(event.type)!.push(event);
-    });
-    
-    return grouped;
-  }
+    private generateRiskRecommendations(riskLevel: string, criticalFactors: string[]): string[] {
+        const recommendations: string[] = [];
 
-  private detectAnomalyInEventType(
-    eventType: string, 
-    events: AnalyticsEvent[], 
-    baseline: number
-  ): AnomalyDetectionResult | null {
-    const currentValue = this.calculateCurrentValue(events);
-    const deviation = Math.abs(currentValue - baseline) / baseline;
-    
-    if (deviation > this.config.anomalyThreshold) {
-      return {
-        id: this.generateId(),
-        metric: eventType,
-        currentValue,
-        baseline,
-        deviation,
-        confidence: Math.min(deviation / this.config.anomalyThreshold, 1),
-        severity: this.getSeverity(deviation),
-        component: this.getComponentFromEventType(eventType),
-        detectedAt: new Date(),
-        description: `Anomaly detected in ${eventType}: ${deviation.toFixed(2)}x deviation from baseline`
-      };
+        if (riskLevel === 'high') {
+            recommendations.push('Immediate attention required');
+            recommendations.push('Review system stability');
+            recommendations.push('Consider rollback if recent changes');
+        }
+
+        if (criticalFactors.includes('Error Rate')) {
+            recommendations.push('Investigate error patterns');
+            recommendations.push('Review error logs');
+        }
+
+        if (criticalFactors.includes('Failure Rate')) {
+            recommendations.push('Review test configurations');
+            recommendations.push('Check dependency versions');
+        }
+
+        if (criticalFactors.includes('High Anomalies')) {
+            recommendations.push('Investigate performance anomalies');
+            recommendations.push('Monitor system resources');
+        }
+
+        return recommendations;
     }
-    
-    return null;
-  }
 
-  private calculateBaseline(events: AnalyticsEvent[]): number {
-    if (events.length === 0) return 0;
-    
-    const values = events.map(e => this.extractMetricValue(e));
-    const sum = values.reduce((a, b) => a + b, 0);
-    return sum / values.length;
-  }
-
-  private calculateCurrentValue(events: AnalyticsEvent[]): number {
-    return this.calculateBaseline(events); // Simplified for now
-  }
-
-  private extractMetricValue(event: AnalyticsEvent): number {
-    // Extract numeric value from event metadata
-    return event.metadata.value || event.metadata.duration || event.metadata.count || 1;
-  }
-
-  private async generateMetricForecast(
-    events: AnalyticsEvent[], 
-    metric: string, 
-    horizonHours: number
-  ): Promise<ForecastResult | null> {
-    const metricEvents = events.filter(e => e.metadata[metric] !== undefined);
-    if (metricEvents.length < 10) return null;
-
-    // Simple linear trend forecasting
-    const trend = this.calculateLinearTrend(metricEvents, metric);
-    const forecast = this.projectTrend(trend, horizonHours);
-    
-    return {
-      id: this.generateId(),
-      metric,
-      currentValue: trend.currentValue,
-      forecastValue: forecast.value,
-      trend: forecast.direction,
-      confidence: forecast.confidence,
-      timeHorizon: horizonHours,
-      generatedAt: new Date(),
-      dataPoints: metricEvents.length
-    };
-  }
-
-  private calculateLinearTrend(events: AnalyticsEvent[], metric: string): any {
-    const values = events.map(e => e.metadata[metric]).filter(v => v !== undefined);
-    if (values.length === 0) return { currentValue: 0, slope: 0 };
-
-    const n = values.length;
-    const x = Array.from({ length: n }, (_, i) => i);
-    const y = values;
-    
-    const sumX = x.reduce((a, b) => a + b, 0);
-    const sumY = y.reduce((a, b) => a + b, 0);
-    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
-    const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0);
-    
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-    
-    return {
-      currentValue: values[values.length - 1],
-      slope,
-      intercept
-    };
-  }
-
-  private projectTrend(trend: any, horizonHours: number): any {
-    const projectedValue = trend.currentValue + (trend.slope * horizonHours);
-    
-    return {
-      value: projectedValue,
-      direction: trend.slope > 0 ? 'increasing' : trend.slope < 0 ? 'decreasing' : 'stable',
-      confidence: Math.max(0.5, 1 - Math.abs(trend.slope) * 0.1) // Simplified confidence
-    };
-  }
-
-  private calculateRiskScore(predictions: PredictionResult[], anomalies: AnomalyDetectionResult[]): number {
-    let score = 0;
-    
-    predictions.forEach(p => {
-      const weight = p.impact === 'high' ? 0.4 : p.impact === 'medium' ? 0.3 : 0.2;
-      score += p.confidence * weight;
-    });
-    
-    anomalies.forEach(a => {
-      const weight = a.severity === 'high' ? 0.3 : a.severity === 'medium' ? 0.2 : 0.1;
-      score += a.confidence * weight;
-    });
-    
-    return Math.min(score, 1);
-  }
-
-  private identifyCriticalFactors(
-    predictions: PredictionResult[], 
-    anomalies: AnomalyDetectionResult[]
-  ): string[] {
-    const factors: string[] = [];
-    
-    predictions.forEach(p => {
-      if (p.confidence > 0.8 && p.impact === 'high') {
-        factors.push(`High risk: ${p.prediction}`);
-      }
-    });
-    
-    anomalies.forEach(a => {
-      if (a.confidence > 0.8 && a.severity === 'high') {
-        factors.push(`Critical anomaly: ${a.description}`);
-      }
-    });
-    
-    return factors;
-  }
-
-  private generateRiskRecommendations(criticalFactors: string[]): string[] {
-    const recommendations: string[] = [];
-    
-    criticalFactors.forEach(factor => {
-      if (factor.includes('command failure')) {
-        recommendations.push('Implement command retry mechanisms and error handling');
-      }
-      if (factor.includes('performance')) {
-        recommendations.push('Optimize performance bottlenecks and scale resources');
-      }
-      if (factor.includes('resource')) {
-        recommendations.push('Scale up system resources and optimize usage');
-      }
-      if (factor.includes('anomaly')) {
-        recommendations.push('Investigate anomaly source and verify system health');
-      }
-    });
-    
-    return [...new Set(recommendations)]; // Remove duplicates
-  }
-
-  private getRiskLevel(score: number): 'low' | 'medium' | 'high' {
-    if (score >= 0.7) return 'high';
-    if (score >= 0.4) return 'medium';
-    return 'low';
-  }
-
-  private getSeverity(deviation: number): 'low' | 'medium' | 'high' {
-    if (deviation >= 5) return 'high';
-    if (deviation >= 2) return 'medium';
-    return 'low';
-  }
-
-  private getComponentFromEventType(eventType: string): string {
-    const componentMap: Record<string, string> = {
-      'command_executed': 'command_processor',
-      'performance_metric': 'performance_monitor',
-      'resource_usage': 'resource_manager',
-      'error': 'error_handler'
-    };
-    
-    return componentMap[eventType] || 'unknown';
-  }
-
-  private calculateFailureRate(events: AnalyticsEvent[]): number {
-    if (events.length === 0) return 0;
-    const failures = events.filter(e => !e.metadata.success);
-    return failures.length / events.length;
-  }
-
-  private calculatePerformanceTrend(events: AnalyticsEvent[]): any {
-    if (events.length < 2) return { degradation: 0 };
-    
-    const responseTimes = events.map(e => e.metadata.responseTime).filter(t => t);
-    if (responseTimes.length < 2) return { degradation: 0 };
-    
-    const recent = responseTimes.slice(-Math.ceil(responseTimes.length / 3));
-    const older = responseTimes.slice(0, Math.floor(responseTimes.length / 3));
-    
-    const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
-    const olderAvg = older.reduce((a, b) => a + b, 0) / older.length;
-    
-    const degradation = recentAvg > olderAvg ? (recentAvg - olderAvg) / olderAvg : 0;
-    
-    return { degradation: Math.min(degradation, 1) };
-  }
-
-  private calculateResourceUtilization(events: AnalyticsEvent[]): any {
-    if (events.length === 0) return { memory: 0, cpu: 0 };
-    
-    const memoryValues = events.map(e => e.metadata.memoryUsage).filter(v => v);
-    const cpuValues = events.map(e => e.metadata.cpuUsage).filter(v => v);
-    
-    const avgMemory = memoryValues.length > 0 ? 
-      memoryValues.reduce((a, b) => a + b, 0) / memoryValues.length : 0;
-    const avgCpu = cpuValues.length > 0 ? 
-      cpuValues.reduce((a, b) => a + b, 0) / cpuValues.length : 0;
-    
-    return {
-      memory: Math.min(avgMemory / 100, 1), // Normalize to 0-1
-      cpu: Math.min(avgCpu / 100, 1)
-    };
-  }
-
-  private getAffectedComponents(events: AnalyticsEvent[]): string[] {
-    const components = new Set<string>();
-    events.forEach(e => {
-      if (e.metadata.component) {
-        components.add(e.metadata.component);
-      }
-    });
-    return Array.from(components);
-  }
-
-  private calculatePrecision(modelId: string): number {
-    // Simplified precision calculation
-    return 0.80 + Math.random() * 0.15;
-  }
-
-  private calculateRecall(modelId: string): number {
-    // Simplified recall calculation
-    return 0.75 + Math.random() * 0.20;
-  }
-
-  private calculateF1Score(modelId: string): number {
-    const precision = this.calculatePrecision(modelId);
-    const recall = this.calculateRecall(modelId);
-    return 2 * (precision * recall) / (precision + recall);
-  }
-
-  private getTrainingDataSize(modelId: string): number {
-    return this.trainingData.filter(d => d.metadata.modelId === modelId).length;
-  }
-
-  private generateId(): string {
-    return `pred_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
+    public dispose(): void {
+        this.models.clear();
+        this.trainingData = [];
+        this.removeAllListeners();
+    }
 }

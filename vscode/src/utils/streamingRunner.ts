@@ -1,237 +1,240 @@
-import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
-import { CommandResult, StreamingEventEmitter } from '../types';
+import { spawn, ChildProcess } from 'child_process';
+import * as vscode from 'vscode';
+import { StreamingMessage, CommandResult } from '../types';
 
-/**
- * Enhanced command runner with real-time streaming capabilities
- */
-export class StreamingCommandRunner extends EventEmitter implements StreamingEventEmitter {
-    private currentProcess?: ChildProcess;
-    private startTime: number = 0;
-    private outputBuffer: string = '';
-    private errorBuffer: string = '';
+export interface StreamingOptions {
+    cwd?: string;
+    env?: Record<string, string>;
+    timeout?: number;
+    killSignal?: string;
+    progressSteps?: string[];
+}
 
-    /**
-     * Execute a command with real-time streaming
-     */
-    async executeWithStreaming(
-        command: string, 
-        args: string[], 
-        options: {
-            cwd?: string;
-            shell?: boolean;
-            progressSteps?: string[]; // Keywords that indicate progress milestones
-        } = {}
-    ): Promise<CommandResult> {
-        this.startTime = Date.now();
-        this.outputBuffer = '';
-        this.errorBuffer = '';
+export class StreamingCommandRunner extends EventEmitter {
+    private _activeProcess?: ChildProcess;
+    private _isRunning = false;
+    private _startTime?: number;
+    private _currentOutput = '';
+    private _timeoutId?: NodeJS.Timeout;
+    private _forceKillTimeoutId?: NodeJS.Timeout;
 
-        const progressSteps = options.progressSteps || [];
-        let currentStep = 0;
-
-        return new Promise((resolve) => {
-            console.log(`Streaming command: ${command} ${args.join(' ')}`);
-            
-            this.currentProcess = spawn(command, args, {
-                cwd: options.cwd,
-                shell: options.shell !== false, // Default to true
-                stdio: ['pipe', 'pipe', 'pipe']
-            });
-
-            // Stream stdout data
-            this.currentProcess.stdout?.on('data', (data) => {
-                const text = data.toString();
-                this.outputBuffer += text;
-                
-                // Emit real-time output
-                this.emit('output', text);
-                
-                // Check for progress milestones
-                if (progressSteps.length > 0) {
-                    const lowerText = text.toLowerCase();
-                    for (let i = currentStep; i < progressSteps.length; i++) {
-                        if (lowerText.includes(progressSteps[i].toLowerCase())) {
-                            currentStep = i + 1;
-                            const progress = Math.round((currentStep / progressSteps.length) * 100);
-                            this.emit('progress', progress);
-                            this.emit('status', `Step ${currentStep}/${progressSteps.length}: ${progressSteps[i]}`);
-                            break;
-                        }
-                    }
-                }
-            });
-
-            // Stream stderr data
-            this.currentProcess.stderr?.on('data', (data) => {
-                const text = data.toString();
-                this.errorBuffer += text;
-                
-                // Emit error output (some commands use stderr for normal output)
-                this.emit('error', text);
-            });
-
-            // Handle process completion
-            this.currentProcess.on('close', (code) => {
-                const duration = Date.now() - this.startTime;
-                const result: CommandResult = {
-                    success: code === 0,
-                    exitCode: code || 0,
-                    output: this.outputBuffer,
-                    error: this.errorBuffer || undefined,
-                    duration
-                };
-                
-                this.currentProcess = undefined;
-                this.emit('complete', result);
-                resolve(result);
-            });
-
-            // Handle process errors
-            this.currentProcess.on('error', (error) => {
-                const duration = Date.now() - this.startTime;
-                const result: CommandResult = {
-                    success: false,
-                    exitCode: 1,
-                    output: this.outputBuffer,
-                    error: error.message,
-                    duration
-                };
-                
-                this.currentProcess = undefined;
-                this.emit('complete', result);
-                resolve(result);
-            });
-
-            // Emit initial status
-            this.emit('status', 'Starting command execution...');
-        });
+    constructor(private readonly _outputChannel: vscode.OutputChannel) {
+        super();
     }
 
-    /**
-     * Cancel the currently running command
-     */
-    cancel(): void {
-        if (this.currentProcess) {
-            this.emit('status', 'Cancelling command...');
-            this.currentProcess.kill('SIGTERM');
-            
-            // Force kill after 5 seconds
-            setTimeout(() => {
-                if (this.currentProcess) {
-                    this.currentProcess.kill('SIGKILL');
-                }
-            }, 5000);
-            
-            this.currentProcess = undefined;
+    // Main execution method
+    public async executeWithStreaming(command: string, args: string[], options: StreamingOptions = {}): Promise<CommandResult> {
+        if (this._isRunning) {
+            throw new Error('Command is already running');
+        }
+
+        this._isRunning = true;
+        this._startTime = Date.now();
+        this._currentOutput = '';
+
+        try {
+            return await this._executeCommand(command, args, options);
+        } finally {
+            this._cleanup();
         }
     }
 
-    /**
-     * Check if a command is currently running
-     */
-    isRunning(): boolean {
-        return this.currentProcess !== undefined;
+    // Test command execution
+    public async executeTestCommand(command: string, args: string[], cwd?: string): Promise<CommandResult> {
+        return this.executeWithStreaming(command, args, { cwd });
     }
 
-    /**
-     * Get current output buffer
-     */
-    getCurrentOutput(): string {
-        return this.outputBuffer;
+    // Git command execution
+    public async executeGitCommand(args: string[], cwd?: string): Promise<CommandResult> {
+        return this.executeWithStreaming('git', args, { cwd });
     }
 
-    /**
-     * Clear output buffers
-     */
-    clearOutput(): void {
-        this.outputBuffer = '';
-        this.errorBuffer = '';
+    // Lint command execution
+    public async executeLintCommand(command: string, args: string[], cwd?: string): Promise<CommandResult> {
+        return this.executeWithStreaming(command, args, { cwd });
     }
 
-    /**
-     * Simulate progress for commands that don't provide clear milestones
-     */
-    simulateProgress(durationMs: number = 30000): void {
-        const startTime = Date.now();
-        const interval = setInterval(() => {
-            if (!this.isRunning()) {
-                clearInterval(interval);
+    private async _executeCommand(command: string, args: string[], options: StreamingOptions): Promise<CommandResult> {
+        return new Promise<CommandResult>((resolve, reject) => {
+            this._activeProcess = spawn(command, args, {
+                cwd: options.cwd || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+                env: { ...process.env, ...options.env },
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            let output = '';
+            let error = '';
+
+            // FIX: Add error handling for stdout/stderr streams
+            this._activeProcess.stdout?.on('data', (data: Buffer) => {
+                const text = data.toString();
+                output += text;
+                this._currentOutput += text;
+                
+                this.emit('output', text);
+                this._outputChannel.append(text);
+            });
+
+            this._activeProcess.stdout?.on('error', (err: Error) => {
+                console.warn('stdout stream error:', err);
+                // Don't reject here, let the process handle it
+            });
+
+            this._activeProcess.stderr?.on('data', (data: Buffer) => {
+                const text = data.toString();
+                error += text;
+                this._currentOutput += text;
+                
+                this.emit('error', text);
+                this._outputChannel.append(text);
+            });
+
+            this._activeProcess.stderr?.on('error', (err: Error) => {
+                console.warn('stderr stream error:', err);
+                // Don't reject here, let the process handle it
+            });
+
+            this._activeProcess.on('close', (code: number) => {
+                const duration = Date.now() - (this._startTime || 0);
+                
+                // FIX: Clear timeout when process completes
+                if (this._timeoutId) {
+                    clearTimeout(this._timeoutId);
+                    this._timeoutId = undefined;
+                }
+                
+                const result: CommandResult = {
+                    success: code === 0,
+                    exitCode: code,
+                    output,
+                    error,
+                    duration
+                };
+
+                this.emit('complete', result);
+                resolve(result);
+            });
+
+            this._activeProcess.on('error', (err: Error) => {
+                const duration = Date.now() - (this._startTime || 0);
+                
+                // FIX: Clear timeout when process errors
+                if (this._timeoutId) {
+                    clearTimeout(this._timeoutId);
+                    this._timeoutId = undefined;
+                }
+                
+                const result: CommandResult = {
+                    success: false,
+                    exitCode: 1,
+                    output,
+                    error: err.message,
+                    duration
+                };
+
+                this.emit('error', err.message);
+                this.emit('complete', result);
+                resolve(result); // Resolve instead of reject to maintain consistency
+            });
+
+            // FIX: Handle timeout properly
+            if (options.timeout) {
+                this._timeoutId = setTimeout(() => {
+                    if (this._activeProcess && this._isRunning) {
+                        console.log(`Command timed out after ${options.timeout}ms`);
+                        this._cancelWithTimeout();
+                        reject(new Error(`Command timed out after ${options.timeout}ms`));
+                    }
+                }, options.timeout);
+            }
+        });
+    }
+
+    public cancel(): void {
+        if (this._activeProcess && this._isRunning) {
+            this._cancelWithTimeout();
+        }
+    }
+
+    // FIX: Improved cancel with timeout handling
+    private _cancelWithTimeout(): void {
+        if (!this._activeProcess) {
+            return;
+        }
+
+        console.log('Cancelling command with SIGTERM');
+        this._activeProcess.kill('SIGTERM');
+        
+        // FIX: Clear existing force kill timeout before setting new one
+        if (this._forceKillTimeoutId) {
+            clearTimeout(this._forceKillTimeoutId);
+        }
+        
+        // Force kill after 5 seconds
+        this._forceKillTimeoutId = setTimeout(() => {
+            if (this._activeProcess) {
+                console.log('Force killing command with SIGKILL');
+                this._activeProcess.kill('SIGKILL');
+            }
+            this._forceKillTimeoutId = undefined;
+        }, 5000);
+    }
+
+    // FIX: Comprehensive cleanup method
+    private _cleanup(): void {
+        this._isRunning = false;
+        this._activeProcess = undefined;
+        
+        if (this._timeoutId) {
+            clearTimeout(this._timeoutId);
+            this._timeoutId = undefined;
+        }
+        
+        if (this._forceKillTimeoutId) {
+            clearTimeout(this._forceKillTimeoutId);
+            this._forceKillTimeoutId = undefined;
+        }
+    }
+
+    public get isRunning(): boolean {
+        return this._isRunning;
+    }
+
+    public getCurrentOutput(): string {
+        return this._currentOutput;
+    }
+
+    public clearOutput(): void {
+        this._currentOutput = '';
+    }
+
+    public simulateProgress(duration: number): void {
+        const interval = 100; // Update every 100ms
+        const steps = duration / interval;
+        let currentStep = 0;
+
+        const progressInterval = setInterval(() => {
+            // FIX: Stop progress simulation if command is no longer running
+            if (!this._isRunning) {
+                clearInterval(progressInterval);
                 return;
             }
 
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(Math.round((elapsed / durationMs) * 90), 90); // Max 90% until complete
+            currentStep++;
+            const progress = Math.min(90, Math.floor((currentStep / steps) * 100)); // Cap at 90%
+            
             this.emit('progress', progress);
-        }, 1000);
+            
+            if (currentStep >= steps) {
+                clearInterval(progressInterval);
+            }
+        }, interval);
     }
 
-    /**
-     * Enhanced execute method for test commands with smart progress tracking
-     */
-    async executeTestCommand(
-        command: string,
-        args: string[],
-        cwd: string
-    ): Promise<CommandResult> {
-        const testProgressSteps = [
-            'determining test suites to run',
-            'found test suites',
-            'running tests',
-            'test suites completed',
-            'collecting coverage',
-            'test results'
-        ];
-
-        this.emit('status', 'Initializing test runner...');
-        
-        return this.executeWithStreaming(command, args, {
-            cwd,
-            progressSteps: testProgressSteps
-        });
-    }
-
-    /**
-     * Enhanced execute method for git operations
-     */
-    async executeGitCommand(
-        args: string[],
-        cwd: string
-    ): Promise<CommandResult> {
-        const gitProgressSteps = [
-            'analyzing repository',
-            'computing diff',
-            'processing changes'
-        ];
-
-        this.emit('status', 'Analyzing git repository...');
-        
-        return this.executeWithStreaming('git', args, {
-            cwd,
-            progressSteps: gitProgressSteps
-        });
-    }
-
-    /**
-     * Enhanced execute method for lint/format operations
-     */
-    async executeLintCommand(
-        command: string,
-        args: string[],
-        cwd: string
-    ): Promise<CommandResult> {
-        const lintProgressSteps = [
-            'loading configuration',
-            'scanning files',
-            'running lint rules',
-            'generating report'
-        ];
-
-        this.emit('status', 'Starting code analysis...');
-        
-        return this.executeWithStreaming(command, args, {
-            cwd,
-            progressSteps: lintProgressSteps
-        });
+    public dispose(): void {
+        this.cancel();
+        this._cleanup();
+        this.removeAllListeners();
     }
 }

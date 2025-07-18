@@ -7,10 +7,12 @@ import { CommandRunner } from '../utils/shellRunner';
 export class AiDebugCommand {
     private fileManager: FileManager;
     private commandRunner: CommandRunner;
+    private outputChannel: vscode.OutputChannel;
 
     constructor() {
-        this.fileManager = new FileManager();
-        this.commandRunner = new CommandRunner();
+        this.outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
+        this.fileManager = new FileManager(this.outputChannel);
+        this.commandRunner = new CommandRunner(this.outputChannel);
     }
 
     /**
@@ -123,7 +125,8 @@ export class AiDebugCommand {
                 testResult.success,
                 outputFiles['pr-description-prompt'],
                 lintExitCode,
-                prettierExitCode
+                prettierExitCode,
+                project
             );
 
             const duration = Date.now() - startTime;
@@ -211,7 +214,7 @@ export class AiDebugCommand {
         contextFile: string,
         diffFile: string,
         testFile: string,
-        testTarget: string,
+        project: string,
         exitCode: number,
         focusArea: string,
         quickMode: boolean,
@@ -226,7 +229,7 @@ export class AiDebugCommand {
 =================================================================
 
 PROJECT: Angular NX Monorepo
-TARGET: ${testTarget}
+TARGET: ${project}
 STATUS: ${status}
 FOCUS: ${focusArea || "General debugging"}
 TIMESTAMP: ${timestamp}
@@ -339,7 +342,7 @@ NOTE: Focus on items 1-4 first to get tests passing, then implement item 5
 `;
 
         try {
-            const testContent = await this.fileManager.readFile(testFile);
+            const testContent = await this.fileManager.getFileContent('jest-output');
             contextContent += testContent;
         } catch {
             contextContent += "❌ No test results available\n";
@@ -404,9 +407,15 @@ NOTE: Focus on items 1-4 first to get tests passing, then implement item 5
         } else {
             contextContent += `⚠️  NOT READY - Issues need resolution:
 `;
-            if (exitCode !== 0) contextContent += "• Tests: Failing ❌\n";
-            if (lintExitCode !== 0) contextContent += "• Lint: Issues detected ❌\n";
-            if (prettierExitCode !== 0) contextContent += "• Format: Failed ❌\n";
+            if (exitCode !== 0) {
+                contextContent += "• Tests: Failing ❌\n";
+            }
+            if (lintExitCode !== 0) {
+                contextContent += "• Lint: Issues detected ❌\n";
+            }
+            if (prettierExitCode !== 0) {
+                contextContent += "• Format: Failed ❌\n";
+            }
         }
 
         // Add git changes analysis
@@ -417,7 +426,7 @@ NOTE: Focus on items 1-4 first to get tests passing, then implement item 5
 `;
 
         try {
-            const diffContent = await this.fileManager.readFile(diffFile);
+            const diffContent = await this.fileManager.getFileContent('diff');
             contextContent += diffContent;
         } catch {
             contextContent += `ℹ️  No recent code changes detected
@@ -443,14 +452,14 @@ This context file is optimized for AI analysis with:
 Context file size: ${contextContent.split('\n').length} lines (optimized for AI processing)
 `;
 
-        await this.fileManager.writeFile(contextFile, contextContent);
+        await this.fileManager.saveOutput('ai-debug-context', contextContent);
     }
 
     private async createPrDescriptionPrompts(
         prFile: string,
         diffFile: string,
         testFile: string,
-        testTarget: string,
+        project: string,
         exitCode: number,
         lintExitCode: number,
         prettierExitCode: number
@@ -497,16 +506,16 @@ wish to have tested.
 =================================================================
 
 PROJECT: Angular NX Monorepo
-TARGET: ${testTarget}
+TARGET: ${project}
 TEST STATUS: ${testStatus}
 LINT STATUS: ${lintStatus}
 FORMAT STATUS: ${formatStatus}
 TIMESTAMP: ${timestamp}
 
 📋 TESTING INSTRUCTIONS:
-• Run: yarn nx test ${testTarget}
-• Run: yarn nx lint ${testTarget}
-• Run: yarn nx prettier ${testTarget} --write
+• Run: yarn nx test ${project}
+• Run: yarn nx lint ${project}
+• Run: yarn nx prettier ${project} --write
 • Verify all tests pass and code follows style guidelines
 • Test the specific functionality mentioned in the Solution section
 • Check for any UI/UX changes if applicable
@@ -514,7 +523,7 @@ TIMESTAMP: ${timestamp}
 🎯 READY TO USE: Copy the primary prompt above, attach ai-debug-context.txt, and ask your AI assistant to create the PR description!
 `;
 
-        await this.fileManager.writeFile(prFile, prContent);
+        await this.fileManager.saveOutput('pr-description-prompt', prContent);
     }
 
     private async displayAiDebugSummary(
@@ -524,7 +533,8 @@ TIMESTAMP: ${timestamp}
         prDescriptionEnabled: boolean,
         prDescriptionFile: string,
         lintExitCode: number,
-        prettierExitCode: number
+        prettierExitCode: number,
+        project: string
     ): Promise<void> {
         const contextStats = await this.fileManager.getFileStats(contextFile);
         
@@ -573,7 +583,9 @@ TIMESTAMP: ${timestamp}
         // Show file details
         this.showInfo("\n📄 CONTEXT FILE DETAILS:");
         this.showInfo(`• Location: ${contextFile}`);
-        this.showInfo(`• Size: ${contextStats.size} (${contextStats.lines} lines)`);
+        if (contextStats) {
+            this.showInfo(`• Size: ${contextStats.size} bytes`);
+        }
         this.showInfo("• Optimized: ✅ AI-friendly structure");
         this.showInfo(`• Focus: ${focusArea || "General"}`);
         
@@ -587,7 +599,9 @@ TIMESTAMP: ${timestamp}
             const prStats = await this.fileManager.getFileStats(prDescriptionFile);
             this.showInfo("\n📝 PR DESCRIPTION PROMPTS:");
             this.showInfo(`• Location: ${prDescriptionFile}`);
-            this.showInfo(`• Size: ${prStats.size}`);
+            if (prStats) {
+                this.showInfo(`• Size: ${prStats.size} bytes`);
+            }
             this.showInfo("• Ready: ✅ GitHub PR format prompts generated");
         }
 
@@ -602,7 +616,7 @@ TIMESTAMP: ${timestamp}
             } else {
                 let step = 1;
                 if (lintExitCode !== 0) {
-                    this.showInfo(`${step}. Fix linting errors (try: yarn nx lint ${testTarget} --fix)`);
+                    this.showInfo(`${step}. Fix linting errors (try: yarn nx lint ${project} --fix)`);
                     step++;
                 }
                 if (prettierExitCode !== 0) {
@@ -659,8 +673,7 @@ TIMESTAMP: ${timestamp}
     }
 
     private showInfo(message: string) {
-        const outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
-        outputChannel.appendLine(message);
-        outputChannel.show();
+        this.outputChannel.appendLine(message);
+        this.outputChannel.show();
     }
 }

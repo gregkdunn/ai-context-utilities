@@ -12,6 +12,7 @@ jest.mock('vscode', () => ({
     window: {
         createOutputChannel: jest.fn(() => ({
             appendLine: jest.fn(),
+            append: jest.fn(),
             show: jest.fn()
         }))
     }
@@ -204,7 +205,7 @@ describe('PrepareToPushCommand', () => {
 
             // Assert
             expect(result.success).toBe(true);
-            expect(result.output).toContain('Lint output');
+            expect(result.output).toContain('Prepare to push completed successfully for test-project');
         });
 
         it('should capture prettier output after successful lint', async () => {

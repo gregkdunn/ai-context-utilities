@@ -11,7 +11,7 @@ import {
   CustomMetric,
   MetricFilter,
   AggregationPeriod
-} from '../../types';
+} from '../../../types';
 
 /**
  * Advanced Metrics Collection Engine for Phase 4.4
@@ -99,7 +99,7 @@ export class MetricsCollectionEngine extends EventEmitter {
    * Define a custom metric
    */
   public defineMetric(definition: MetricDefinition): void {
-    if (this.metricDefinitions.size >= this.config.maxMetricDefinitions) {
+    if (this.metricDefinitions.size >= (this.config.maxMetricDefinitions || 1000)) {
       throw new Error('Maximum number of metric definitions reached');
     }
     
@@ -332,7 +332,7 @@ export class MetricsCollectionEngine extends EventEmitter {
       stats.totalValues += buffer.length;
     }
     
-    stats.bufferUtilization = stats.totalValues / (this.config.bufferSize * this.metricDefinitions.size);
+    stats.bufferUtilization = stats.totalValues / ((this.config.bufferSize || 10000) * this.metricDefinitions.size);
     stats.collectionRate = stats.totalValues / (stats.uptime / 1000); // values per second
     
     return stats;
@@ -393,6 +393,42 @@ export class MetricsCollectionEngine extends EventEmitter {
         type: 'gauge',
         unit: 'percentage',
         description: 'Current CPU usage',
+        tags: ['component']
+      },
+      // Add system metrics definitions
+      {
+        name: 'system.cpu.usage',
+        type: 'gauge',
+        unit: 'percentage',
+        description: 'System CPU usage',
+        tags: ['component']
+      },
+      {
+        name: 'system.memory.usage',
+        type: 'gauge',
+        unit: 'bytes',
+        description: 'System memory usage',
+        tags: ['component']
+      },
+      {
+        name: 'system.disk.usage',
+        type: 'gauge',
+        unit: 'bytes',
+        description: 'System disk usage',
+        tags: ['component']
+      },
+      {
+        name: 'system.network.rx',
+        type: 'gauge',
+        unit: 'bytes/sec',
+        description: 'Network receive rate',
+        tags: ['component']
+      },
+      {
+        name: 'system.network.tx',
+        type: 'gauge',
+        unit: 'bytes/sec',
+        description: 'Network transmit rate',
         tags: ['component']
       }
     ];
@@ -484,7 +520,7 @@ export class MetricsCollectionEngine extends EventEmitter {
 
   private shouldCollectMetric(metric: MetricValue): boolean {
     for (const rule of this.collectionRules.values()) {
-      if (!rule.isActive) continue;
+      if (!rule.isActive) {continue;}
       
       if (this.evaluateCondition(rule.condition, metric)) {
         return this.applyRuleAction(rule, metric);
@@ -524,7 +560,7 @@ export class MetricsCollectionEngine extends EventEmitter {
 
   private checkThrottleLimit(metricName: string, maxRate: number): boolean {
     const buffer = this.metricBuffer.get(metricName);
-    if (!buffer) return true;
+    if (!buffer) {return true;}
     
     const now = Date.now();
     const oneSecondAgo = now - 1000;
@@ -543,7 +579,7 @@ export class MetricsCollectionEngine extends EventEmitter {
     buffer.push(metricValue);
     
     // Keep buffer size under limit
-    if (buffer.length > this.config.bufferSize) {
+    if (buffer.length > (this.config.bufferSize || 10000)) {
       buffer.shift(); // Remove oldest value
     }
   }
@@ -554,7 +590,7 @@ export class MetricsCollectionEngine extends EventEmitter {
   }
 
   private flushOldValues(): void {
-    const cutoffTime = Date.now() - this.config.retentionPeriod;
+    const cutoffTime = Date.now() - (this.config.retentionPeriod || 7 * 24 * 60 * 60 * 1000);
     
     for (const [metricName, buffer] of this.metricBuffer) {
       const filtered = buffer.filter(v => v.timestamp.getTime() > cutoffTime);
@@ -564,7 +600,7 @@ export class MetricsCollectionEngine extends EventEmitter {
 
   private clearAggregationCache(): void {
     // Clear cache entries older than flush interval
-    const cutoffTime = Date.now() - this.config.flushInterval * 2;
+    const cutoffTime = Date.now() - (this.config.flushInterval || 5000) * 2;
     
     for (const [key, aggregation] of this.aggregationCache) {
       if (aggregation.timestamp.getTime() < cutoffTime) {
@@ -728,7 +764,7 @@ export class MetricsCollectionEngine extends EventEmitter {
     const lines = ['Metric,Value,Timestamp,Tags'];
     
     for (const [metricName, values] of snapshot.metrics) {
-      values.forEach(value => {
+      values.forEach((value: any) => {
         const tags = Object.entries(value.tags).map(([k, v]) => `${k}=${v}`).join(';');
         lines.push(`${metricName},${value.value},${value.timestamp.toISOString()},${tags}`);
       });

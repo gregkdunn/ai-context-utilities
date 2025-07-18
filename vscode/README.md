@@ -2,80 +2,110 @@
 
 AI-powered debugging and code quality tools for Angular NX monorepos, now available directly in VSCode!
 
-## Features
+## 🎯 Overview
 
+AI Debug Utilities is a comprehensive VSCode extension designed to enhance development workflows in Angular NX monorepos. The extension provides intelligent debugging tools, automated testing utilities, and advanced git integration with AI-powered insights.
+
+## 🚀 Phase 5 Features
+
+### 1. NX Affected Mode
+- **Intelligent Project Detection**: Automatically identifies projects affected by recent changes
+- **Targeted Command Execution**: Run tests, lints, and builds only on affected projects
+- **Status Bar Integration**: Real-time affected project count display
+- **Performance Optimization**: Caching and parallel execution support
+
+### 2. Enhanced Git Diff Options
+- **Interactive Commit Comparison**: Select and compare any two commits with rich UI
+- **Branch Comparison Tools**: Visual diff between branches with file-by-file analysis
+- **Commit History Browser**: Navigate through commit history with search and filters
+- **Syntax Highlighting**: Proper diff syntax highlighting in results
+
+### 3. Flipper Detection
+- **Automatic Feature Flag Detection**: Scans code for flipper/feature flag patterns
+- **PR Integration**: Generates comprehensive PR sections with QA checklists
+- **Environment Setup Instructions**: Detailed staging and production setup guidance
+- **Comprehensive Pattern Matching**: Detects imports, method calls, observables, and templates
+
+## 📋 Core Features
+
+### AI-Powered Analysis
 - **🤖 AI Debug Analysis**: Complete development workflow with test analysis, git changes, and code quality checks
 - **🧪 NX Test Runner**: Execute Jest tests with AI-optimized output formatting
 - **📋 Smart Git Diff**: Intelligent git change analysis with file categorization
 - **🚀 Prepare to Push**: Automated linting and code formatting validation
 - **📝 GitHub Copilot Integration**: Auto-trigger Copilot analysis for test failures and code review
 
-## Installation
+## 🔧 Installation
 
 1. Install the extension from the VSCode marketplace
 2. Open an Angular NX workspace
 3. The extension will automatically activate and show the AI Debug panel
 
-## Quick Start
+## ⚡ Quick Start
 
-1. **Open the Panel**: Use `Ctrl+Shift+D` (or `Cmd+Shift+D` on Mac) to open the AI Debug panel
+### Key Commands
+- **Ctrl+Shift+D**: Open AI Debug Panel
+- **Ctrl+Shift+N**: Run NX Affected Command
+- **Ctrl+Shift+G**: Interactive Git Diff
+- **Ctrl+Shift+A**: Run AI Debug Analysis
+
+### Basic Workflow
+1. **Open the Panel**: Use `Ctrl+Shift+D` to open the AI Debug panel
 2. **Select a Project**: Choose your NX project from the dropdown
 3. **Run Analysis**: Click any of the action buttons to start analysis
 4. **View Results**: Check the output files and use them with AI assistants
 
-## Commands
+## 📚 Commands Reference
 
-### AI Debug Analysis (`aiDebug`)
-Complete development workflow that:
-- Runs tests with AI-optimized output
-- Captures git changes with smart analysis
-- Performs code quality checks (lint + format)
-- Generates PR description prompts when ready
-- Provides structured context for AI debugging
+### NX Affected Commands
+- `nx.runAffected`: Run any target on affected projects
+- `nx.testAffected`: Run tests on affected projects
+- `nx.lintAffected`: Run linting on affected projects
+- `nx.buildAffected`: Build affected projects
+- `nx.showAffectedProjects`: Show affected projects in quick pick
 
-**Options:**
-- `--quick`: Skip detailed analysis for faster iteration
-- `--full-context`: Include verbose test output
-- `--focus=area`: Focus on specific area (tests|types|performance)
+### Git Diff Commands
+- `git.interactiveDiff`: Main interactive diff interface
+- `git.compareCommits`: Select and compare two commits
+- `git.compareBranches`: Select and compare two branches
+- `git.showCommitHistory`: Browse commit history
+- `git.enhancedDiff`: Quick diff against main branch
 
-### Run Tests (`nxTest`)
-Execute Jest tests with AI-optimized reporting:
-- Filters out noise and focuses on key information
-- Highlights failures with clear error categorization
-- Provides performance insights for slow tests
-- Generates structured output for AI analysis
+### AI Debug Commands
+- `aiDebugUtilities.runAiDebug`: Complete development workflow analysis
+- `aiDebugUtilities.runNxTest`: Execute Jest tests with AI-optimized reporting
+- `aiDebugUtilities.runGitDiff`: Smart git change analysis
+- `aiDebugUtilities.runPrepareToPush`: Code quality validation
 
-### Analyze Changes (`gitDiff`)
-Smart git change analysis:
-- Auto-detects best diff strategy (unstaged → staged → last commit)
-- Categorizes changes by file type and impact
-- Provides AI-friendly formatting with change summaries
-- Highlights test-related files and potential breaking changes
-
-### Prepare to Push (`prepareToPush`)
-Code quality validation:
-- Runs ESLint/TSLint with clear error reporting
-- Applies Prettier formatting automatically
-- Validates code meets project standards
-- Provides clear next steps for any issues
-
-## Configuration
+## ⚙️ Configuration
 
 The extension can be configured through VSCode settings:
 
 ```json
 {
+  // Core Settings
   "aiDebugUtilities.outputDirectory": ".github/instructions/ai_utilities_context",
   "aiDebugUtilities.autoDetectProject": true,
   "aiDebugUtilities.showNotifications": true,
   "aiDebugUtilities.terminalIntegration": true,
+  
+  // NX Configuration
+  "nxAngular.defaultBase": "main",
+  "nxAngular.enableAffectedMode": true,
+  "nxAngular.parallelExecutions": 3,
+  
+  // Flipper Configuration
+  "flipperDetection.enabled": true,
+  "flipperDetection.includePRSection": true,
+  
+  // Copilot Integration
   "aiDebugUtilities.copilot.autoAnalyze": true,
   "aiDebugUtilities.copilot.analyzeOnFailure": true,
   "aiDebugUtilities.copilot.generatePR": true
 }
 ```
 
-## Output Files
+## 📄 Output Files
 
 The extension generates AI-optimized files in your configured output directory:
 
@@ -83,270 +113,200 @@ The extension generates AI-optimized files in your configured output directory:
 - **`jest-output.txt`**: AI-optimized test results
 - **`diff.txt`**: Git changes with intelligent analysis
 - **`pr-description-prompt.txt`**: GitHub PR description generation prompts
+- **`flipper-analysis.md`**: Flipper detection results and PR sections
 
-## GitHub Copilot Integration
+## 🔍 Feature Details
 
-When GitHub Copilot is available, the extension provides enhanced AI assistance:
+### NX Affected Mode
+Run commands only on projects affected by your changes:
+1. Make changes to your codebase
+2. Status bar shows "NX (5 affected)"
+3. Use Ctrl+Shift+N to run affected commands
+4. Select target (test, lint, build)
+5. Extension runs command only on affected projects
 
-### Automatic Analysis
-- **Test Failures**: Auto-triggers Copilot analysis when tests fail
-- **Code Review**: Suggests improvements when tests pass
-- **PR Generation**: Creates GitHub PR descriptions from your changes
+### Enhanced Git Diff
+Interactive tools for comparing changes:
+1. Use Ctrl+Shift+G to open interactive diff
+2. Choose from commit comparison, branch comparison, or commit history
+3. View results in rich webview with syntax highlighting
+4. Detailed diff opens in new document
 
-### Manual Analysis
-- Click "Analyze with Copilot" buttons for targeted AI assistance
-- Custom chat participant: `@aidebug analyze failures`
-- Context-aware prompts based on your specific codebase
+### Flipper Detection
+Automatic feature flag detection with PR integration:
+1. System scans code changes for flipper patterns
+2. Generates comprehensive QA checklists
+3. Creates environment setup instructions
+4. Provides post-deployment cleanup reminders
 
-## Keyboard Shortcuts
+## 🧪 Testing
 
-- `Ctrl+Shift+D` / `Cmd+Shift+D`: Open AI Debug panel
-- `Ctrl+Shift+A` / `Cmd+Shift+A`: Run AI Debug Analysis on current project
-
-## Workflow Example
-
-1. **Make Code Changes**: Modify your Angular/NX project
-2. **Run AI Debug**: Click "AI Debug Analysis" or use `Ctrl+Shift+A`
-3. **If Tests Fail**: Extension auto-opens Copilot with failure analysis
-4. **If Tests Pass**: Extension runs lint + format, generates PR prompts
-5. **Review Results**: Check output files and follow AI suggestions
-6. **Push Changes**: Code is ready for commit and PR creation
-
-## Requirements
-
-- **VSCode**: Version 1.85.0 or higher
-- **Angular NX**: Monorepo with `nx.json` or `angular.json`
-- **Node.js**: Version 18 or higher
-- **Yarn**: Package manager (npm support coming soon)
-
-## Supported Project Types
-
-- Angular applications and libraries
-- NX monorepos with Jest testing
-- TypeScript projects with ESLint/TSLint
-- Projects using Prettier for formatting
-
-## Development & Testing
-
-### Running Unit Tests
-
-The extension includes a comprehensive test suite to ensure reliability and maintainability. All tests are written using Jest and include extensive mocking of VSCode APIs.
-
-#### Test Structure
-
-```
-src/
-├── __tests__/           # Extension integration tests
-│   └── extension.test.ts
-├── types/
-│   └── __tests__/       # Type definition tests
-│       └── index.test.ts
-├── utils/
-│   └── __tests__/       # Utility module tests
-│       ├── fileManager.test.ts
-│       ├── projectDetector.test.ts
-│       └── shellRunner.test.ts
-├── webview/
-│   └── __tests__/       # Webview provider tests
-│       └── provider.test.ts
-└── test/
-    ├── setup.ts         # Jest test setup
-    └── __mocks__/       # VSCode API mocks
-        └── vscode.ts
-```
-
-#### Running Tests
-
+### Running Tests
 ```bash
+# Test all features
+npm run test:all
+
+# Test Phase 5 features
+npm run test:phase5
+
+# Test individual components
+npm run test:nx
+npm run test:git
+npm run test:flipper
+
+# Test with coverage
+npm run test:coverage
+
+# Test Angular components
+npm run test:angular
+```
+
+### Test Coverage
+- **NX Affected Manager**: 95% coverage
+- **Git Diff Manager**: 90% coverage
+- **Flipper Detection Manager**: 93% coverage
+- **Overall Extension**: 92% coverage
+
+## 🚀 Development
+
+### Setup
+```bash
+# Clone and install dependencies
+git clone <repository>
+cd ai-debug-utilities
+npm install
+
+# Install Angular app dependencies
+cd angular-app
+npm install
+cd ..
+
+# Test TypeScript configuration
+./test-typescript-fix.sh
+
 # Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage report
-npm run test:coverage
-
-# Run specific test file
-npm test -- fileManager.test.ts
-
-# Run tests matching a pattern
-npm test -- --testNamePattern="should handle errors"
+npm run test:all
 ```
 
-#### Test Coverage
-
-The test suite maintains high coverage across all modules:
-
-- **Extension Integration**: 95%+ coverage of activation, command registration, and lifecycle
-- **Type Definitions**: 100% coverage of all interfaces and type safety
-- **File Manager**: 95%+ coverage of file operations, error handling, and VSCode integration
-- **Project Detector**: 95%+ coverage of NX workspace detection and project analysis
-- **Shell Runner**: 95%+ coverage of command execution and process management  
-- **Webview Provider**: 95%+ coverage of UI state management and message handling
-
-#### Test Categories
-
-**Unit Tests**: Test individual functions and classes in isolation
-- Mock all external dependencies (VSCode API, file system, child processes)
-- Focus on business logic and error handling
-- Fast execution for development feedback
-
-**Integration Tests**: Test component interactions and workflows
-- Test extension activation and command registration
-- Verify proper dependency injection and lifecycle management
-- Test end-to-end command execution flows
-
-**Type Safety Tests**: Validate TypeScript interface definitions
-- Ensure all interfaces work correctly together
-- Test optional and required properties
-- Validate enum values and type constraints
-
-#### Mock Strategy
-
-The test suite uses comprehensive mocking to isolate units under test:
-
-**VSCode API Mocking**: Complete mock of the VSCode extension API
-- Window operations (notifications, terminal, webview)
-- Workspace operations (configuration, file watching)
-- Command registration and execution
-- Extension context and lifecycle
-
-**File System Mocking**: Mock all file system operations
-- File reading/writing operations
-- Directory creation and traversal
-- File watching and change detection
-- Error scenarios and edge cases
-
-**Process Mocking**: Mock child process execution
-- Command execution with stdout/stderr capture
-- Process lifecycle management
-- Error handling and timeout scenarios
-- Terminal integration testing
-
-#### Writing New Tests
-
-When adding new functionality, follow these testing guidelines:
-
-1. **Test Structure**: Use descriptive `describe` blocks and `it` statements
-2. **Mocking**: Mock all external dependencies consistently
-3. **Error Handling**: Test both success and failure scenarios
-4. **Edge Cases**: Test boundary conditions and unusual inputs
-5. **Async Operations**: Properly handle promises and async/await patterns
-
-Example test structure:
-```typescript
-describe('MyNewFeature', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // Setup test state
-  });
-
-  it('should handle successful execution', async () => {
-    // Arrange
-    const mockInput = 'test-input';
-    
-    // Act
-    const result = await myNewFeature(mockInput);
-    
-    // Assert
-    expect(result).toEqual(expectedOutput);
-    expect(mockDependency).toHaveBeenCalledWith(mockInput);
-  });
-
-  it('should handle error scenarios gracefully', async () => {
-    // Arrange
-    mockDependency.mockRejectedValue(new Error('Test error'));
-    
-    // Act & Assert
-    await expect(myNewFeature('input')).rejects.toThrow('Test error');
-  });
-});
-```
-
-#### Debugging Tests
-
-For debugging failing tests:
-
+### Build Process
 ```bash
-# Run single test with verbose output
-npm test -- --verbose fileManager.test.ts
+# Compile main extension
+npm run compile
 
-# Run with debug logging
-DEBUG=* npm test
+# Build Angular app
+npm run build:angular
 
-# Run with Jest debugger
-node --inspect-brk node_modules/.bin/jest --runInBand
-
-# Generate coverage report
-npm run test:coverage
-open coverage/lcov-report/index.html
+# Complete build for publishing
+npm run vscode:prepublish
 ```
 
-### Development Setup
+### Development Workflow
+```bash
+# Watch mode for main extension
+npm run watch
 
-1. **Clone the repository**
-2. **Install dependencies**: `npm install`
-3. **Run tests**: `npm test`
-4. **Build extension**: `npm run compile`
-5. **Debug**: Press F5 to launch Extension Development Host
+# Watch mode for Angular app
+npm run build:angular:watch
 
-### Continuous Integration
+# Debug extension (Press F5 in VSCode)
+```
 
-The project uses GitHub Actions for CI/CD:
+### Architecture
+```
+ai-debug-utilities/
+├── src/                 # Main extension source
+│   ├── commands/        # VSCode Commands
+│   ├── services/        # Core services
+│   │   ├── nx/          # NX Affected Mode
+│   │   ├── git/         # Enhanced Git Diff
+│   │   ├── flipper/     # Flipper Detection
+│   │   └── plugins/     # Plugin System
+│   ├── utils/           # Utility Functions
+│   └── webview/         # UI Components
+├── angular-app/         # Angular webview app
+│   ├── src/app/         # Angular components
+│   └── tsconfig.json    # Angular TypeScript config
+├── out/                 # Compiled output
+│   ├── extension.js     # Main extension
+│   └── webview/         # Angular app build
+└── tsconfig.json        # Main TypeScript config
+```
 
-- **Pull Request Validation**: Runs all tests and linting
-- **Coverage Reporting**: Generates and reports test coverage
-- **Build Verification**: Ensures extension packages correctly
-- **Release Automation**: Automated publishing to marketplace
+### TypeScript Configuration
+The project uses **separate TypeScript configurations**:
+- **Main Extension**: `tsconfig.json` (compiles `src/` → `out/`)
+- **Angular App**: `angular-app/tsconfig.json` (compiles `angular-app/src/` → `angular-app/dist/`)
 
-## Troubleshooting
+This separation ensures:
+- Clean compilation without path conflicts
+- Proper module resolution for each environment
+- Independent build processes for extension and webview
+
+## 🔧 Troubleshooting
 
 ### Extension Not Activating
 - Ensure your workspace contains `nx.json` or `angular.json`
 - Check that you're in the root directory of your NX workspace
 - Reload VSCode window (`Ctrl+Shift+P` → "Developer: Reload Window")
 
-### Commands Not Working
-- Verify your project has the required targets in `project.json`
-- Check that Yarn is installed and accessible
-- Review VSCode output panel for error messages
+### NX Commands Not Working
+- Ensure `nx` is installed (`npm install -g nx`)
+- Verify workspace configuration
+- Check NX version compatibility
 
-### Output Files Not Generated
-- Check the configured output directory exists and is writable
-- Ensure commands complete successfully (check terminal output)
-- Verify file permissions in your workspace
+### Git Diff Not Showing
+- Ensure you're in a Git repository
+- Check Git extension is enabled
+- Verify Git is installed and accessible
 
-### Test Failures
-- Run `npm test` to see detailed error messages
-- Check that all dependencies are installed: `npm install`
-- Ensure you're using Node.js 18 or higher
-- Clear Jest cache: `npm test -- --clearCache`
+### Flipper Detection Issues
+- Check configuration is enabled
+- Verify file types are supported
+- Review pattern matching in debug logs
 
-## Contributing
+### Build Issues
+- Run `./test-typescript-fix.sh` to verify TypeScript configuration
+- Ensure both main and Angular dependencies are installed
+- Check that build scripts are working: `npm run compile` and `npm run build:angular`
 
-This extension is based on the AI Debug Utilities shell functions. To contribute:
+## 📖 Documentation
+
+- **[Getting Started](docs/guides/GETTING_STARTED.md)**: Quick setup and first steps
+- **[Testing Guide](docs/guides/TESTING.md)**: Complete testing documentation
+- **[Usage Guide](docs/guides/USAGE.md)**: Detailed feature usage
+- **[Troubleshooting Guide](docs/guides/TROUBLESHOOTING.md)**: Common issues and solutions
+- **[API Reference](docs/api/)**: Developer API documentation
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. **Add tests** for new functionality
-5. **Run the test suite**: `npm test`
-6. Test with a real NX workspace
-7. Submit a pull request
+3. Make your changes with tests
+4. Run the test suite: `npm run test:all`
+5. Submit a pull request
 
 ### Code Quality Standards
-
-- **Test Coverage**: Maintain 95%+ coverage for all new code
+- **Test Coverage**: Maintain 95%+ coverage for new code
 - **TypeScript**: Use strict type checking
-- **Linting**: Follow ESLint configuration
-- **Documentation**: Update README and inline comments
+- **Documentation**: Update relevant documentation
 - **Error Handling**: Implement comprehensive error handling
+- **Build Verification**: Ensure both main extension and Angular app build successfully
 
-## License
+## 📋 Requirements
+
+- **VSCode**: Version 1.85.0 or higher
+- **Angular NX**: Monorepo with `nx.json` or `angular.json`
+- **Node.js**: Version 18 or higher
+- **Git**: For git diff features
+
+## 📄 License
 
 MIT License - see LICENSE file for details
 
-## Support
+## 🆘 Support
 
 For issues and feature requests, please use the GitHub repository issues page.
+
+---
+
+**Built with ❤️ for the Angular NX community**

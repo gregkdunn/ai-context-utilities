@@ -36,6 +36,34 @@ export class PluginManager implements PluginRegistry {
 
   private createPluginAPI(): PluginAPI {
     return {
+      // VS Code API
+      vscode: vscode as any,
+      
+      // Plugin metadata methods
+      getPluginPath: () => this.extensionContext.extensionPath,
+      getPluginVersion: () => this.extensionContext.extension.packageJSON.version,
+      getPluginMetadata: () => ({
+        id: this.extensionContext.extension.id,
+        name: this.extensionContext.extension.packageJSON.displayName || this.extensionContext.extension.packageJSON.name,
+        version: this.extensionContext.extension.packageJSON.version,
+        description: this.extensionContext.extension.packageJSON.description || '',
+        author: this.extensionContext.extension.packageJSON.author || '',
+        license: this.extensionContext.extension.packageJSON.license || '',
+        enabled: true,
+        capabilities: []
+      }),
+      
+      // Command registration
+      registerCommand: (id: string, callback: (...args: any[]) => any) => {
+        const disposable = vscode.commands.registerCommand(id, callback);
+        this.extensionContext.subscriptions.push(disposable);
+        return disposable;
+      },
+      
+      registerProvider: (type: string, provider: any) => {
+        // Implementation depends on provider type
+        return { dispose: () => {} };
+      },
       // Core services
       getInsightsEngine: () => this.getInsightsEngine(),
       getCollaborationService: () => this.getCollaborationService(),
@@ -64,10 +92,9 @@ export class PluginManager implements PluginRegistry {
         }, task);
       },
 
-      openFile: (filePath: string) => {
-        vscode.workspace.openTextDocument(filePath).then(doc => {
-          vscode.window.showTextDocument(doc);
-        });
+      openFile: async (filePath: string) => {
+        const doc = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(doc);
       },
 
       writeFile: async (filePath: string, content: string) => {
@@ -75,13 +102,99 @@ export class PluginManager implements PluginRegistry {
         await vscode.workspace.fs.writeFile(uri, Buffer.from(content));
       },
 
-      // Extension points
-      registerCommand: (command) => this.registerCommand(command),
+      // Plugin extension points
       registerAnalyzer: (analyzer) => this.registerAnalyzer(analyzer),
       registerFormatter: (formatter) => this.registerFormatter(formatter),
       registerTransformer: (transformer) => this.registerTransformer(transformer),
       registerValidator: (validator) => this.registerValidator(validator),
 
+      // VS Code workspace and window APIs
+      createOutputChannel: (name: string) => vscode.window.createOutputChannel(name),
+      showMessage: (message: string, level?: 'info' | 'warning' | 'error') => {
+        switch (level) {
+          case 'warning': vscode.window.showWarningMessage(message); break;
+          case 'error': vscode.window.showErrorMessage(message); break;
+          default: vscode.window.showInformationMessage(message);
+        }
+      },
+      getConfiguration: (section?: string) => vscode.workspace.getConfiguration(section),
+      onDidChangeConfiguration: (callback) => vscode.workspace.onDidChangeConfiguration(callback),
+      createStatusBarItem: (alignment?, priority?) => vscode.window.createStatusBarItem(alignment, priority),
+      createTreeView: (viewId, options) => vscode.window.createTreeView(viewId, options),
+      createWebviewPanel: (viewType, title, showOptions, options?) => {
+        if (typeof showOptions === 'object' && showOptions && 'viewColumn' in showOptions) {
+          const webviewOptions = showOptions as { viewColumn: vscode.ViewColumn; preserveFocus?: boolean };
+          return vscode.window.createWebviewPanel(viewType, title, webviewOptions.viewColumn, { ...options, ...webviewOptions });
+        } else {
+          return vscode.window.createWebviewPanel(viewType, title, showOptions as vscode.ViewColumn, options);
+        }
+      },
+      executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
+      openExternal: (uri) => vscode.env.openExternal(uri),
+      showTextDocument: (document, column?, preserveFocus?) => vscode.window.showTextDocument(document, column, preserveFocus),
+      showQuickPick: (items, options?) => vscode.window.showQuickPick(items, options),
+      showInputBox: (options?) => vscode.window.showInputBox(options),
+      withProgress: (options, task) => vscode.window.withProgress(options, task),
+      createTerminal: (name?, shellPath?, shellArgs?) => vscode.window.createTerminal(name, shellPath, shellArgs),
+      createFileSystemWatcher: (globPattern, ignoreCreateEvents?, ignoreChangeEvents?, ignoreDeleteEvents?) => 
+        vscode.workspace.createFileSystemWatcher(globPattern, ignoreCreateEvents, ignoreChangeEvents, ignoreDeleteEvents),
+      findFiles: (include, exclude?, maxResults?, token?) => vscode.workspace.findFiles(include, exclude, maxResults, token),
+      openTextDocument: (uri) => vscode.workspace.openTextDocument(uri),
+      saveAll: (includeUntitled?) => vscode.workspace.saveAll(includeUntitled),
+      applyEdit: (edit) => vscode.workspace.applyEdit(edit),
+      createDiagnosticCollection: (name?) => vscode.languages.createDiagnosticCollection(name),
+      
+      // Provider registrations
+      registerCodeActionsProvider: (selector, provider) => vscode.languages.registerCodeActionsProvider(selector, provider),
+      registerCompletionItemProvider: (selector, provider, ...triggerCharacters) => 
+        vscode.languages.registerCompletionItemProvider(selector, provider, ...triggerCharacters),
+      registerDefinitionProvider: (selector, provider) => vscode.languages.registerDefinitionProvider(selector, provider),
+      registerHoverProvider: (selector, provider) => vscode.languages.registerHoverProvider(selector, provider),
+      registerDocumentFormattingEditProvider: (selector, provider) => 
+        vscode.languages.registerDocumentFormattingEditProvider(selector, provider),
+      registerDocumentRangeFormattingEditProvider: (selector, provider) => 
+        vscode.languages.registerDocumentRangeFormattingEditProvider(selector, provider),
+      registerRenameProvider: (selector, provider) => vscode.languages.registerRenameProvider(selector, provider),
+      registerReferenceProvider: (selector, provider) => vscode.languages.registerReferenceProvider(selector, provider),
+      registerDocumentSymbolProvider: (selector, provider) => vscode.languages.registerDocumentSymbolProvider(selector, provider),
+      registerDocumentHighlightProvider: (selector, provider) => vscode.languages.registerDocumentHighlightProvider(selector, provider),
+      registerDocumentLinkProvider: (selector, provider) => vscode.languages.registerDocumentLinkProvider(selector, provider),
+      registerSignatureHelpProvider: (selector, provider, ...triggerCharacters) => 
+        vscode.languages.registerSignatureHelpProvider(selector, provider, ...triggerCharacters),
+      
+      // Debug and task APIs
+      registerDebugConfigurationProvider: (type, provider) => vscode.debug.registerDebugConfigurationProvider(type, provider),
+      registerDebugAdapterDescriptorFactory: (type, factory) => vscode.debug.registerDebugAdapterDescriptorFactory(type, factory),
+      registerTaskProvider: (type, provider) => vscode.tasks.registerTaskProvider(type, provider),
+      createTask: (definition, name, source, execution, problemMatchers?) => new vscode.Task(definition, vscode.TaskScope.Workspace, name, source, execution, problemMatchers),
+      executeTask: (task) => vscode.tasks.executeTask(task),
+      onDidStartTask: (callback) => vscode.tasks.onDidStartTask(callback),
+      onDidEndTask: (callback) => vscode.tasks.onDidEndTask(callback),
+      onDidStartTaskProcess: (callback) => vscode.tasks.onDidStartTaskProcess(callback),
+      onDidEndTaskProcess: (callback) => vscode.tasks.onDidEndTaskProcess(callback),
+      
+      // Additional provider methods
+      createTreeDataProvider: (viewId, treeDataProvider) => ({ dispose: () => {} }),
+      createCustomTextEditorProvider: (viewType, provider) => ({ dispose: () => {} }),
+      createCustomEditorProvider: (viewType, provider, options?) => ({ dispose: () => {} }),
+      createWebviewViewProvider: (viewId, provider) => ({ dispose: () => {} }),
+      createAuthenticationProvider: (id, label, provider, options?) => ({ dispose: () => {} }),
+      createSourceControlResourceGroup: (id, label) => ({} as any),
+      createSourceControl: (id, label, rootUri?) => ({} as any),
+      createCommentController: (id, label) => ({} as any),
+      createNotebookController: (id, notebookType, label) => ({} as any),
+      createNotebookCellExecution: (uri) => ({} as any),
+      createNotebookCellOutput: (items) => ({} as any),
+      createNotebookCellOutputItem: (data, mime) => ({} as any),
+      createNotebookDocument: (uri, notebookType, metadata?) => ({} as any),
+      createNotebookEdit: (uri, edit) => ({} as any),
+      createNotebookRange: (start, end) => ({} as any),
+      createNotebookCell: (kind, value, languageId, outputs?, metadata?, executionSummary?) => ({} as any),
+      createNotebookCellData: (kind, value, languageId, outputs?, metadata?, executionSummary?) => ({} as any),
+      createNotebookData: (cells, metadata?) => ({} as any),
+      createNotebookDocumentFilter: (pattern?, scheme?, language?) => ({} as any),
+      createNotebookDocumentMetadata: (metadata?) => ({} as any),
+      
       // Events
       emit: (event: string, data?: any) => this.eventEmitter.emit(event, data),
       on: (event: string, handler: (data: any) => void) => this.eventEmitter.on(event, handler),
@@ -97,6 +210,22 @@ export class PluginManager implements PluginRegistry {
 
   private createPluginContext(): PluginContext {
     return {
+      subscriptions: this.extensionContext.subscriptions,
+      workspaceState: this.extensionContext.workspaceState,
+      globalState: this.extensionContext.globalState,
+      secrets: this.extensionContext.secrets,
+      extensionUri: this.extensionContext.extensionUri,
+      extensionPath: this.extensionContext.extensionPath,
+      environmentVariableCollection: this.extensionContext.environmentVariableCollection,
+      asAbsolutePath: (relativePath: string) => this.extensionContext.asAbsolutePath(relativePath),
+      storageUri: this.extensionContext.storageUri,
+      storagePath: this.extensionContext.storagePath,
+      globalStorageUri: this.extensionContext.globalStorageUri,
+      globalStoragePath: this.extensionContext.globalStoragePath,
+      logUri: this.extensionContext.logUri,
+      logPath: this.extensionContext.logPath,
+      extensionMode: this.extensionContext.extensionMode,
+      extension: this.extensionContext.extension,
       workspaceRoot: this.workspaceRoot,
       currentFile: vscode.window.activeTextEditor?.document.fileName,
       selectedText: vscode.window.activeTextEditor?.document.getText(
@@ -167,6 +296,14 @@ export class PluginManager implements PluginRegistry {
     return Array.from(this.plugins.values());
   }
 
+  getPlugin(pluginId: string): Plugin | undefined {
+    return this.plugins.get(pluginId);
+  }
+
+  getAllPlugins(): Plugin[] {
+    return Array.from(this.plugins.values());
+  }
+
   getByCapability(capability: string): Plugin[] {
     return this.getAll().filter(plugin => 
       plugin.metadata.capabilities.some(cap => cap.type === capability)
@@ -220,7 +357,7 @@ export class PluginManager implements PluginRegistry {
     } catch (error) {
       this.emitEvent(PLUGIN_EVENTS.ERROR, { 
         pluginId, 
-        error: error.message 
+        error: (error as Error).message 
       });
       throw error;
     }
@@ -245,7 +382,7 @@ export class PluginManager implements PluginRegistry {
     } catch (error) {
       this.emitEvent(PLUGIN_EVENTS.ERROR, { 
         pluginId, 
-        error: error.message 
+        error: (error as Error).message 
       });
       throw error;
     }
@@ -311,7 +448,7 @@ export class PluginManager implements PluginRegistry {
         } catch (error) {
           this.emitEvent(PLUGIN_EVENTS.ERROR, {
             commandId: command.id,
-            error: error.message
+            error: (error as Error).message
           });
           throw error;
         }
@@ -402,7 +539,9 @@ export class PluginManager implements PluginRegistry {
   // Development utilities
   createDevUtils(pluginId: string): PluginDevUtils {
     return {
+      createTestSuite: (id: string) => this.createTestSuite(id),
       createLogger: (id: string) => this.createLogger(id),
+      createProfiler: (id: string) => this.createProfiler(id),
       createStorage: (id: string) => this.createStorage(id),
       createScheduler: (id: string) => this.createScheduler(id)
     };
@@ -421,6 +560,15 @@ export class PluginManager implements PluginRegistry {
       },
       debug: (message: string, data?: any) => {
         console.debug(`[${pluginId}] ${message}`, data);
+      },
+      trace: (message: string, data?: any) => {
+        console.trace(`[${pluginId}] ${message}`, data);
+      },
+      setLevel: (level: 'debug' | 'info' | 'warn' | 'error' | 'trace') => {
+        // Implementation would set the log level
+      },
+      createChild: (name: string) => {
+        return this.createLogger(`${pluginId}:${name}`);
       }
     };
   }
@@ -429,28 +577,35 @@ export class PluginManager implements PluginRegistry {
     const prefix = `plugin.${pluginId}.`;
     
     return {
-      get: <T>(key: string): T | undefined => {
+      get: async <T>(key: string): Promise<T | undefined> => {
         return this.extensionContext.globalState.get<T>(prefix + key);
       },
-      set: <T>(key: string, value: T): void => {
-        this.extensionContext.globalState.update(prefix + key, value);
+      set: async <T>(key: string, value: T): Promise<void> => {
+        await this.extensionContext.globalState.update(prefix + key, value);
       },
-      delete: (key: string): void => {
-        this.extensionContext.globalState.update(prefix + key, undefined);
+      delete: async (key: string): Promise<void> => {
+        await this.extensionContext.globalState.update(prefix + key, undefined);
       },
-      clear: (): void => {
+      clear: async (): Promise<void> => {
         // Get all keys with this plugin's prefix and clear them
         const keys = this.extensionContext.globalState.keys();
         for (const key of keys) {
           if (key.startsWith(prefix)) {
-            this.extensionContext.globalState.update(key, undefined);
+            await this.extensionContext.globalState.update(key, undefined);
           }
         }
       },
-      keys: (): string[] => {
+      keys: async (): Promise<string[]> => {
         return this.extensionContext.globalState.keys()
           .filter(key => key.startsWith(prefix))
           .map(key => key.substring(prefix.length));
+      },
+      has: async (key: string): Promise<boolean> => {
+        return this.extensionContext.globalState.keys().includes(prefix + key);
+      },
+      size: async (): Promise<number> => {
+        return this.extensionContext.globalState.keys()
+          .filter(key => key.startsWith(prefix)).length;
       }
     };
   }
@@ -459,40 +614,150 @@ export class PluginManager implements PluginRegistry {
     const timers = new Map<string, NodeJS.Timeout>();
     
     return {
-      schedule: (id: string, interval: number, task: () => Promise<void>) => {
-        // Cancel existing timer if any
-        const existingTimer = timers.get(id);
-        if (existingTimer) {
-          clearInterval(existingTimer);
-        }
+      schedule: (task: () => Promise<void> | void, delay: number) => {
+        const id = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create timer
+        const timer = setTimeout(async () => {
+          try {
+            await task();
+          } catch (error) {
+          this.emitEvent(PLUGIN_EVENTS.ERROR, {
+          pluginId,
+          error: (error as Error).message,
+          source: 'scheduler'
+          });
+          }
+          timers.delete(id);
+        }, delay);
 
-        // Create new timer
+        timers.set(id, timer);
+        
+        return {
+          id,
+          cancel: () => {
+            const timer = timers.get(id);
+            if (timer) {
+              clearTimeout(timer);
+              timers.delete(id);
+            }
+          },
+          reschedule: (newDelay: number) => {
+            const timer = timers.get(id);
+            if (timer) {
+              clearTimeout(timer);
+              const newTimer = setTimeout(async () => {
+                try {
+                  await task();
+                } catch (error) {
+                  this.emitEvent(PLUGIN_EVENTS.ERROR, {
+                    pluginId,
+                    error: (error as Error).message,
+                    source: 'scheduler'
+                  });
+                }
+                timers.delete(id);
+              }, newDelay);
+              timers.set(id, newTimer);
+            }
+          }
+        };
+      },
+      scheduleRepeating: (task: () => Promise<void> | void, interval: number) => {
+        const id = `repeat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
         const timer = setInterval(async () => {
           try {
             await task();
           } catch (error) {
             this.emitEvent(PLUGIN_EVENTS.ERROR, {
               pluginId,
-              error: error.message,
+              error: (error as Error).message,
               source: 'scheduler'
             });
           }
         }, interval);
 
         timers.set(id, timer);
+        
+        return {
+          id,
+          cancel: () => {
+            const timer = timers.get(id);
+            if (timer) {
+              clearInterval(timer);
+              timers.delete(id);
+            }
+          },
+          reschedule: (newInterval: number) => {
+            const timer = timers.get(id);
+            if (timer) {
+              clearInterval(timer);
+              const newTimer = setInterval(async () => {
+                try {
+                  await task();
+                } catch (error) {
+                  this.emitEvent(PLUGIN_EVENTS.ERROR, {
+                    pluginId,
+                    error: (error as Error).message,
+                    source: 'scheduler'
+                  });
+                }
+              }, newInterval);
+              timers.set(id, newTimer);
+            }
+          }
+        };
       },
-      cancel: (id: string) => {
-        const timer = timers.get(id);
-        if (timer) {
-          clearInterval(timer);
-          timers.delete(id);
-        }
+      cancel: (scheduledTask) => {
+        scheduledTask.cancel();
       },
       cancelAll: () => {
         for (const timer of timers.values()) {
           clearInterval(timer);
+          clearTimeout(timer);
         }
         timers.clear();
+      }
+    };
+  }
+
+  private createTestSuite(pluginId: string): any {
+    return {
+      addTest: (name: string, test: () => Promise<void> | void) => {
+        // Implementation would add test to suite
+      },
+      addSetup: (setup: () => Promise<void> | void) => {
+        // Implementation would add setup
+      },
+      addTeardown: (teardown: () => Promise<void> | void) => {
+        // Implementation would add teardown
+      }
+    };
+  }
+  
+  private createProfiler(pluginId: string): any {
+    return {
+      start: (name: string) => {
+        const startTime = Date.now();
+        return {
+          end: () => Date.now() - startTime,
+          mark: (markName: string) => {
+            // Implementation would record mark
+          }
+        };
+      },
+      measure: <T>(name: string, fn: () => T): T => {
+        const start = Date.now();
+        const result = fn();
+        console.log(`[${pluginId}] ${name}: ${Date.now() - start}ms`);
+        return result;
+      },
+      measureAsync: async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+        const start = Date.now();
+        const result = await fn();
+        console.log(`[${pluginId}] ${name}: ${Date.now() - start}ms`);
+        return result;
       }
     };
   }

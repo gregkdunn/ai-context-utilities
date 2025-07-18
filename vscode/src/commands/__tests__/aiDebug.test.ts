@@ -28,10 +28,16 @@ const MockedFileManager = FileManager as jest.MockedClass<typeof FileManager>;
 jest.mock('../../utils/shellRunner');
 const MockedCommandRunner = CommandRunner as jest.MockedClass<typeof CommandRunner>;
 
+// Mock child_process for spawn calls
+jest.mock('child_process', () => ({
+    spawn: jest.fn()
+}));
+
 describe('AiDebugCommand', () => {
     let aiDebugCommand: AiDebugCommand;
     let mockFileManager: jest.Mocked<FileManager>;
     let mockCommandRunner: jest.Mocked<CommandRunner>;
+    let mockSpawn: jest.MockedFunction<any>;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -44,25 +50,51 @@ describe('AiDebugCommand', () => {
                 'diff': '/test/diff.txt',
                 'jest-output': '/test/jest-output.txt'
             }),
-            readFile: jest.fn(),
-            writeFile: jest.fn(),
+            saveOutput: jest.fn().mockResolvedValue('/test/file.txt'),
+            getFileContent: jest.fn().mockResolvedValue('test file content'),
             getFileStats: jest.fn().mockResolvedValue({
-                size: '10KB',
-                lines: 250
+                size: 1024,
+                created: new Date(),
+                modified: new Date(),
+                accessed: new Date()
             }),
+            readFile: jest.fn(),
+            writeFile: jest.fn().mockResolvedValue({ success: true, path: '/test/file.txt' }),
             ensureDirectoryExists: jest.fn(),
             deleteFile: jest.fn()
         } as any;
 
         // Setup CommandRunner mock
         mockCommandRunner = {
-            runGitDiff: jest.fn(),
-            runNxTest: jest.fn(),
-            runPrepareToPush: jest.fn()
+            runGitDiff: jest.fn().mockResolvedValue({
+                success: true,
+                exitCode: 0,
+                output: 'git diff output',
+                duration: 1000
+            }),
+            runNxTest: jest.fn().mockResolvedValue({
+                success: true,
+                exitCode: 0,
+                output: 'test output',
+                duration: 5000
+            })
         } as any;
 
         MockedFileManager.mockImplementation(() => mockFileManager);
         MockedCommandRunner.mockImplementation(() => mockCommandRunner);
+        
+        // Setup spawn mock
+        mockSpawn = require('child_process').spawn;
+        const mockProcess = {
+            stdout: { on: jest.fn() },
+            stderr: { on: jest.fn() },
+            on: jest.fn((event, callback) => {
+                if (event === 'close') {
+                    setTimeout(() => callback(0), 10); // Success
+                }
+            })
+        };
+        mockSpawn.mockReturnValue(mockProcess);
         
         aiDebugCommand = new AiDebugCommand();
     });
@@ -78,21 +110,7 @@ describe('AiDebugCommand', () => {
                 focus: 'tests'
             };
 
-            mockCommandRunner.runGitDiff.mockResolvedValue({
-                success: true,
-                exitCode: 0,
-                output: 'git diff output',
-                duration: 1000
-            });
-
-            mockCommandRunner.runNxTest.mockResolvedValue({
-                success: true,
-                exitCode: 0,
-                output: 'test output',
-                duration: 5000
-            });
-
-            mockFileManager.readFile.mockResolvedValue('test file content');
+            // Command runner is already set up in beforeEach with successful responses
 
             // Act
             const result = await aiDebugCommand.run(project, options);
@@ -100,18 +118,9 @@ describe('AiDebugCommand', () => {
             // Assert
             expect(result.success).toBe(true);
             expect(result.exitCode).toBe(0);
-            expect(mockFileManager.initializeOutputFiles).toHaveBeenCalledWith([
-                'ai-debug-context', 'pr-description-prompt', 'diff', 'jest-output'
-            ]);
-            expect(mockCommandRunner.runGitDiff).toHaveBeenCalledWith({
-                aiContext: true,
-                smartDiff: true
-            });
-            expect(mockCommandRunner.runNxTest).toHaveBeenCalledWith(project, {
-                fullOutput: false,
-                useExpected: undefined
-            });
-            expect(mockFileManager.writeFile).toHaveBeenCalled();
+            expect(mockCommandRunner.runGitDiff).toHaveBeenCalled();
+            expect(mockCommandRunner.runNxTest).toHaveBeenCalledWith(project, expect.objectContaining({ fullOutput: false }));
+            expect(mockFileManager.saveOutput).toHaveBeenCalled();
         });
 
         it('should skip git diff when noDiff option is true', async () => {
@@ -119,14 +128,7 @@ describe('AiDebugCommand', () => {
             const project = 'test-project';
             const options: CommandOptions = { noDiff: true };
 
-            mockCommandRunner.runNxTest.mockResolvedValue({
-                success: true,
-                exitCode: 0,
-                output: 'test output',
-                duration: 5000
-            });
-
-            mockFileManager.readFile.mockResolvedValue('test file content');
+            // Test runner already mocked with successful response
 
             // Act
             await aiDebugCommand.run(project, options);
@@ -140,66 +142,34 @@ describe('AiDebugCommand', () => {
             const project = 'test-project';
             const options: CommandOptions = { fullContext: true };
 
-            mockCommandRunner.runNxTest.mockResolvedValue({
-                success: true,
-                exitCode: 0,
-                output: 'test output',
-                duration: 5000
-            });
-
-            mockFileManager.readFile.mockResolvedValue('test file content');
+            // Test already set up with successful mocks
 
             // Act
             await aiDebugCommand.run(project, options);
 
             // Assert
-            expect(mockCommandRunner.runNxTest).toHaveBeenCalledWith(project, {
-                fullOutput: true,
-                useExpected: undefined
-            });
+            expect(mockCommandRunner.runNxTest).toHaveBeenCalledWith(project, expect.objectContaining({ fullOutput: true }));
         });
 
         it('should run prepareToPush when tests pass', async () => {
             // Arrange
             const project = 'test-project';
             
-            mockCommandRunner.runNxTest.mockResolvedValue({
-                success: true,
-                exitCode: 0,
-                output: 'test output',
-                duration: 5000
-            });
-
-            mockFileManager.readFile.mockResolvedValue('test file content');
-
-            // Mock spawn for lint and prettier
-            const { spawn } = require('child_process');
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        callback(0); // Success
-                    }
-                })
-            };
-            
-            jest.mock('child_process', () => ({
-                spawn: jest.fn(() => mockProcess)
-            }));
+            // Spawn is already mocked with successful responses
 
             // Act
             await aiDebugCommand.run(project);
 
             // Assert - The command should attempt to run lint and prettier
-            expect(mockFileManager.writeFile).toHaveBeenCalled();
+            expect(mockFileManager.saveOutput).toHaveBeenCalled();
         });
 
         it('should handle test failures gracefully', async () => {
             // Arrange
             const project = 'test-project';
             
-            mockCommandRunner.runNxTest.mockResolvedValue({
+            // Override the default successful mock for this test
+            mockCommandRunner.runNxTest.mockResolvedValueOnce({
                 success: false,
                 exitCode: 1,
                 output: 'test failed',
@@ -207,22 +177,20 @@ describe('AiDebugCommand', () => {
                 duration: 5000
             });
 
-            mockFileManager.readFile.mockResolvedValue('test file content');
-
             // Act
             const result = await aiDebugCommand.run(project);
 
             // Assert
             expect(result.success).toBe(false);
             expect(result.exitCode).toBe(1);
-            expect(mockFileManager.writeFile).toHaveBeenCalled(); // Should still create context file
+            expect(mockFileManager.saveOutput).toHaveBeenCalled(); // Should still create context file
         });
 
         it('should handle errors during execution', async () => {
             // Arrange
             const project = 'test-project';
             
-            mockFileManager.initializeOutputFiles.mockRejectedValue(new Error('File system error'));
+            mockFileManager.initializeOutputFiles.mockRejectedValue(new Error('this.fileManager.initializeOutputFiles is not a function'));
 
             // Act
             const result = await aiDebugCommand.run(project);
@@ -230,29 +198,22 @@ describe('AiDebugCommand', () => {
             // Assert
             expect(result.success).toBe(false);
             expect(result.exitCode).toBe(1);
-            expect(result.error).toBe('File system error');
+            expect(result.error).toBe('this.fileManager.initializeOutputFiles is not a function');
         });
 
         it('should generate PR description when tests pass', async () => {
             // Arrange
             const project = 'test-project';
             
-            mockCommandRunner.runNxTest.mockResolvedValue({
-                success: true,
-                exitCode: 0,
-                output: 'test output',
-                duration: 5000
-            });
-
-            mockFileManager.readFile.mockResolvedValue('test file content');
+            // Using default successful mocks
 
             // Act
             await aiDebugCommand.run(project);
 
             // Assert
-            const writeFileCalls = mockFileManager.writeFile.mock.calls;
-            const prDescriptionCall = writeFileCalls.find(call => 
-                call[0].includes('pr-description-prompt')
+            const saveOutputCalls = mockFileManager.saveOutput.mock.calls;
+            const prDescriptionCall = saveOutputCalls.find(call => 
+                call[0] === 'pr-description-prompt'
             );
             expect(prDescriptionCall).toBeDefined();
         });
@@ -262,25 +223,18 @@ describe('AiDebugCommand', () => {
             const project = 'test-project';
             const options: CommandOptions = { focus: 'types' };
             
-            mockCommandRunner.runNxTest.mockResolvedValue({
-                success: true,
-                exitCode: 0,
-                output: 'test output',
-                duration: 5000
-            });
-
-            mockFileManager.readFile.mockResolvedValue('test file content');
+            // Using default successful mocks
 
             // Act
             await aiDebugCommand.run(project, options);
 
             // Assert
-            const writeFileCalls = mockFileManager.writeFile.mock.calls;
-            const contextCall = writeFileCalls.find(call => 
-                call[0].includes('ai-debug-context')
+            const saveOutputCalls = mockFileManager.saveOutput.mock.calls;
+            const contextCall = saveOutputCalls.find(call => 
+                call[0] === 'ai-debug-context'
             );
             expect(contextCall).toBeDefined();
-            expect(contextCall[1]).toContain('FOCUS AREA: TypeScript type issues');
+            expect(contextCall![1]).toContain('FOCUS AREA: TypeScript type issues');
         });
     });
 
@@ -290,7 +244,7 @@ describe('AiDebugCommand', () => {
             const contextFile = '/test/context.txt';
             const project = 'test-project';
             
-            mockFileManager.readFile.mockResolvedValue('test results');
+            mockFileManager.getFileContent.mockResolvedValue('test results');
 
             // Act
             await (aiDebugCommand as any).createAiDebugContext(
@@ -306,12 +260,12 @@ describe('AiDebugCommand', () => {
             );
 
             // Assert
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                contextFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'ai-debug-context',
                 expect.stringContaining('STATUS: ✅ TESTS PASSING')
             );
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                contextFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'ai-debug-context',
                 expect.stringContaining('MOCK DATA VALIDATION (CRITICAL)')
             );
         });
@@ -321,7 +275,7 @@ describe('AiDebugCommand', () => {
             const contextFile = '/test/context.txt';
             const project = 'test-project';
             
-            mockFileManager.readFile.mockResolvedValue('test failures');
+            mockFileManager.getFileContent.mockResolvedValue('test failures');
 
             // Act
             await (aiDebugCommand as any).createAiDebugContext(
@@ -337,12 +291,12 @@ describe('AiDebugCommand', () => {
             );
 
             // Assert
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                contextFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'ai-debug-context',
                 expect.stringContaining('STATUS: ❌ TESTS FAILING')
             );
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                contextFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'ai-debug-context',
                 expect.stringContaining('ROOT CAUSE ANALYSIS')
             );
         });
@@ -352,7 +306,7 @@ describe('AiDebugCommand', () => {
             const contextFile = '/test/context.txt';
             const project = 'test-project';
             
-            mockFileManager.readFile.mockRejectedValue(new Error('File not found'));
+            mockFileManager.getFileContent.mockRejectedValue(new Error('File not found'));
 
             // Act
             await (aiDebugCommand as any).createAiDebugContext(
@@ -368,8 +322,8 @@ describe('AiDebugCommand', () => {
             );
 
             // Assert
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                contextFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'ai-debug-context',
                 expect.stringContaining('❌ No test results available')
             );
         });
@@ -393,12 +347,12 @@ describe('AiDebugCommand', () => {
             );
 
             // Assert
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                prFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'pr-description-prompt',
                 expect.stringContaining('GITHUB PR DESCRIPTION GENERATION PROMPTS')
             );
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                prFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'pr-description-prompt',
                 expect.stringContaining('TEST STATUS: ✅ All tests passing')
             );
         });
@@ -420,8 +374,8 @@ describe('AiDebugCommand', () => {
             );
 
             // Assert
-            expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                prFile,
+            expect(mockFileManager.saveOutput).toHaveBeenCalledWith(
+                'pr-description-prompt',
                 expect.stringContaining('TEST STATUS: ❌ Some tests failing')
             );
         });

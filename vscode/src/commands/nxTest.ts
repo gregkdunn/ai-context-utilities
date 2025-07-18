@@ -8,9 +8,11 @@ import * as os from 'os';
 
 export class NxTestCommand {
     private fileManager: FileManager;
+    private outputChannel: vscode.OutputChannel;
 
     constructor() {
-        this.fileManager = new FileManager();
+        this.outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
+        this.fileManager = new FileManager(this.outputChannel);
     }
 
     /**
@@ -20,8 +22,8 @@ export class NxTestCommand {
         const startTime = Date.now();
         
         try {
-            const finalOutputFile = await this.fileManager.getOutputFilePath('jest-output.txt');
-            const expectedOutputFile = await this.fileManager.getOutputFilePath('jest-output-expected.txt');
+            const finalOutputFile = this.fileManager.getOutputFilePath('jest-output.txt');
+            const expectedOutputFile = this.fileManager.getOutputFilePath('jest-output-expected.txt');
             
             // Create temporary files
             const tempRawOutput = path.join(os.tmpdir(), `jest-raw-${Date.now()}.txt`);
@@ -402,9 +404,8 @@ Original output reduced from ${lines.length} lines to ${output.split('\n').lengt
     }
 
     private showInfo(message: string): void {
-        const outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
-        outputChannel.appendLine(message);
-        outputChannel.show();
+        this.outputChannel.appendLine(message);
+        this.outputChannel.show();
     }
 
     private showSuccess(message: string): void {

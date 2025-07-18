@@ -5,9 +5,11 @@ import { FileManager } from '../utils/fileManager';
 
 export class GitDiffCommand {
     private fileManager: FileManager;
+    private outputChannel: vscode.OutputChannel;
 
     constructor() {
-        this.fileManager = new FileManager();
+        this.outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
+        this.fileManager = new FileManager(this.outputChannel);
     }
 
     /**
@@ -17,18 +19,27 @@ export class GitDiffCommand {
         const startTime = Date.now();
         
         try {
-            const outputFile = await this.fileManager.getOutputFilePath('diff.txt');
-            const diffArgs = this.buildDiffArgs(options);
+            // Skip diff if noDiff option is set
+            if (options.noDiff) {
+                const duration = Date.now() - startTime;
+                return {
+                    success: true,
+                    exitCode: 0,
+                    output: 'Diff skipped due to noDiff option',
+                    duration
+                };
+            }
+
+            const outputFile = this.fileManager.getOutputFilePath('diff.txt');
             
-            // Ensure output directory exists and clean up previous run
+            // Ensure output directory exists
             await this.fileManager.ensureDirectoryExists(require('path').dirname(outputFile));
-            await this.fileManager.deleteFile(outputFile);
             
-            // Smart diff detection if no specific args provided
-            const finalArgs = diffArgs.length === 0 ? await this.detectSmartDiff() : diffArgs;
+            // Smart diff detection
+            const diffArgs = await this.detectSmartDiff();
             
             // Generate the diff
-            const diffResult = await this.executeDiff(finalArgs);
+            const diffResult = await this.executeDiff(diffArgs);
             
             if (!diffResult.success) {
                 const duration = Date.now() - startTime;
@@ -42,7 +53,7 @@ export class GitDiffCommand {
             }
 
             // Process diff for AI context
-            const processedOutput = await this.createAiDiffContext(diffResult.output, finalArgs);
+            const processedOutput = await this.createAiDiffContext(diffResult.output, diffArgs);
             
             // Save to file
             await this.fileManager.writeFile(outputFile, processedOutput);
@@ -50,11 +61,11 @@ export class GitDiffCommand {
             // Show statistics
             const stats = await this.fileManager.getFileStats(outputFile);
             
-            if (stats.lines === 0) {
+            if (!stats || stats.size === 0) {
                 this.showWarning("No diff output generated");
             } else {
                 this.showSuccess(`Diff saved to: ${outputFile}`);
-                this.showInfo(`📊 Size: ${stats.size}, Lines: ${stats.lines}`);
+                this.showInfo(`📊 Size: ${stats.size} bytes`);
                 
                 // Quick content summary
                 const filesChanged = this.countChangedFiles(processedOutput);
@@ -80,17 +91,6 @@ export class GitDiffCommand {
                 duration
             };
         }
-    }
-
-    private buildDiffArgs(options: CommandOptions): string[] {
-        const args: string[] = [];
-        
-        // Add any specific git diff options from the options
-        if (options.noDiff) {
-            return []; // Return empty to skip diff entirely
-        }
-        
-        return args;
     }
 
     private async detectSmartDiff(): Promise<string[]> {
@@ -141,7 +141,7 @@ export class GitDiffCommand {
         return new Promise((resolve) => {
             const process = spawn('git', args, {
                 cwd: this.getWorkspaceRoot(),
-                shell: true
+                shell: false
             });
 
             let output = '';
@@ -298,12 +298,14 @@ Change impact areas:
         
         let currentFileA = '';
         let currentFileB = '';
+        let isProcessingFile = false;
         
         for (const line of lines) {
             const diffMatch = line.match(/^diff --git a\/(.*) b\/(.*)/);
             if (diffMatch) {
                 currentFileA = diffMatch[1];
                 currentFileB = diffMatch[2];
+                isProcessingFile = true;
                 
                 // Check if it's a rename/move
                 if (currentFileA !== currentFileB) {
@@ -312,12 +314,17 @@ Change impact areas:
                 continue;
             }
             
-            if (line.match(/^new file mode/)) {
-                newFiles.push(currentFileB);
-            } else if (line.match(/^deleted file mode/)) {
-                deletedFiles.push(currentFileA);
-            } else if (line.match(/^index.*\.\./) && currentFileA === currentFileB) {
-                modifiedFiles.push(currentFileA);
+            if (isProcessingFile) {
+                if (line.match(/^new file mode/)) {
+                    newFiles.push(currentFileB);
+                    isProcessingFile = false;
+                } else if (line.match(/^deleted file mode/)) {
+                    deletedFiles.push(currentFileA);
+                    isProcessingFile = false;
+                } else if (line.match(/^index.*\.\./) && currentFileA === currentFileB && !renamedFiles.some(f => f.includes(currentFileA))) {
+                    modifiedFiles.push(currentFileA);
+                    isProcessingFile = false;
+                }
             }
         }
         
@@ -405,7 +412,6 @@ Other: ${counts.other}
 
     private createNoChangesOutput(): string {
         const timestamp = new Date().toISOString();
-        const branch = this.getCurrentBranch();
         
         return `=================================================================
 🔍 GIT DIFF ANALYSIS
@@ -413,14 +419,12 @@ Other: ${counts.other}
 
 STATUS: No changes detected
 TIMESTAMP: ${timestamp}
-BRANCH: ${branch}
 
 =================================================================
 📊 REPOSITORY STATUS
 =================================================================
 Working directory: Clean
 Staged changes: None
-Last commit: ${this.getLastCommit()}
 
 =================================================================
 🤖 AI ANALYSIS CONTEXT
@@ -447,11 +451,6 @@ Suggested actions:
         }
     }
 
-    private getLastCommit(): string {
-        // This would be implemented with a git command, but for simplicity returning placeholder
-        return 'Recent commit info';
-    }
-
     private countChangedFiles(output: string): number {
         const matches = output.match(/^📁 FILE:/gm);
         return matches ? matches.length : 0;
@@ -462,9 +461,8 @@ Suggested actions:
     }
 
     private showInfo(message: string): void {
-        const outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
-        outputChannel.appendLine(message);
-        outputChannel.show();
+        this.outputChannel.appendLine(message);
+        this.outputChannel.show();
     }
 
     private showSuccess(message: string): void {

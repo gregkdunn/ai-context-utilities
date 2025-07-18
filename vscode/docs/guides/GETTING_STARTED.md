@@ -53,7 +53,84 @@ code --install-extension ai-debug-utilities
 3. Reports any issues found
 4. Ensures code is ready for push
 
+## Development Setup
+
+### Prerequisites
+- Node.js 18+ and npm
+- VSCode 1.85+
+- TypeScript 5.3+
+
+### Building the Extension
+```bash
+# Clone and setup
+git clone <repository>
+cd ai-debug-utilities
+npm install
+
+# Build Angular app
+cd angular-app
+npm install
+cd ..
+
+# Compile TypeScript
+npm run compile
+
+# Build complete extension
+npm run vscode:prepublish
+```
+
+### Testing
+```bash
+# Run all tests
+npm run test:all
+
+# Run specific test suites
+npm run test              # Main extension tests
+npm run test:angular      # Angular app tests
+npm run test:phase5       # Service tests
+
+# Test TypeScript configuration
+./test-typescript-fix.sh
+```
+
+### Development Mode
+```bash
+# Watch mode for TypeScript
+npm run watch
+
+# Watch mode for Angular
+npm run build:angular:watch
+
+# Debug extension
+# Press F5 in VSCode to launch Extension Development Host
+```
+
+## Architecture Overview
+
+### Project Structure
+```
+ai-debug-utilities/
+├── src/                 # Main extension source
+│   ├── commands/        # Command implementations
+│   ├── services/        # Core services (NX, Git, Flipper)
+│   ├── utils/           # Utility functions
+│   └── webview/         # Webview integration
+├── angular-app/         # Angular webview app
+│   ├── src/app/         # Angular components
+│   └── tsconfig.json    # Angular TypeScript config
+├── out/                 # Compiled output
+│   ├── extension.js     # Main extension
+│   └── webview/         # Angular app build
+└── tsconfig.json        # Main TypeScript config
+```
+
+### Build Process
+1. **Main Extension**: `tsconfig.json` compiles `src/` → `out/`
+2. **Angular App**: `angular-app/tsconfig.json` compiles Angular → `angular-app/dist/`
+3. **Integration**: `build:angular` copies Angular build to `out/webview/`
+
 ## Next Steps
+- [Testing Guide](TESTING.md) - Complete testing documentation
 - [Detailed Usage Guide](USAGE.md) - Learn all features and shortcuts
 - [Troubleshooting](TROUBLESHOOTING.md) - Solve common issues
 - [API Documentation](../api/COMMANDS.md) - Technical reference
@@ -63,3 +140,5 @@ code --install-extension ai-debug-utilities
 - **Check prerequisites** - Ensure NX CLI and project dependencies are installed
 - **Use real-time output** - Watch the live output to understand what's happening
 - **Try keyboard shortcuts** - `Ctrl+R` to refresh, `Ctrl+Shift+C` to cancel all
+- **Test regularly** - Run `npm run test:all` to ensure everything works
+- **Separate builds** - Main extension and Angular app have separate TypeScript configs

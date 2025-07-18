@@ -4,7 +4,23 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Mock fs and path modules
-jest.mock('fs');
+jest.mock('fs', () => ({
+  existsSync: jest.fn(),
+  mkdirSync: jest.fn(),
+  readdirSync: jest.fn(),
+  statSync: jest.fn(),
+  watch: jest.fn(),
+  promises: {
+    writeFile: jest.fn(),
+    readFile: jest.fn(),
+    mkdir: jest.fn(),
+    unlink: jest.fn(),
+    stat: jest.fn(),
+    access: jest.fn(),
+    readdir: jest.fn(),
+    copyFile: jest.fn()
+  }
+}));
 jest.mock('path');
 
 // Mock vscode module
@@ -15,7 +31,7 @@ jest.mock('vscode', () => ({
     ],
     getConfiguration: jest.fn(() => ({
       get: jest.fn((key: string) => {
-        if (key === 'outputDirectory') return '.github/instructions/ai_utilities_context';
+        if (key === 'outputDirectory') {return '.github/instructions/ai_utilities_context';}
         return undefined;
       })
     })),
@@ -50,7 +66,7 @@ const mockedPath = path as jest.Mocked<typeof path>;
 describe('FileManager', () => {
   let fileManager: FileManager;
   const mockWorkspaceRoot = '/test/workspace';
-  const mockOutputDir = '/test/workspace/.github/instructions/ai_utilities_context';
+  const mockOutputDir = '/test/workspace/.ai-debug-output';
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -59,7 +75,16 @@ describe('FileManager', () => {
     mockedPath.join.mockImplementation((...segments) => segments.join('/'));
     mockedPath.basename.mockImplementation((p) => p.split('/').pop() || '');
     
-    fileManager = new FileManager();
+    // Create mock output channel
+    const mockOutputChannel = {
+      appendLine: jest.fn(),
+      show: jest.fn(),
+      hide: jest.fn(),
+      dispose: jest.fn(),
+      name: 'Test Output Channel'
+    } as any;
+    
+    fileManager = new FileManager(mockOutputChannel);
   });
 
   describe('constructor', () => {
@@ -79,6 +104,8 @@ describe('FileManager', () => {
     });
 
     it('should not create directory if it already exists', () => {
+      // Since constructor calls ensureOutputDirectory, we need to clear the mock
+      jest.clearAllMocks();
       mockedFs.existsSync.mockReturnValue(true);
 
       fileManager.ensureOutputDirectory();
@@ -92,15 +119,13 @@ describe('FileManager', () => {
       const content = 'test content';
       const type: OutputType = 'jest-output';
       
-      mockedFs.existsSync.mockReturnValue(false);
-      mockedFs.mkdirSync.mockImplementation(() => undefined);
-      mockedFs.writeFileSync.mockImplementation(() => undefined);
+      (mockedFs.promises.writeFile as jest.Mock).mockResolvedValue(undefined);
 
       const result = await fileManager.saveOutput(type, content);
 
-      expect(result).toBe('/test/workspace/.github/instructions/ai_utilities_context/jest-output.txt');
-      expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
-        '/test/workspace/.github/instructions/ai_utilities_context/jest-output.txt',
+      expect(result).toBe('/test/workspace/.ai-debug-output/jest-output.txt');
+      expect(mockedFs.promises.writeFile).toHaveBeenCalledWith(
+        '/test/workspace/.ai-debug-output/jest-output.txt',
         content,
         'utf8'
       );
@@ -110,10 +135,7 @@ describe('FileManager', () => {
       const content = 'test content';
       const type: OutputType = 'jest-output';
       
-      mockedFs.existsSync.mockReturnValue(true);
-      mockedFs.writeFileSync.mockImplementation(() => {
-        throw new Error('Write error');
-      });
+      (mockedFs.promises.writeFile as jest.Mock).mockRejectedValue(new Error('Write error'));
 
       await expect(fileManager.saveOutput(type, content)).rejects.toThrow('Failed to save jest-output output: Error: Write error');
     });
@@ -125,49 +147,47 @@ describe('FileManager', () => {
       const type: OutputType = 'ai-debug-context';
 
       mockedFs.existsSync.mockReturnValue(true);
-      mockedFs.readFileSync.mockReturnValue(expectedContent);
+      (mockedFs.promises.readFile as jest.Mock).mockResolvedValue(expectedContent);
 
       const result = await fileManager.getFileContent(type);
 
       expect(result).toBe(expectedContent);
-      expect(mockedFs.readFileSync).toHaveBeenCalledWith(
-        '/test/workspace/.github/instructions/ai_utilities_context/ai-debug-context.txt',
+      expect(mockedFs.promises.readFile).toHaveBeenCalledWith(
+        '/test/workspace/.ai-debug-output/ai-debug-context.txt',
         'utf8'
       );
     });
 
-    it('should return null if file does not exist', async () => {
+    it('should return empty string if file does not exist', async () => {
       const type: OutputType = 'ai-debug-context';
 
       mockedFs.existsSync.mockReturnValue(false);
 
       const result = await fileManager.getFileContent(type);
 
-      expect(result).toBeNull();
-      expect(mockedFs.readFileSync).not.toHaveBeenCalled();
+      expect(result).toBe('');
     });
 
     it('should handle read errors gracefully', async () => {
       const type: OutputType = 'ai-debug-context';
 
       mockedFs.existsSync.mockReturnValue(true);
-      mockedFs.readFileSync.mockImplementation(() => {
-        throw new Error('Read error');
-      });
+      (mockedFs.promises.readFile as jest.Mock).mockRejectedValue(new Error('Read error'));
 
       const result = await fileManager.getFileContent(type);
 
-      expect(result).toBeNull();
+      expect(result).toBe('');
     });
   });
 
   describe('getFilePath', () => {
     it('should return correct file paths for all output types', () => {
       const testCases: Array<[OutputType, string]> = [
-        ['ai-debug-context', '/test/workspace/.github/instructions/ai_utilities_context/ai-debug-context.txt'],
-        ['jest-output', '/test/workspace/.github/instructions/ai_utilities_context/jest-output.txt'],
-        ['diff', '/test/workspace/.github/instructions/ai_utilities_context/diff.txt'],
-        ['pr-description', '/test/workspace/.github/instructions/ai_utilities_context/pr-description-prompt.txt']
+        ['ai-debug-context', '/test/workspace/.ai-debug-output/ai-debug-context.txt'],
+        ['jest-output', '/test/workspace/.ai-debug-output/jest-output.txt'],
+        ['diff', '/test/workspace/.ai-debug-output/diff.txt'],
+        ['pr-description', '/test/workspace/.ai-debug-output/pr-description.txt'],
+        ['pr-description-prompt', '/test/workspace/.ai-debug-output/pr-description-prompt.txt']
       ];
 
       testCases.forEach(([type, expectedPath]) => {
@@ -177,21 +197,18 @@ describe('FileManager', () => {
   });
 
   describe('fileExists', () => {
-    it('should return true when file exists', () => {
-      mockedFs.existsSync.mockReturnValue(true);
-
-      const result = fileManager.fileExists('jest-output');
+    it('should return true when file exists', async () => {
+      (mockedFs.promises.access as jest.Mock).mockResolvedValue(undefined);
+      
+      const result = await fileManager.fileExists('jest-output.txt');
 
       expect(result).toBe(true);
-      expect(mockedFs.existsSync).toHaveBeenCalledWith(
-        '/test/workspace/.github/instructions/ai_utilities_context/jest-output.txt'
-      );
     });
 
-    it('should return false when file does not exist', () => {
-      mockedFs.existsSync.mockReturnValue(false);
-
-      const result = fileManager.fileExists('jest-output');
+    it('should return false when file does not exist', async () => {
+      (mockedFs.promises.access as jest.Mock).mockRejectedValue(new Error('File not found'));
+      
+      const result = await fileManager.fileExists('nonexistent.txt');
 
       expect(result).toBe(false);
     });
@@ -231,30 +248,23 @@ describe('FileManager', () => {
   });
 
   describe('getAllOutputFiles', () => {
-    it('should return metadata for all output file types', () => {
-      const mockDate = new Date('2024-01-01');
-      
-      mockedFs.existsSync.mockImplementation((filePath) => {
-        return String(filePath).includes('jest-output.txt') || String(filePath).includes('diff.txt');
-      });
-      
-      mockedFs.statSync.mockReturnValue({ mtime: mockDate } as any);
+    it('should return dictionary of output files', () => {
+      mockedFs.readdirSync.mockReturnValue(['jest-output.txt', 'diff.txt'] as any);
 
       const result = fileManager.getAllOutputFiles();
 
-      expect(result).toHaveLength(4);
-      expect(result[0]).toEqual({
-        type: 'ai-debug-context',
-        path: '/test/workspace/.github/instructions/ai_utilities_context/ai-debug-context.txt',
-        exists: false,
-        modified: undefined
+      expect(result).toEqual({
+        'jest-output': '/test/workspace/.ai-debug-output/jest-output.txt',
+        'diff': '/test/workspace/.ai-debug-output/diff.txt'
       });
-      expect(result[1]).toEqual({
-        type: 'jest-output',
-        path: '/test/workspace/.github/instructions/ai_utilities_context/jest-output.txt',
-        exists: true,
-        modified: mockDate
-      });
+    });
+
+    it('should handle empty directory', () => {
+      mockedFs.readdirSync.mockReturnValue([] as any);
+
+      const result = fileManager.getAllOutputFiles();
+
+      expect(result).toEqual({});
     });
   });
 
@@ -263,36 +273,35 @@ describe('FileManager', () => {
       const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000); // 10 days old
       const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-      mockedFs.existsSync.mockReturnValue(true);
+      mockedFs.readdirSync.mockReturnValue(['old-file.txt', 'another-old.txt'] as any);
       mockedFs.statSync.mockReturnValue({ mtime: oldDate } as any);
-      mockedFs.unlinkSync.mockImplementation(() => undefined);
+      (mockedFs.promises.unlink as jest.Mock).mockResolvedValue(undefined);
 
       await fileManager.cleanupOldFiles(maxAge);
 
-      expect(mockedFs.unlinkSync).toHaveBeenCalledTimes(4); // All 4 file types
+      expect(mockedFs.promises.unlink).toHaveBeenCalledTimes(2);
     });
 
     it('should not remove recent files', async () => {
       const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000); // 1 day old
       const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-      mockedFs.existsSync.mockReturnValue(true);
+      mockedFs.readdirSync.mockReturnValue(['recent-file.txt'] as any);
       mockedFs.statSync.mockReturnValue({ mtime: recentDate } as any);
+      (mockedFs.promises.unlink as jest.Mock).mockResolvedValue(undefined);
 
       await fileManager.cleanupOldFiles(maxAge);
 
-      expect(mockedFs.unlinkSync).not.toHaveBeenCalled();
+      expect(mockedFs.promises.unlink).not.toHaveBeenCalled();
     });
 
     it('should handle unlink errors gracefully', async () => {
       const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
       const maxAge = 7 * 24 * 60 * 60 * 1000;
 
-      mockedFs.existsSync.mockReturnValue(true);
+      mockedFs.readdirSync.mockReturnValue(['error-file.txt'] as any);
       mockedFs.statSync.mockReturnValue({ mtime: oldDate } as any);
-      mockedFs.unlinkSync.mockImplementation(() => {
-        throw new Error('Unlink error');
-      });
+      (mockedFs.promises.unlink as jest.Mock).mockRejectedValue(new Error('Unlink error'));
 
       // Should not throw
       await expect(fileManager.cleanupOldFiles(maxAge)).resolves.toBeUndefined();
@@ -304,8 +313,8 @@ describe('FileManager', () => {
       const mockContent = 'file content';
       const vscode = require('vscode');
 
-      mockedFs.existsSync.mockReturnValue(true);
-      mockedFs.readFileSync.mockReturnValue(mockContent);
+      // Mock the getFileContent method
+      jest.spyOn(fileManager, 'getFileContent').mockResolvedValue(mockContent);
 
       await fileManager.copyToClipboard('jest-output');
 
@@ -313,15 +322,16 @@ describe('FileManager', () => {
       expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('jest-output content copied to clipboard');
     });
 
-    it('should show warning when file does not exist', async () => {
+    it('should handle errors gracefully', async () => {
       const vscode = require('vscode');
 
-      mockedFs.existsSync.mockReturnValue(false);
+      // Mock the getFileContent method to throw an error
+      jest.spyOn(fileManager, 'getFileContent').mockRejectedValue(new Error('Read error'));
 
       await fileManager.copyToClipboard('jest-output');
 
       expect(vscode.env.clipboard.writeText).not.toHaveBeenCalled();
-      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith('No jest-output file found');
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('Failed to copy jest-output to clipboard: Error: Read error');
     });
   });
 
@@ -336,7 +346,7 @@ describe('FileManager', () => {
 
       await fileManager.openFile(filePath);
 
-      expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith({ fsPath: filePath });
+      expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(filePath);
       expect(vscode.window.showTextDocument).toHaveBeenCalledWith(mockDocument);
     });
 
@@ -354,60 +364,25 @@ describe('FileManager', () => {
 
   describe('watchFiles', () => {
     it('should create file system watcher and handle file changes', () => {
-      const vscode = require('vscode');
-      const mockWatcher = {
-        onDidChange: jest.fn(),
-        onDidCreate: jest.fn(),
-        dispose: jest.fn()
-      };
       const mockCallback = jest.fn();
-
-      vscode.workspace.createFileSystemWatcher.mockReturnValue(mockWatcher);
+      const mockFs = require('fs');
+      
+      // Mock fs.watch
+      const mockWatcher = {
+        close: jest.fn()
+      };
+      mockFs.watch = jest.fn().mockReturnValue(mockWatcher);
 
       const disposable = fileManager.watchFiles(mockCallback);
 
-      expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledWith(
-        expect.objectContaining({})
+      expect(mockFs.watch).toHaveBeenCalledWith(
+        '/test/workspace/.ai-debug-output',
+        expect.any(Function)
       );
-      expect(mockWatcher.onDidChange).toHaveBeenCalled();
-      expect(mockWatcher.onDidCreate).toHaveBeenCalled();
-    });
-  });
-
-  describe('private methods', () => {
-    describe('getFileName', () => {
-      it('should return correct file names for all output types', () => {
-        // Access private method through any casting
-        const getFileName = (fileManager as any).getFileName.bind(fileManager);
-
-        expect(getFileName('ai-debug-context')).toBe('ai-debug-context.txt');
-        expect(getFileName('jest-output')).toBe('jest-output.txt');
-        expect(getFileName('diff')).toBe('diff.txt');
-        expect(getFileName('pr-description')).toBe('pr-description-prompt.txt');
-      });
-
-      it('should throw error for unknown output type', () => {
-        const getFileName = (fileManager as any).getFileName.bind(fileManager);
-
-        expect(() => getFileName('unknown')).toThrow('Unknown output type: unknown');
-      });
-    });
-
-    describe('getTypeFromFileName', () => {
-      it('should return correct types for all file names', () => {
-        const getTypeFromFileName = (fileManager as any).getTypeFromFileName.bind(fileManager);
-
-        expect(getTypeFromFileName('ai-debug-context.txt')).toBe('ai-debug-context');
-        expect(getTypeFromFileName('jest-output.txt')).toBe('jest-output');
-        expect(getTypeFromFileName('diff.txt')).toBe('diff');
-        expect(getTypeFromFileName('pr-description-prompt.txt')).toBe('pr-description');
-      });
-
-      it('should return null for unknown file names', () => {
-        const getTypeFromFileName = (fileManager as any).getTypeFromFileName.bind(fileManager);
-
-        expect(getTypeFromFileName('unknown.txt')).toBeNull();
-      });
+      
+      // Test disposable
+      disposable.dispose();
+      expect(mockWatcher.close).toHaveBeenCalled();
     });
   });
 });

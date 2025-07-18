@@ -9,6 +9,14 @@ import { PluginManager } from './services/plugins/pluginManager';
 import { PluginMarketplaceService } from './services/plugins/pluginMarketplace';
 import { PluginDiscoveryService } from './services/plugins/pluginDiscovery';
 
+// Phase 5 Features
+import { NxAffectedManager } from './services/nx/NxAffectedManager';
+import { NxCommandProvider } from './services/nx/NxCommandProvider';
+import { NxStatusBar } from './services/nx/NxStatusBar';
+import { GitDiffManager } from './services/git/GitDiffManager';
+import { GitCommandProvider } from './services/git/GitCommandProvider';
+import { FlipperDetectionManager } from './services/flipper/FlipperDetectionManager';
+
 let webviewProvider: WebviewProvider;
 let statusTracker: StatusTracker;
 let commandCoordinator: CommandCoordinator;
@@ -16,24 +24,45 @@ let pluginManager: PluginManager;
 let pluginMarketplace: PluginMarketplaceService;
 let pluginDiscovery: PluginDiscoveryService;
 
+// Phase 5 Features
+let nxAffectedManager: NxAffectedManager;
+let nxCommandProvider: NxCommandProvider;
+let nxStatusBar: NxStatusBar;
+let gitDiffManager: GitDiffManager;
+let gitCommandProvider: GitCommandProvider;
+let flipperDetectionManager: FlipperDetectionManager;
+
 export async function activate(context: vscode.ExtensionContext) {
     console.log('AI Debug Utilities extension is now active');
 
     try {
-        // Initialize core utilities
-        const projectDetector = new ProjectDetector();
-        const commandRunner = new CommandRunner();
-        const fileManager = new FileManager();
+        // Get workspace path
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+        
+        // Create output channel
+        const outputChannel = vscode.window.createOutputChannel('AI Debug Utilities');
+        
+        // Initialize core utilities with required parameters
+        const projectDetector = new ProjectDetector(workspaceRoot);
+        const commandRunner = new CommandRunner(outputChannel);
+        const fileManager = new FileManager(outputChannel);
         
         // Initialize status tracking and coordination
-        statusTracker = new StatusTracker(context);
+        statusTracker = new StatusTracker();
         commandCoordinator = new CommandCoordinator(statusTracker, context);
 
         // Initialize plugin system
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
         pluginManager = new PluginManager(context, workspaceRoot);
         pluginMarketplace = new PluginMarketplaceService(context);
         pluginDiscovery = new PluginDiscoveryService(context);
+
+        // Initialize Phase 5 Features
+        nxAffectedManager = new NxAffectedManager(context);
+        nxCommandProvider = new NxCommandProvider(nxAffectedManager);
+        nxStatusBar = new NxStatusBar(context, nxAffectedManager);
+        gitDiffManager = new GitDiffManager(context);
+        gitCommandProvider = new GitCommandProvider(gitDiffManager);
+        flipperDetectionManager = new FlipperDetectionManager(context);
 
         // Check if this is an NX workspace
         const isNxWorkspace = await projectDetector.findNxWorkspace();
@@ -48,8 +77,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 projectDetector, 
                 commandRunner, 
                 fileManager,
-                statusTracker,
-                commandCoordinator
+                statusTracker
             );
             
             // Register webview provider
@@ -59,6 +87,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
             // Register commands
             registerCommands(context, webviewProvider, projectDetector, commandRunner, fileManager, statusTracker, commandCoordinator, pluginManager, pluginMarketplace);
+            
+            // Register Phase 5 commands
+            const nxCommands = nxCommandProvider.register();
+            const gitCommands = gitCommandProvider.register();
+            context.subscriptions.push(...nxCommands, ...gitCommands);
             
             console.log('AI Debug Utilities: NX workspace detected, extension fully activated');
             
@@ -102,9 +135,9 @@ function registerCommands(
 
     // Run AI Debug command
     const runAiDebugCommand = vscode.commands.registerCommand('aiDebugUtilities.runAiDebug', async () => {
-        const project = await projectDetector.detectCurrentProject();
+        const project = await projectDetector.getCurrentProject();
         if (project) {
-            await webviewProvider.runCommand('aiDebug', { project });
+            await webviewProvider.runCommand('aiDebug', { project: project.name });
         } else {
             vscode.window.showWarningMessage('No NX project detected. Please select a project first.');
         }
@@ -112,9 +145,9 @@ function registerCommands(
 
     // Run NX Test command
     const runNxTestCommand = vscode.commands.registerCommand('aiDebugUtilities.runNxTest', async () => {
-        const project = await projectDetector.detectCurrentProject();
+        const project = await projectDetector.getCurrentProject();
         if (project) {
-            await webviewProvider.runCommand('nxTest', { project });
+            await webviewProvider.runCommand('nxTest', { project: project.name });
         } else {
             vscode.window.showWarningMessage('No NX project detected. Please select a project first.');
         }
@@ -127,9 +160,9 @@ function registerCommands(
 
     // Run Prepare to Push command
     const runPrepareToPushCommand = vscode.commands.registerCommand('aiDebugUtilities.runPrepareToPush', async () => {
-        const project = await projectDetector.detectCurrentProject();
+        const project = await projectDetector.getCurrentProject();
         if (project) {
-            await webviewProvider.runCommand('prepareToPush', { project });
+            await webviewProvider.runCommand('prepareToPush', { project: project.name });
         } else {
             vscode.window.showWarningMessage('No NX project detected. Please select a project first.');
         }
@@ -266,7 +299,7 @@ function registerCommands(
                                 await pluginMarketplace.installPlugin(selected.plugin.id);
                                 vscode.window.showInformationMessage(`${selected.plugin.name} installed successfully!`);
                             } catch (error) {
-                                vscode.window.showErrorMessage(`Failed to install ${selected.plugin.name}: ${error.message}`);
+                                vscode.window.showErrorMessage(`Failed to install ${selected.plugin.name}: ${(error as Error).message}`);
                             }
                             break;
                         case 'details':
@@ -313,7 +346,7 @@ function registerCommands(
                 const result = await pluginManager.executePluginCommand(selected.pluginId, selected.commandId);
                 vscode.window.showInformationMessage(`Command executed successfully: ${selected.label}`);
             } catch (error) {
-                vscode.window.showErrorMessage(`Failed to execute command: ${error.message}`);
+                vscode.window.showErrorMessage(`Failed to execute command: ${(error as Error).message}`);
             }
         }
     });
@@ -392,13 +425,33 @@ export function deactivate() {
     
     // Clean up plugin system
     if (pluginManager) {
-        const allPlugins = pluginManager.getAll();
-        for (const plugin of allPlugins) {
-            if (pluginManager.isEnabled(plugin.metadata.id)) {
-                pluginManager.disable(plugin.metadata.id).catch(error => {
-                    console.error(`Failed to disable plugin ${plugin.metadata.id}:`, error);
-                });
+        try {
+            const allPlugins = pluginManager.getAll();
+            if (allPlugins && Array.isArray(allPlugins)) {
+                for (const plugin of allPlugins) {
+                    if (plugin?.metadata?.id && pluginManager.isEnabled(plugin.metadata.id)) {
+                        pluginManager.disable(plugin.metadata.id).catch(error => {
+                            console.error(`Failed to disable plugin ${plugin.metadata.id}:`, error);
+                        });
+                    }
+                }
             }
+        } catch (error) {
+            console.error('Error during plugin cleanup:', error);
         }
+    }
+    
+    // Clean up Phase 5 Features
+    if (nxAffectedManager) {
+        nxAffectedManager.dispose();
+    }
+    if (nxStatusBar) {
+        nxStatusBar.dispose();
+    }
+    if (gitDiffManager) {
+        gitDiffManager.dispose();
+    }
+    if (flipperDetectionManager) {
+        flipperDetectionManager.dispose();
     }
 }

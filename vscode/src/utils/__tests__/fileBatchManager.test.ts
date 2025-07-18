@@ -346,14 +346,15 @@ describe('FileBatchManager', () => {
             mockFileManager.createFileBatch.mockResolvedValue(mockBatch);
             mockFileManager.saveOutput.mockResolvedValue('/test/path.txt');
 
-            await batchManager.executeBatch('testCommand', [
+            const result = await batchManager.executeBatch('testCommand', [
                 { type: 'jest-output', content: 'test' }
             ], { trackHistory: true });
 
             const activeBatches = batchManager.getActiveBatches();
             expect(activeBatches.size).toBe(1);
             
-            const batch = batchManager.getBatch('test-batch-123');
+            // The batch ID is generated as command-timestamp, so we need to use the result's batchId
+            const batch = batchManager.getBatch(result.batchId);
             expect(batch).toEqual(mockBatch);
         });
 

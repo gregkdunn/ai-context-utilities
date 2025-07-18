@@ -26,13 +26,7 @@ export class TestAnalyzerPlugin implements Plugin {
         type: 'analyzer',
         name: 'test-analyzer',
         description: 'Analyze test files and results',
-        permissions: [
-          {
-            type: 'file-system',
-            scope: 'test-files',
-            reason: 'Analyze test files and coverage reports'
-          }
-        ]
+        permissions: ['file-system:test-files:Analyze test files and coverage reports']
       },
       {
         type: 'formatter',
@@ -85,13 +79,15 @@ export class TestAnalyzerPlugin implements Plugin {
             issues.push({
               id: 'test-analysis-error',
               type: 'error',
-              message: `Test analysis failed: ${error.message}`,
+              message: `Test analysis failed: ${(error as Error).message}`,
               severity: 'medium',
               fixable: false
             });
           }
           
           return {
+            id: 'test-file-analysis',
+            summary: 'Test file analysis completed',
             issues,
             metrics,
             suggestions,
@@ -110,7 +106,7 @@ export class TestAnalyzerPlugin implements Plugin {
         description: 'Format test results for better readability',
         filePatterns: ['**/*.test.json', '**/test-results.json'],
         
-        format: async (content: string, filePath: string, context: PluginContext): Promise<string> => {
+        format: async (content: string, filePath?: string, context?: PluginContext): Promise<string> => {
           try {
             const testResults = JSON.parse(content);
             return this.formatTestResults(testResults);
@@ -156,7 +152,7 @@ export class TestAnalyzerPlugin implements Plugin {
           const qualityAnalysis = await this.analyzeTestQuality(context);
           
           // Show quality insights
-          const items = qualityAnalysis.suggestions.map(suggestion => ({
+          const items = qualityAnalysis.suggestions.map((suggestion: any) => ({
             label: suggestion.title,
             description: suggestion.description,
             detail: `Impact: ${suggestion.impact} | Effort: ${suggestion.effort}`
@@ -168,7 +164,7 @@ export class TestAnalyzerPlugin implements Plugin {
           });
           
           if (selected) {
-            const suggestion = qualityAnalysis.suggestions.find(s => s.title === selected.label);
+            const suggestion = qualityAnalysis.suggestions.find((s: any) => s.title === (selected as any)?.label);
             if (suggestion) {
               await this.applySuggestion(suggestion, context);
             }
@@ -208,30 +204,30 @@ export class TestAnalyzerPlugin implements Plugin {
     
     // Register analyzers
     for (const analyzer of this.analyzers) {
-      api.registerAnalyzer(analyzer);
+      api.registerAnalyzer?.(analyzer);
     }
     
     // Register formatters
     for (const formatter of this.formatters) {
-      api.registerFormatter(formatter);
+      api.registerFormatter?.(formatter);
     }
     
     // Register commands
     for (const command of this.commands) {
-      api.registerCommand(command);
+      api.registerCommand(command.id, command.execute);
     }
     
     // Listen for test events
-    api.on('test:run', (data) => this.onTestRun(data, context));
-    api.on('test:complete', (data) => this.onTestComplete(data, context));
+    api.on?.('test:run', (data) => this.onTestRun(data, context));
+    api.on?.('test:complete', (data) => this.onTestComplete(data, context));
     
     console.log('Test Analyzer Plugin activated');
   }
 
   async deactivate(api: PluginAPI, context: PluginContext): Promise<void> {
     // Cleanup
-    api.off('test:run');
-    api.off('test:complete');
+    api.off?.('test:run');
+    api.off?.('test:complete');
     
     console.log('Test Analyzer Plugin deactivated');
   }
@@ -298,6 +294,8 @@ export class TestAnalyzerPlugin implements Plugin {
     }
     
     return {
+      id: 'test-structure-analysis',
+      summary: 'Test structure analysis completed',
       issues,
       metrics,
       suggestions,
@@ -356,6 +354,8 @@ export class TestAnalyzerPlugin implements Plugin {
     }
     
     return {
+      id: 'test-coverage-analysis',
+      summary: 'Test coverage analysis completed',
       issues,
       metrics,
       suggestions,
@@ -429,7 +429,7 @@ export class TestAnalyzerPlugin implements Plugin {
     metrics['has-cleanup'] = hasCleanup ? 1 : 0;
     metrics['has-mocks'] = hasMocks ? 1 : 0;
     
-    if (!hasSetup && testBlocks > 1) {
+    if (!hasSetup && metrics['test-blocks'] > 1) {
       suggestions.push('Consider using beforeEach/beforeAll for test setup');
     }
     
@@ -438,6 +438,8 @@ export class TestAnalyzerPlugin implements Plugin {
     }
     
     return {
+      id: 'test-pattern-analysis',
+      summary: 'Test pattern analysis completed',
       issues,
       metrics,
       suggestions,
@@ -540,7 +542,7 @@ export class TestAnalyzerPlugin implements Plugin {
     
     if (stats.failed > 0) {
       formatted += `## Failed Tests\n\n`;
-      const failedTests = tests.filter(t => t.status === 'failed');
+      const failedTests = tests.filter((t: any) => t.status === 'failed');
       for (const test of failedTests) {
         formatted += `### ${test.name}\n`;
         formatted += `**File:** ${test.file}\n`;
@@ -626,7 +628,7 @@ export class TestAnalyzerPlugin implements Plugin {
 
   private async applySuggestion(suggestion: any, context: PluginContext): Promise<void> {
     // Implementation for applying suggestions
-    this.api?.showNotification(`Applied suggestion: ${suggestion.title}`, 'info');
+    this.api?.showNotification?.(`Applied suggestion: ${suggestion.title}`, 'info');
   }
 
   private async onTestRun(data: any, context: PluginContext): Promise<void> {

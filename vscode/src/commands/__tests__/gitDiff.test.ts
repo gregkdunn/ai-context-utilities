@@ -37,13 +37,15 @@ describe('GitDiffCommand', () => {
         
         // Setup FileManager mock
         mockFileManager = {
-            getOutputFilePath: jest.fn().mockResolvedValue('/test/diff.txt'),
+            getOutputFilePath: jest.fn().mockReturnValue('/test/diff.txt'),
             ensureDirectoryExists: jest.fn(),
             deleteFile: jest.fn(),
             writeFile: jest.fn(),
             getFileStats: jest.fn().mockResolvedValue({
-                size: '5KB',
-                lines: 150
+                size: 5120,
+                created: new Date(),
+                modified: new Date(),
+                accessed: new Date()
             })
         } as any;
 
@@ -67,24 +69,12 @@ index 123..456 100644
 +  newMethod() {}
  }`;
 
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        setTimeout(() => callback(0), 10); // Success
-                    }
-                })
-            };
-
-            mockSpawn.mockReturnValue(mockProcess);
-
-            // Simulate stdout data
-            mockProcess.stdout.on.mockImplementation((event, callback) => {
-                if (event === 'data') {
-                    setTimeout(() => callback(Buffer.from(mockDiffOutput)), 5);
-                }
-            });
+            // Mock the executeGitCommand method directly
+            const mockExecuteGitCommand = jest.spyOn(gitDiffCommand as any, 'executeGitCommand');
+            
+            mockExecuteGitCommand
+                .mockResolvedValueOnce({ success: false, exitCode: 1, output: '', duration: 0 }) // diff --quiet (has changes)
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: mockDiffOutput, duration: 0 }); // diff
 
             // Act
             const result = await gitDiffCommand.run(options);
@@ -93,112 +83,68 @@ index 123..456 100644
             expect(result.success).toBe(true);
             expect(result.exitCode).toBe(0);
             expect(mockFileManager.writeFile).toHaveBeenCalled();
-        });
+            
+            // Cleanup
+            mockExecuteGitCommand.mockRestore();
+        }, 5000);
 
         it('should detect smart diff when no changes in working directory', async () => {
             // Arrange
             const options: CommandOptions = {};
 
-            // Mock git diff --quiet to return 0 (no changes)
-            // Mock git diff --cached --quiet to return 0 (no staged changes)
-            // Mock git rev-parse to return success (has commits)
-            let callCount = 0;
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        callCount++;
-                        if (callCount <= 2) {
-                            // First two calls return 0 (no unstaged/staged changes)
-                            setTimeout(() => callback(0), 10);
-                        } else if (callCount === 3) {
-                            // Third call (rev-parse) returns 0 (has commits)
-                            setTimeout(() => callback(0), 10);
-                        } else {
-                            // Final diff call with HEAD~1..HEAD
-                            setTimeout(() => callback(0), 10);
-                        }
-                    }
-                })
-            };
-
-            mockSpawn.mockReturnValue(mockProcess);
+            // Mock the executeGitCommand method directly
+            const mockExecuteGitCommand = jest.spyOn(gitDiffCommand as any, 'executeGitCommand');
+            
+            mockExecuteGitCommand
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: '', duration: 0 }) // diff --quiet (no unstaged)
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: '', duration: 0 }) // diff --cached --quiet (no staged)
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: '', duration: 0 }) // rev-parse --verify HEAD~1 (has commits)
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: '', duration: 0 }); // diff HEAD~1..HEAD
 
             // Act
             await gitDiffCommand.run(options);
 
             // Assert
-            expect(mockSpawn).toHaveBeenCalledWith(
-                'git',
-                ['diff', '--quiet'],
-                expect.any(Object)
-            );
-            expect(mockSpawn).toHaveBeenCalledWith(
-                'git',
-                ['diff', '--cached', '--quiet'],
-                expect.any(Object)
-            );
-            expect(mockSpawn).toHaveBeenCalledWith(
-                'git',
-                ['rev-parse', '--verify', 'HEAD~1'],
-                expect.any(Object)
-            );
+            expect(mockExecuteGitCommand).toHaveBeenCalledWith(['diff', '--quiet']);
+            expect(mockExecuteGitCommand).toHaveBeenCalledWith(['diff', '--cached', '--quiet']);
+            expect(mockExecuteGitCommand).toHaveBeenCalledWith(['rev-parse', '--verify', 'HEAD~1']);
+            expect(mockExecuteGitCommand).toHaveBeenCalledWith(['diff', 'HEAD~1..HEAD']);
+            
+            // Cleanup
+            mockExecuteGitCommand.mockRestore();
         });
 
         it('should use staged changes when no unstaged changes', async () => {
             // Arrange
             const options: CommandOptions = {};
 
-            let callCount = 0;
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        callCount++;
-                        if (callCount === 1) {
-                            // First call (unstaged): no changes
-                            setTimeout(() => callback(0), 10);
-                        } else if (callCount === 2) {
-                            // Second call (staged): has changes
-                            setTimeout(() => callback(1), 10);
-                        } else {
-                            // Final diff call with --cached
-                            setTimeout(() => callback(0), 10);
-                        }
-                    }
-                })
-            };
-
-            mockSpawn.mockReturnValue(mockProcess);
+            // Mock the executeGitCommand method directly
+            const mockExecuteGitCommand = jest.spyOn(gitDiffCommand as any, 'executeGitCommand');
+            
+            mockExecuteGitCommand
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: '', duration: 0 }) // diff --quiet (no unstaged)
+                .mockResolvedValueOnce({ success: false, exitCode: 1, output: '', duration: 0 }) // diff --cached --quiet (has staged)
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: 'staged changes', duration: 0 }); // diff --cached
 
             // Act
             await gitDiffCommand.run(options);
 
             // Assert
-            expect(mockSpawn).toHaveBeenCalledWith(
-                'git',
-                ['diff', '--cached'],
-                expect.any(Object)
-            );
-        });
+            expect(mockExecuteGitCommand).toHaveBeenCalledWith(['diff', '--quiet']);
+            expect(mockExecuteGitCommand).toHaveBeenCalledWith(['diff', '--cached', '--quiet']);
+            expect(mockExecuteGitCommand).toHaveBeenCalledWith(['diff', '--cached']);
+            
+            // Cleanup
+            mockExecuteGitCommand.mockRestore();
+        }, 5000);
 
         it('should handle git command errors', async () => {
             // Arrange
             const options: CommandOptions = {};
 
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'error') {
-                        setTimeout(() => callback(new Error('Git not found')), 10);
-                    }
-                })
-            };
-
-            mockSpawn.mockReturnValue(mockProcess);
+            // Mock the executeGitCommand method to return an error on first call
+            const mockExecuteGitCommand = jest.spyOn(gitDiffCommand as any, 'executeGitCommand');
+            mockExecuteGitCommand.mockRejectedValue(new Error('Git not found'));
 
             // Act
             const result = await gitDiffCommand.run(options);
@@ -206,7 +152,10 @@ index 123..456 100644
             // Assert
             expect(result.success).toBe(false);
             expect(result.error).toBe('Git not found');
-        });
+            
+            // Cleanup
+            mockExecuteGitCommand.mockRestore();
+        }, 5000);
 
         it('should skip diff when noDiff option is true', async () => {
             // Arrange
@@ -223,24 +172,12 @@ index 123..456 100644
             // Arrange
             const options: CommandOptions = {};
 
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        setTimeout(() => callback(0), 10);
-                    }
-                })
-            };
-
-            mockSpawn.mockReturnValue(mockProcess);
-
-            // Simulate empty stdout
-            mockProcess.stdout.on.mockImplementation((event, callback) => {
-                if (event === 'data') {
-                    setTimeout(() => callback(Buffer.from('')), 5);
-                }
-            });
+            // Mock the executeGitCommand method directly
+            const mockExecuteGitCommand = jest.spyOn(gitDiffCommand as any, 'executeGitCommand');
+            
+            mockExecuteGitCommand
+                .mockResolvedValueOnce({ success: false, exitCode: 1, output: '', duration: 0 }) // diff --quiet (has changes)
+                .mockResolvedValueOnce({ success: true, exitCode: 0, output: '', duration: 0 }); // diff (empty output)
 
             // Act
             const result = await gitDiffCommand.run(options);
@@ -251,6 +188,9 @@ index 123..456 100644
                 expect.any(String),
                 expect.stringContaining('No changes detected')
             );
+            
+            // Cleanup
+            mockExecuteGitCommand.mockRestore();
         });
     });
 
@@ -411,24 +351,13 @@ Even more content`;
 
     describe('getCurrentBranch', () => {
         it('should return current branch name', async () => {
-            // Arrange
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        setTimeout(() => callback(0), 10);
-                    }
-                })
-            };
-
-            mockSpawn.mockReturnValue(mockProcess);
-
-            // Simulate branch output
-            mockProcess.stdout.on.mockImplementation((event, callback) => {
-                if (event === 'data') {
-                    setTimeout(() => callback(Buffer.from('main\n')), 5);
-                }
+            // Mock the executeGitCommand method directly
+            const mockExecuteGitCommand = jest.spyOn(gitDiffCommand as any, 'executeGitCommand');
+            mockExecuteGitCommand.mockResolvedValueOnce({ 
+                success: true, 
+                exitCode: 0, 
+                output: 'main\n',
+                duration: 0 
             });
 
             // Act
@@ -436,27 +365,30 @@ Even more content`;
 
             // Assert
             expect(result).toBe('main');
+            
+            // Cleanup
+            mockExecuteGitCommand.mockRestore();
         });
 
         it('should return "unknown" when git command fails', async () => {
-            // Arrange
-            const mockProcess = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        setTimeout(() => callback(1), 10); // Error
-                    }
-                })
-            };
-
-            mockSpawn.mockReturnValue(mockProcess);
+            // Mock the executeGitCommand method to return an error
+            const mockExecuteGitCommand = jest.spyOn(gitDiffCommand as any, 'executeGitCommand');
+            mockExecuteGitCommand.mockResolvedValueOnce({ 
+                success: false, 
+                exitCode: 1, 
+                output: '',
+                error: 'Not a git repository',
+                duration: 0 
+            });
 
             // Act
             const result = await (gitDiffCommand as any).getCurrentBranch();
 
             // Assert
             expect(result).toBe('unknown');
+            
+            // Cleanup
+            mockExecuteGitCommand.mockRestore();
         });
     });
 });

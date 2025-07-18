@@ -7,7 +7,9 @@ describe('Types Module - Interface Definitions', () => {
             const mockProject: types.NxProject = {
                 name: 'test-project',
                 root: './apps/test-project',
-                projectType: 'application'
+                projectType: 'application',
+                type: 'nx',
+                packageJsonPath: './apps/test-project/package.json'
             };
 
             expect(mockProject.name).toBe('test-project');
@@ -19,13 +21,17 @@ describe('Types Module - Interface Definitions', () => {
             const appProject: types.NxProject = {
                 name: 'app',
                 root: './apps/app',
-                projectType: 'application'
+                projectType: 'application',
+                type: 'nx',
+                packageJsonPath: './apps/app/package.json'
             };
 
             const libProject: types.NxProject = {
                 name: 'lib',
                 root: './libs/lib',
-                projectType: 'library'
+                projectType: 'library',
+                type: 'nx',
+                packageJsonPath: './libs/lib/package.json'
             };
 
             expect(appProject.projectType).toBe('application');
@@ -37,6 +43,8 @@ describe('Types Module - Interface Definitions', () => {
                 name: 'test',
                 root: './test',
                 projectType: 'application',
+                type: 'nx',
+                packageJsonPath: './test/package.json',
                 targets: {
                     build: { executor: '@nx/webpack:webpack' },
                     test: { executor: '@nx/jest:jest' }
@@ -46,7 +54,9 @@ describe('Types Module - Interface Definitions', () => {
             const projectWithoutTargets: types.NxProject = {
                 name: 'test',
                 root: './test',
-                projectType: 'application'
+                projectType: 'application',
+                type: 'nx',
+                packageJsonPath: './test/package.json'
             };
 
             expect(projectWithTargets.targets).toBeDefined();
@@ -266,7 +276,7 @@ describe('Types Module - Interface Definitions', () => {
         it('should have required properties with correct types', () => {
             const state: types.WebviewState = {
                 projects: [
-                    { name: 'project1', root: './apps/project1', projectType: 'application' }
+                    { name: 'project1', root: './apps/project1', projectType: 'application', type: 'nx', packageJsonPath: './apps/project1/package.json' }
                 ],
                 actions: {
                     'aiDebug': {
@@ -279,7 +289,9 @@ describe('Types Module - Interface Definitions', () => {
                 },
                 outputFiles: {
                     'test-results': 'test output content'
-                }
+                },
+                isStreaming: false,
+                currentOutput: ''
             };
 
             expect(Array.isArray(state.projects)).toBe(true);
@@ -297,7 +309,9 @@ describe('Types Module - Interface Definitions', () => {
                     action: 'aiDebug',
                     timestamp: new Date(),
                     success: true
-                }
+                },
+                isStreaming: false,
+                currentOutput: ''
             };
 
             expect(stateWithOptionals.currentProject).toBe('selected-project');
@@ -428,6 +442,8 @@ describe('Types Module - Interface Definitions', () => {
                 name: 'my-app',
                 root: './apps/my-app',
                 projectType: 'application',
+                type: 'nx',
+                packageJsonPath: './apps/my-app/package.json',
                 targets: {
                     build: { executor: '@nx/webpack:webpack' },
                     test: { executor: '@nx/jest:jest' }
@@ -476,7 +492,9 @@ describe('Types Module - Interface Definitions', () => {
                     action: button.id,
                     timestamp: new Date(),
                     success: result.success
-                }
+                },
+                isStreaming: false,
+                currentOutput: ''
             };
 
             // Verify the integration works
@@ -547,7 +565,9 @@ describe('Types Module - Interface Definitions', () => {
             const minimalProject: types.NxProject = {
                 name: 'minimal',
                 root: './minimal',
-                projectType: 'library'
+                projectType: 'library',
+                type: 'nx',
+                packageJsonPath: './minimal/package.json'
             };
 
             const minimalOptions: types.CommandOptions = {};
@@ -555,7 +575,9 @@ describe('Types Module - Interface Definitions', () => {
             const minimalState: types.WebviewState = {
                 projects: [],
                 actions: {},
-                outputFiles: {}
+                outputFiles: {},
+                isStreaming: false,
+                currentOutput: ''
             };
 
             expect(minimalProject.targets).toBeUndefined();
@@ -571,6 +593,8 @@ describe('Types Module - Interface Definitions', () => {
                         name: 'main-app',
                         root: './apps/main-app',
                         projectType: 'application',
+                        type: 'nx',
+                        packageJsonPath: './apps/main-app/package.json',
                         targets: {
                             build: { executor: '@nx/webpack:webpack' },
                             test: { executor: '@nx/jest:jest' },
@@ -580,7 +604,9 @@ describe('Types Module - Interface Definitions', () => {
                     {
                         name: 'shared-lib',
                         root: './libs/shared-lib',
-                        projectType: 'library'
+                        projectType: 'library',
+                        type: 'nx',
+                        packageJsonPath: './libs/shared-lib/package.json'
                     }
                 ],
                 actions: {
@@ -598,7 +624,9 @@ describe('Types Module - Interface Definitions', () => {
                     action: 'nxTest',
                     timestamp: new Date('2024-01-01T10:00:00Z'),
                     success: true
-                }
+                },
+                isStreaming: false,
+                currentOutput: ''
             };
 
             expect(complexState.projects).toHaveLength(2);

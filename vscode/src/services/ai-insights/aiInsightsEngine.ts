@@ -31,9 +31,9 @@ export class AIInsightsEngine implements IAIInsightsEngine {
     private readonly cacheTimeout = 300000; // 5 minutes
 
     // Phase 4.2 Enhanced Engines
-    private intelligentSuggestionsEngine: IntelligentSuggestionsEngine;
-    private automatedInsightsEngine: AutomatedInsightsEngine;
-    private naturalLanguageQueryEngine: NaturalLanguageQueryEngine;
+    private intelligentSuggestionsEngine!: IntelligentSuggestionsEngine;
+    private automatedInsightsEngine!: AutomatedInsightsEngine;
+    private naturalLanguageQueryEngine!: NaturalLanguageQueryEngine;
     private readonly phase42Enabled = true;
 
     constructor(private context: vscode.ExtensionContext) {
@@ -67,7 +67,7 @@ export class AIInsightsEngine implements IAIInsightsEngine {
             // Phase 4.2: Use enhanced automated insights engine
             if (this.phase42Enabled && this.automatedInsightsEngine) {
                 const enhancedInsights = await this.automatedInsightsEngine.generateAutomatedInsights(data);
-                insights.push(...enhancedInsights);
+                insights.push(...(enhancedInsights as unknown as Insight[]));
                 console.log(`Phase 4.2: Generated ${enhancedInsights.length} enhanced insights`);
             } else {
                 // Fallback to legacy analysis
@@ -153,7 +153,7 @@ export class AIInsightsEngine implements IAIInsightsEngine {
             
         } catch (error) {
             console.error('Error generating report:', error);
-            throw new Error(`Failed to generate report: ${error.message}`);
+            throw new Error(`Failed to generate report: ${(error as Error).message}`);
         }
     }
 
@@ -238,7 +238,7 @@ export class AIInsightsEngine implements IAIInsightsEngine {
             
         } catch (error) {
             console.error('Error optimizing workflow:', error);
-            throw new Error(`Failed to optimize workflow: ${error.message}`);
+            throw new Error(`Failed to optimize workflow: ${(error as Error).message}`);
         }
     }
 
@@ -462,29 +462,37 @@ export class AIInsightsEngine implements IAIInsightsEngine {
 
     private cleanupCache(): void {
         for (const [key, value] of this.insightCache.entries()) {
-            if (Math.random() < 0.01) this.insightCache.delete(key);
+            if (Math.random() < 0.01) {
+                this.insightCache.delete(key);
+            }
         }
         for (const [key, value] of this.suggestionCache.entries()) {
-            if (Math.random() < 0.01) this.suggestionCache.delete(key);
+            if (Math.random() < 0.01) {
+                this.suggestionCache.delete(key);
+            }
         }
     }
 
     // AI method implementations
     private async parseQueryIntent(query: string): Promise<string> {
         const lowerQuery = query.toLowerCase();
-        if (lowerQuery.includes('test') || lowerQuery.includes('failing')) return 'test-query';
-        if (lowerQuery.includes('performance') || lowerQuery.includes('slow')) return 'performance-query';
-        if (lowerQuery.includes('error') || lowerQuery.includes('bug')) return 'error-query';
-        if (lowerQuery.includes('git') || lowerQuery.includes('commit')) return 'git-query';
+        if (lowerQuery.includes('test') || lowerQuery.includes('failing')) {return 'test-query';}
+        if (lowerQuery.includes('performance') || lowerQuery.includes('slow')) {return 'performance-query';}
+        if (lowerQuery.includes('error') || lowerQuery.includes('bug')) {return 'error-query';}
+        if (lowerQuery.includes('git') || lowerQuery.includes('commit')) {return 'git-query';}
         return 'general-query';
     }
 
     private async extractQueryEntities(query: string): Promise<Record<string, any>> {
         const entities: Record<string, any> = {};
         const projectMatch = query.match(/project[s]?\s+(\w+)/i);
-        if (projectMatch) entities.project = projectMatch[1];
+        if (projectMatch) {
+            entities.project = projectMatch[1];
+        }
         const timeMatch = query.match(/(last|past)\s+(\d+)\s+(day|week|month|year)s?/i);
-        if (timeMatch) entities.timeRange = { amount: parseInt(timeMatch[2]), unit: timeMatch[3] };
+        if (timeMatch) {
+            entities.timeRange = { amount: parseInt(timeMatch[2]), unit: timeMatch[3] };
+        }
         return entities;
     }
 
@@ -495,7 +503,7 @@ export class AIInsightsEngine implements IAIInsightsEngine {
             'error-query': 'I can help identify recurring error patterns and suggest fixes.',
             'git-query': 'I can analyze your git history and suggest improvements to your commit patterns.'
         };
-        return responses[intent] || 'I can help you analyze your debugging patterns and suggest improvements.';
+        return (responses as any)[intent] || 'I can help you analyze your debugging patterns and suggest improvements.';
     }
 
     private async generateQueryActions(intent: string, entities: Record<string, any>): Promise<ActionSuggestion[]> {
@@ -532,8 +540,12 @@ export class AIInsightsEngine implements IAIInsightsEngine {
 
     private calculateQueryConfidence(intent: string, entities: Record<string, any>): number {
         let confidence = 0.5;
-        if (intent !== 'unknown') confidence += 0.3;
-        if (Object.keys(entities).length > 0) confidence += 0.2;
+        if (intent !== 'unknown') {
+            confidence += 0.3;
+        }
+        if (Object.keys(entities).length > 0) {
+            confidence += 0.2;
+        }
         return Math.min(confidence, 1.0);
     }
 
@@ -647,7 +659,8 @@ export class AIInsightsEngine implements IAIInsightsEngine {
      */
     async getQueryAnalytics(): Promise<any> {
         if (this.phase42Enabled && this.naturalLanguageQueryEngine) {
-            return this.naturalLanguageQueryEngine.analyzeQueryPatterns();
+            const patterns = await this.naturalLanguageQueryEngine.analyzeQueryPatterns();
+            return { patterns, insights: [] };
         }
         
         return { patterns: [], insights: [] };
@@ -661,7 +674,7 @@ export class AIInsightsEngine implements IAIInsightsEngine {
             if (this.phase42Enabled) {
                 await Promise.all([
                     this.intelligentSuggestionsEngine?.savePatterns(),
-                    this.automatedInsightsEngine?.saveInsightHistory(),
+                    this.automatedInsightsEngine?.saveInsightHistory([]),
                     this.naturalLanguageQueryEngine?.saveQueryHistory()
                 ]);
                 console.log('Phase 4.2: All engine states saved successfully');

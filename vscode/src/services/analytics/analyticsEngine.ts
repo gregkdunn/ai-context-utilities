@@ -107,7 +107,7 @@ export class AnalyticsEngine extends EventEmitter {
     });
 
     // Check if buffer needs flushing
-    if (this.eventBuffer.length >= this.config.bufferSize) {
+    if (this.eventBuffer.length >= (this.config.bufferSize || 1000)) {
       this.flushEventBuffer();
     }
 
@@ -134,9 +134,38 @@ export class AnalyticsEngine extends EventEmitter {
     // Store metrics snapshot
     this.metricsHistory.push({
       id: this.generateSnapshotId(),
-      metrics,
+      metrics: metrics as any,
       timestamp: new Date(),
-      events: events.length
+      systemMetrics: {
+        timestamp: new Date(),
+        cpu: {
+          usage: 0,
+          cores: 1,
+          loadAverage: [0, 0, 0]
+        },
+        memory: {
+          total: 0,
+          used: 0,
+          free: 0,
+          percentage: 0
+        },
+        disk: {
+          total: 0,
+          used: 0,
+          free: 0,
+          percentage: 0
+        },
+        network: {
+          rx: 0,
+          tx: 0,
+          rxPackets: 0,
+          txPackets: 0
+        },
+        processes: 0,
+        uptime: 0
+      },
+      collectionStats: {},
+      bufferStats: {}
     });
 
     // Cleanup old metrics
@@ -154,7 +183,7 @@ export class AnalyticsEngine extends EventEmitter {
       id: config.id || this.generateDashboardId(),
       name: config.name,
       description: config.description,
-      layout: config.layout,
+      layout: config.layout || { type: 'grid', columns: 12, rows: 'auto', gap: '1rem', padding: '1rem' },
       widgets: await this.createDashboardWidgets(config),
       filters: config.filters || [],
       refreshInterval: config.refreshInterval || 30000,
@@ -258,9 +287,9 @@ export class AnalyticsEngine extends EventEmitter {
       updatedAt: new Date()
     };
 
-    this.dashboards.set(id, updatedDashboard);
+    this.dashboards.set(id, updatedDashboard as Dashboard);
     this.emit('dashboardUpdated', updatedDashboard);
-    return updatedDashboard;
+    return updatedDashboard as Dashboard;
   }
 
   /**
@@ -337,6 +366,10 @@ export class AnalyticsEngine extends EventEmitter {
     return `dashboard_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  private generateWidgetId(): string {
+    return `widget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
   private startEventBuffering(): void {
     this.bufferFlushInterval = setInterval(() => {
       if (this.eventBuffer.length > 0) {
@@ -346,7 +379,7 @@ export class AnalyticsEngine extends EventEmitter {
   }
 
   private flushEventBuffer(): void {
-    if (this.eventBuffer.length === 0) return;
+    if (this.eventBuffer.length === 0) {return;}
 
     const eventsToFlush = [...this.eventBuffer];
     this.eventBuffer = [];
@@ -436,12 +469,14 @@ export class AnalyticsEngine extends EventEmitter {
     
     if (failureRate > 0.3) { // 30% failure rate threshold
       return {
-        id: 'command_failure_prediction',
-        type: 'warning',
+        type: 'test-failure',
+        probability: Math.min(failureRate * 2, 1), // Cap at 100%
         confidence: Math.min(failureRate * 2, 1), // Cap at 100%
+        description: 'High probability of command failures',
+        affectedFiles: [],
+        prevention: [],
+        timeline: '1-2 hours',
         prediction: 'High probability of command failures',
-        recommendation: 'Review command patterns and implement error handling',
-        timeframe: '1-2 hours',
         impact: 'high'
       };
     }
@@ -455,12 +490,14 @@ export class AnalyticsEngine extends EventEmitter {
     
     if (trend.direction === 'declining' && trend.severity > 0.7) {
       return {
-        id: 'performance_degradation_prediction',
-        type: 'performance',
+        type: 'performance-degradation',
+        probability: trend.severity,
         confidence: trend.severity,
+        description: 'Performance degradation detected',
+        affectedFiles: [],
+        prevention: [],
+        timeline: '30-60 minutes',
         prediction: 'Performance degradation detected',
-        recommendation: 'Optimize slow operations and check resource usage',
-        timeframe: '30-60 minutes',
         impact: 'medium'
       };
     }
@@ -474,12 +511,14 @@ export class AnalyticsEngine extends EventEmitter {
     
     if (memoryTrend.utilizationRate > 0.8) {
       return {
-        id: 'resource_utilization_prediction',
-        type: 'resource',
+        type: 'security-issue',
+        probability: memoryTrend.utilizationRate,
         confidence: memoryTrend.utilizationRate,
+        description: 'High resource utilization predicted',
+        affectedFiles: [],
+        prevention: [],
+        timeline: '15-30 minutes',
         prediction: 'High resource utilization predicted',
-        recommendation: 'Consider scaling resources or optimizing memory usage',
-        timeframe: '15-30 minutes',
         impact: 'high'
       };
     }
@@ -488,8 +527,17 @@ export class AnalyticsEngine extends EventEmitter {
   }
 
   private async createDashboardWidgets(config: DashboardConfig): Promise<any[]> {
-    // This would create actual dashboard widgets based on the configuration
-    // For now, return a mock structure
+    // Return the widgets from the config if provided, otherwise return default widgets
+    if (config.widgets && config.widgets.length > 0) {
+      return config.widgets.map(widget => ({
+        id: widget.id || this.generateWidgetId(),
+        type: widget.type,
+        title: widget.title,
+        config: widget.configuration || {}
+      }));
+    }
+    
+    // Default widgets when none specified
     return [
       {
         id: 'performance_chart',
@@ -507,11 +555,12 @@ export class AnalyticsEngine extends EventEmitter {
   }
 
   private startDashboardUpdates(dashboardId: string): void {
+    const dashboard = this.dashboards.get(dashboardId);
     // Implementation for real-time dashboard updates
     setInterval(() => {
-      const dashboard = this.dashboards.get(dashboardId);
-      if (dashboard) {
-        this.emit('dashboardUpdate', dashboard);
+      const currentDashboard = this.dashboards.get(dashboardId);
+      if (currentDashboard) {
+        this.emit('dashboardUpdate', currentDashboard);
       }
     }, dashboard?.refreshInterval || 30000);
   }
@@ -543,7 +592,7 @@ export class AnalyticsEngine extends EventEmitter {
 
   private cleanupOldMetrics(): void {
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - this.config.retentionDays);
+    cutoffDate.setDate(cutoffDate.getDate() - (this.config.retentionDays || 30));
     
     this.metricsHistory = this.metricsHistory.filter(
       snapshot => snapshot.timestamp > cutoffDate
@@ -562,7 +611,7 @@ export class AnalyticsEngine extends EventEmitter {
   }
 
   private calculateThroughput(events: AnalyticsEvent[]): number {
-    return events.length / (this.config.flushInterval / 1000); // Events per second
+    return events.length / ((this.config.flushInterval || 5000) / 1000); // Events per second
   }
 
   private calculateErrorRate(events: AnalyticsEvent[]): number {
@@ -572,7 +621,7 @@ export class AnalyticsEngine extends EventEmitter {
 
   private calculateMemoryUsage(events: AnalyticsEvent[]): number {
     const memoryEvents = events.filter(e => e.metadata.memoryUsage);
-    if (memoryEvents.length === 0) return 0;
+    if (memoryEvents.length === 0) {return 0;}
     
     const totalMemory = memoryEvents.reduce((sum, e) => sum + e.metadata.memoryUsage, 0);
     return totalMemory / memoryEvents.length;
@@ -580,7 +629,7 @@ export class AnalyticsEngine extends EventEmitter {
 
   private calculateCpuUsage(events: AnalyticsEvent[]): number {
     const cpuEvents = events.filter(e => e.metadata.cpuUsage);
-    if (cpuEvents.length === 0) return 0;
+    if (cpuEvents.length === 0) {return 0;}
     
     const totalCpu = cpuEvents.reduce((sum, e) => sum + e.metadata.cpuUsage, 0);
     return totalCpu / cpuEvents.length;
@@ -670,8 +719,8 @@ export class AnalyticsEngine extends EventEmitter {
           sessions.set(e.sessionId, { start: e.timestamp, end: e.timestamp });
         } else {
           const session = sessions.get(e.sessionId)!;
-          if (e.timestamp < session.start) session.start = e.timestamp;
-          if (e.timestamp > session.end) session.end = e.timestamp;
+          if (e.timestamp < session.start) {session.start = e.timestamp;}
+          if (e.timestamp > session.end) {session.end = e.timestamp;}
         }
       }
     });

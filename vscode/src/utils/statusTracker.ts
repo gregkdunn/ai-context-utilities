@@ -1,557 +1,386 @@
-import { EventEmitter } from 'events';
 import * as vscode from 'vscode';
-import { CommandResult, ActionButton } from '../types';
+import { EventEmitter } from 'events';
+import { NxProject, CommandResult, ActionButton } from '../types';
 
-/**
- * Enhanced status tracking for command execution
- */
+export interface StatusInfo {
+    isRunning: boolean;
+    currentAction?: string;
+    progress?: number;
+    message?: string;
+    lastUpdated: Date;
+}
+
 export interface CommandStatus {
     id: string;
-    command: 'aiDebug' | 'nxTest' | 'gitDiff' | 'prepareToPush';
+    action: string;
+    command?: string;
     project?: string;
-    status: 'idle' | 'running' | 'success' | 'error' | 'cancelled';
-    progress: number; // 0-100
-    startTime?: Date;
+    status: 'running' | 'success' | 'error' | 'cancelled';
+    startTime: Date;
     endTime?: Date;
-    duration?: number;
-    message: string;
+    progress: number;
     output: string;
     error?: string;
-    outputFiles: string[];
-    metadata: {
-        options?: any;
-        pid?: number;
-        memoryUsage?: number;
-        cancelled?: boolean;
-    };
+    duration?: number;
+    message?: string;
 }
 
-export interface StatusEvent {
-    type: 'status_change' | 'progress_update' | 'output_append' | 'error_append' | 'command_complete';
-    commandId: string;
-    timestamp: Date;
-    data: any;
+export interface CommandStats {
+    total: number;
+    successful: number;
+    failed: number;
+    averageDuration: number;
+    recentCommands: CommandStatus[];
 }
 
-export interface StatusHistory {
-    commandId: string;
-    command: string;
-    project?: string;
-    success: boolean;
-    duration: number;
-    timestamp: Date;
-    errorSummary?: string;
-    filesGenerated: number;
-}
-
-/**
- * Comprehensive status tracking system for AI Debug commands
- */
 export class StatusTracker extends EventEmitter {
-    private statusMap = new Map<string, CommandStatus>();
-    private history: StatusHistory[] = [];
-    private statusBarItem: vscode.StatusBarItem;
-    private maxHistorySize = 50;
-    private persistenceKey = 'aiDebugUtilities.statusHistory';
+    private _statusBarItem: vscode.StatusBarItem;
+    private _projects: NxProject[] = [];
+    private _currentStatus: StatusInfo = {
+        isRunning: false,
+        lastUpdated: new Date()
+    };
+    private _commandStatuses: Map<string, CommandStatus> = new Map();
+    private _commandHistory: CommandStatus[] = [];
 
-    constructor(private context: vscode.ExtensionContext) {
+    constructor() {
         super();
-        
-        // Create status bar item
-        this.statusBarItem = vscode.window.createStatusBarItem(
-            vscode.StatusBarAlignment.Left, 
+        this._statusBarItem = vscode.window.createStatusBarItem(
+            vscode.StatusBarAlignment.Left,
             100
         );
-        this.statusBarItem.command = 'aiDebugUtilities.showStatus';
-        context.subscriptions.push(this.statusBarItem);
-        
-        // Load persisted history
-        this.loadHistory();
-        
-        // Update status bar
-        this.updateStatusBar();
+        this._statusBarItem.show();
+        this._updateStatusBar();
     }
 
-    /**
-     * Start tracking a new command
-     */
-    startCommand(
-        command: 'aiDebug' | 'nxTest' | 'gitDiff' | 'prepareToPush',
-        project?: string,
-        options?: any
-    ): string {
-        const id = this.generateCommandId(command, project);
+    // Start a new command
+    public startCommand(action: string, project?: string, options?: any): string {
+        const commandId = `${action}-${Date.now()}`;
         
-        const status: CommandStatus = {
-            id,
-            command,
+        const commandStatus: CommandStatus = {
+            id: commandId,
+            action,
             project,
             status: 'running',
-            progress: 0,
             startTime: new Date(),
-            message: 'Initializing...',
-            output: '',
-            outputFiles: [],
-            metadata: {
-                options,
-                pid: process.pid
-            }
+            progress: 0,
+            output: ''
         };
 
-        this.statusMap.set(id, status);
-        this.emitStatusChange(id, 'status_change', { status: 'running' });
-        this.updateStatusBar();
-        
-        return id;
-    }
-
-    /**
-     * Update command progress
-     */
-    updateProgress(commandId: string, progress: number, message?: string): void {
-        const status = this.statusMap.get(commandId);
-        if (!status) return;
-
-        status.progress = Math.max(0, Math.min(100, progress));
-        if (message) {
-            status.message = message;
-        }
-
-        this.emitStatusChange(commandId, 'progress_update', { progress, message });
-        this.updateStatusBar();
-    }
-
-    /**
-     * Update command status
-     */
-    updateStatus(
-        commandId: string, 
-        newStatus: CommandStatus['status'], 
-        message?: string
-    ): void {
-        const status = this.statusMap.get(commandId);
-        if (!status) return;
-
-        const previousStatus = status.status;
-        status.status = newStatus;
-        
-        if (message) {
-            status.message = message;
-        }
-
-        // Set end time for terminal states
-        if (['success', 'error', 'cancelled'].includes(newStatus)) {
-            status.endTime = new Date();
-            if (status.startTime) {
-                status.duration = status.endTime.getTime() - status.startTime.getTime();
-            }
-            
-            // Add to history
-            this.addToHistory(status);
-            
-            // Clean up completed commands after a delay
-            setTimeout(() => this.cleanupCommand(commandId), 30000); // 30 seconds
-        }
-
-        this.emitStatusChange(commandId, 'status_change', { 
-            previousStatus, 
-            newStatus, 
-            message 
+        this._commandStatuses.set(commandId, commandStatus);
+        this.updateStatus({
+            isRunning: true,
+            currentAction: action,
+            progress: 0
         });
-        this.updateStatusBar();
-    }
 
-    /**
-     * Append output to command
-     */
-    appendOutput(commandId: string, output: string): void {
-        const status = this.statusMap.get(commandId);
-        if (!status) return;
-
-        status.output += output;
-        this.emitStatusChange(commandId, 'output_append', { output });
-    }
-
-    /**
-     * Append error to command
-     */
-    appendError(commandId: string, error: string): void {
-        const status = this.statusMap.get(commandId);
-        if (!status) return;
-
-        status.error = (status.error || '') + error;
-        this.emitStatusChange(commandId, 'error_append', { error });
-    }
-
-    /**
-     * Complete a command with final result
-     */
-    completeCommand(commandId: string, result: CommandResult): void {
-        const status = this.statusMap.get(commandId);
-        if (!status) return;
-
-        status.status = result.success ? 'success' : 'error';
-        status.progress = 100;
-        status.endTime = new Date();
-        status.duration = result.duration;
-        status.output = result.output || status.output;
-        status.error = result.error;
-        status.outputFiles = result.outputFiles || [];
+        this.emit('status_change', { commandId, status: commandStatus });
         
-        if (status.startTime) {
-            status.duration = status.endTime.getTime() - status.startTime.getTime();
+        return commandId;
+    }
+
+    // Complete a command
+    public completeCommand(commandId: string, result: CommandResult): void {
+        const commandStatus = this._commandStatuses.get(commandId);
+        if (!commandStatus) {
+            return;
         }
 
-        // Add memory usage if available
-        const memUsage = process.memoryUsage();
-        status.metadata.memoryUsage = memUsage.heapUsed;
+        commandStatus.status = result.success ? 'success' : 'error';
+        commandStatus.endTime = new Date();
+        commandStatus.duration = result.duration;
+        commandStatus.output = result.output;
+        commandStatus.error = result.error;
+        commandStatus.progress = 100;
 
-        this.addToHistory(status);
-        this.emitStatusChange(commandId, 'command_complete', { result });
-        this.updateStatusBar();
+        this._commandHistory.push(commandStatus);
+        this._commandStatuses.delete(commandId);
 
-        // Show completion notification
-        this.showCompletionNotification(status);
+        // Update status if this was the current command
+        if (this._commandStatuses.size === 0) {
+            this.updateStatus({
+                isRunning: false,
+                currentAction: undefined,
+                progress: 100,
+                message: result.success ? 'Command completed' : 'Command failed'
+            });
+        }
+
+        this.emit('status_change', { commandId, status: commandStatus });
+        this.emit('history_updated', this._commandHistory);
     }
 
-    /**
-     * Cancel a running command
-     */
-    cancelCommand(commandId: string): void {
-        const status = this.statusMap.get(commandId);
-        if (!status || status.status !== 'running') return;
+    // Cancel a command
+    public cancelCommand(commandId: string): void {
+        const commandStatus = this._commandStatuses.get(commandId);
+        if (!commandStatus) {
+            return;
+        }
 
-        status.status = 'cancelled';
-        status.metadata.cancelled = true;
-        status.message = 'Cancelled by user';
+        commandStatus.status = 'cancelled';
+        commandStatus.endTime = new Date();
+        commandStatus.progress = 0;
+
+        this._commandHistory.push(commandStatus);
+        this._commandStatuses.delete(commandId);
+
+        if (this._commandStatuses.size === 0) {
+            this.updateStatus({
+                isRunning: false,
+                currentAction: undefined,
+                progress: undefined,
+                message: 'Command cancelled'
+            });
+        }
+
+        this.emit('status_change', { commandId, status: commandStatus });
+    }
+
+    // Update command progress
+    public updateProgress(commandId: string, progress: number): void {
+        const commandStatus = this._commandStatuses.get(commandId);
+        if (!commandStatus) {
+            return;
+        }
+
+        commandStatus.progress = Math.max(0, Math.min(100, progress));
         
-        this.updateStatus(commandId, 'cancelled', 'Cancelled by user');
+        this.updateStatus({
+            progress: commandStatus.progress
+        });
+
+        this.emit('status_change', { commandId, status: commandStatus });
     }
 
-    /**
-     * Get current status of a command
-     */
-    getStatus(commandId: string): CommandStatus | undefined {
-        return this.statusMap.get(commandId);
+    // Append output to command
+    public appendOutput(commandId: string, output: string): void {
+        const commandStatus = this._commandStatuses.get(commandId);
+        if (!commandStatus) {
+            return;
+        }
+
+        commandStatus.output += output;
+        this.emit('status_change', { commandId, status: commandStatus });
     }
 
-    /**
-     * Get all current statuses
-     */
-    getAllStatuses(): CommandStatus[] {
-        return Array.from(this.statusMap.values());
+    // Append error to command
+    public appendError(commandId: string, error: string): void {
+        const commandStatus = this._commandStatuses.get(commandId);
+        if (!commandStatus) {
+            return;
+        }
+
+        commandStatus.error = (commandStatus.error || '') + error;
+        this.emit('status_change', { commandId, status: commandStatus });
     }
 
-    /**
-     * Get running commands
-     */
-    getRunningCommands(): CommandStatus[] {
-        return this.getAllStatuses().filter(s => s.status === 'running');
+    // Get all current statuses
+    public getAllStatuses(): CommandStatus[] {
+        return Array.from(this._commandStatuses.values());
     }
 
-    /**
-     * Get command history
-     */
-    getHistory(): StatusHistory[] {
-        return [...this.history];
+    // Get running commands
+    public getRunningCommands(): CommandStatus[] {
+        return Array.from(this._commandStatuses.values()).filter(
+            status => status.status === 'running'
+        );
     }
 
-    /**
-     * Get statistics for a specific command type
-     */
-    getCommandStats(command?: string): {
-        total: number;
-        successful: number;
-        failed: number;
-        averageDuration: number;
-        lastRun?: Date;
-    } {
-        const filtered = command 
-            ? this.history.filter(h => h.command === command)
-            : this.history;
+    // Get command history
+    public getHistory(): CommandStatus[] {
+        return [...this._commandHistory];
+    }
 
-        const total = filtered.length;
-        const successful = filtered.filter(h => h.success).length;
-        const failed = total - successful;
-        const averageDuration = total > 0 
-            ? filtered.reduce((sum, h) => sum + h.duration, 0) / total
-            : 0;
-        const lastRun = total > 0 
-            ? filtered[filtered.length - 1].timestamp
-            : undefined;
+    // Clear command history
+    public clearHistory(): void {
+        this._commandHistory = [];
+        this.emit('history_updated', this._commandHistory);
+    }
+
+    // Get command statistics
+    public getCommandStats(action?: string): CommandStats {
+        let commands = this._commandHistory;
+        
+        if (action) {
+            commands = commands.filter(cmd => cmd.action === action);
+        }
+
+        const successful = commands.filter(cmd => cmd.status === 'success').length;
+        const failed = commands.filter(cmd => cmd.status === 'error').length;
+        const totalDuration = commands.reduce((sum, cmd) => sum + (cmd.duration || 0), 0);
 
         return {
-            total,
+            total: commands.length,
             successful,
             failed,
-            averageDuration,
-            lastRun
+            averageDuration: commands.length > 0 ? totalDuration / commands.length : 0,
+            recentCommands: commands.slice(-10)
         };
     }
 
-    /**
-     * Clear all history
-     */
-    clearHistory(): void {
-        this.history = [];
-        this.saveHistory();
-        this.emit('history_cleared');
-    }
-
-    /**
-     * Export status report
-     */
-    generateStatusReport(): string {
-        const running = this.getRunningCommands();
+    // Generate status report
+    public generateStatusReport(): string {
         const stats = this.getCommandStats();
+        const runningCommands = this.getRunningCommands();
         
-        let report = `
-=================================================================
-🔍 AI DEBUG UTILITIES - STATUS REPORT
-=================================================================
+        return `
+AI Debug Status Report
+=====================
 
-📊 Generated: ${new Date().toISOString()}
-🔄 Running Commands: ${running.length}
-📈 Total Commands Run: ${stats.total}
+Current Status: ${this._currentStatus.isRunning ? 'Running' : 'Idle'}
+Running Commands: ${runningCommands.length}
+Total Commands: ${stats.total}
+Success Rate: ${stats.total > 0 ? ((stats.successful / stats.total) * 100).toFixed(1) : 0}%
+Average Duration: ${stats.averageDuration.toFixed(0)}ms
 
-=================================================================
-🚀 CURRENTLY RUNNING
-=================================================================
-
-`;
-
-        if (running.length === 0) {
-            report += '✅ No commands currently running\n\n';
-        } else {
-            for (const cmd of running) {
-                const elapsed = cmd.startTime 
-                    ? Date.now() - cmd.startTime.getTime()
-                    : 0;
-                
-                report += `🔄 ${cmd.command}${cmd.project ? ` (${cmd.project})` : ''}
-   Status: ${cmd.message}
-   Progress: ${cmd.progress}%
-   Elapsed: ${Math.round(elapsed / 1000)}s
-   ID: ${cmd.id}
-
-`;
-            }
-        }
-
-        report += `
-=================================================================
-📊 STATISTICS
-=================================================================
-
-Total Runs: ${stats.total}
-✅ Successful: ${stats.successful} (${stats.total > 0 ? Math.round((stats.successful / stats.total) * 100) : 0}%)
-❌ Failed: ${stats.failed} (${stats.total > 0 ? Math.round((stats.failed / stats.total) * 100) : 0}%)
-⏱️  Average Duration: ${Math.round(stats.averageDuration / 1000)}s
-🕐 Last Run: ${stats.lastRun ? stats.lastRun.toLocaleString() : 'Never'}
-
-=================================================================
-📈 COMMAND BREAKDOWN
-=================================================================
-
-`;
-
-        const commands = ['aiDebug', 'nxTest', 'gitDiff', 'prepareToPush'] as const;
-        for (const cmd of commands) {
-            const cmdStats = this.getCommandStats(cmd);
-            report += `${this.getCommandIcon(cmd)} ${cmd}:
-   Runs: ${cmdStats.total}
-   Success Rate: ${cmdStats.total > 0 ? Math.round((cmdStats.successful / cmdStats.total) * 100) : 0}%
-   Avg Duration: ${Math.round(cmdStats.averageDuration / 1000)}s
-
-`;
-        }
-
-        if (this.history.length > 0) {
-            report += `
-=================================================================
-📋 RECENT HISTORY (Last 10)
-=================================================================
-
-`;
-
-            const recent = this.history.slice(-10).reverse();
-            for (const entry of recent) {
-                const icon = entry.success ? '✅' : '❌';
-                report += `${icon} ${entry.command}${entry.project ? ` (${entry.project})` : ''}
-   ${entry.timestamp.toLocaleString()}
-   Duration: ${Math.round(entry.duration / 1000)}s
-   Files: ${entry.filesGenerated}
-   ${entry.errorSummary ? `Error: ${entry.errorSummary}` : ''}
-
-`;
-            }
-        }
-
-        return report;
+Recent Commands:
+${stats.recentCommands.slice(-5).map(cmd => 
+    `- ${cmd.action} (${cmd.project || 'N/A'}): ${cmd.status} - ${cmd.duration || 0}ms`
+).join('\n')}
+        `.trim();
     }
 
-    /**
-     * Convert to action button format for webview
-     */
-    toActionButtons(): Record<string, ActionButton> {
+    // Convert to action buttons
+    public toActionButtons(): Record<string, ActionButton> {
         const buttons: Record<string, ActionButton> = {};
-        const commands = ['aiDebug', 'nxTest', 'gitDiff', 'prepareToPush'] as const;
         
-        for (const cmd of commands) {
-            const running = this.getAllStatuses().find(s => s.command === cmd && s.status === 'running');
-            const lastCompleted = this.history
-                .filter(h => h.command === cmd)
-                .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())[0];
+        // Default actions
+        const actions = ['aiDebug', 'nxTest', 'gitDiff', 'prepareToPush'] as const;
+        
+        for (const action of actions) {
+            const runningCommand = this.getRunningCommands().find(cmd => cmd.action === action);
+            const recentCommand = this._commandHistory
+                .filter(cmd => cmd.action === action)
+                .sort((a, b) => b.startTime.getTime() - a.startTime.getTime())[0];
 
-            buttons[cmd] = {
-                id: cmd,
-                label: this.getCommandLabel(cmd),
-                icon: this.getCommandIcon(cmd),
-                status: running ? 'running' : (lastCompleted ? (lastCompleted.success ? 'success' : 'error') : 'idle'),
-                lastRun: lastCompleted?.timestamp || running?.startTime,
-                enabled: !running,
-                progress: running?.progress
+            buttons[action] = {
+                id: action,
+                label: action.charAt(0).toUpperCase() + action.slice(1),
+                icon: this._getActionIcon(action),
+                status: runningCommand ? 'running' : 
+                       recentCommand?.status === 'success' ? 'success' :
+                       recentCommand?.status === 'error' ? 'error' : 'idle',
+                lastRun: recentCommand?.endTime,
+                enabled: !runningCommand,
+                progress: runningCommand?.progress
             };
         }
 
         return buttons;
     }
 
-    // Private methods
-    private generateCommandId(command: string, project?: string): string {
-        const timestamp = Date.now();
-        const suffix = project ? `-${project}` : '';
-        return `${command}${suffix}-${timestamp}`;
+    private _getActionIcon(action: string): string {
+        switch (action) {
+            case 'aiDebug': return '$(debug-alt)';
+            case 'nxTest': return '$(beaker)';
+            case 'gitDiff': return '$(git-compare)';
+            case 'prepareToPush': return '$(cloud-upload)';
+            default: return '$(play)';
+        }
     }
 
-    private emitStatusChange(commandId: string, type: StatusEvent['type'], data: any): void {
-        const event: StatusEvent = {
-            type,
-            commandId,
-            timestamp: new Date(),
-            data
+    public updateStatus(status: Partial<StatusInfo>): void {
+        this._currentStatus = {
+            ...this._currentStatus,
+            ...status,
+            lastUpdated: new Date()
         };
-        
-        this.emit('status_change', event);
-        this.emit(type, event); // Also emit specific event type
+        this._updateStatusBar();
     }
 
-    private addToHistory(status: CommandStatus): void {
-        const historyEntry: StatusHistory = {
-            commandId: status.id,
-            command: status.command,
-            project: status.project,
-            success: status.status === 'success',
-            duration: status.duration || 0,
-            timestamp: status.endTime || new Date(),
-            errorSummary: status.error ? status.error.substring(0, 100) + '...' : undefined,
-            filesGenerated: status.outputFiles.length
-        };
-
-        this.history.push(historyEntry);
-        
-        // Trim history if it gets too large
-        if (this.history.length > this.maxHistorySize) {
-            this.history = this.history.slice(-this.maxHistorySize);
-        }
-        
-        this.saveHistory();
-        this.emit('history_updated', historyEntry);
+    public setRunning(action: string, message?: string): void {
+        this.updateStatus({
+            isRunning: true,
+            currentAction: action,
+            message,
+            progress: 0
+        });
     }
 
-    private cleanupCommand(commandId: string): void {
-        const status = this.statusMap.get(commandId);
-        if (status && ['success', 'error', 'cancelled'].includes(status.status)) {
-            this.statusMap.delete(commandId);
-            this.updateStatusBar();
-        }
+    public setProgress(progress: number, message?: string): void {
+        this.updateStatus({
+            progress,
+            message
+        });
     }
 
-    private updateStatusBar(): void {
-        const running = this.getRunningCommands();
-        
-        if (running.length === 0) {
-            this.statusBarItem.text = '$(debug-alt) AI Debug';
-            this.statusBarItem.tooltip = 'AI Debug Utilities - Ready';
-        } else if (running.length === 1) {
-            const cmd = running[0];
-            this.statusBarItem.text = `$(loading~spin) ${cmd.command} ${cmd.progress}%`;
-            this.statusBarItem.tooltip = `Running: ${cmd.message}`;
-        } else {
-            this.statusBarItem.text = `$(loading~spin) ${running.length} commands`;
-            this.statusBarItem.tooltip = `Running ${running.length} commands`;
-        }
-        
-        this.statusBarItem.show();
-    }
+    public setComplete(message?: string): void {
+        this.updateStatus({
+            isRunning: false,
+            currentAction: undefined,
+            progress: 100,
+            message
+        });
 
-    private showCompletionNotification(status: CommandStatus): void {
-        const config = vscode.workspace.getConfiguration('aiDebugUtilities');
-        if (!config.get('showNotifications', true)) {
-            return;
-        }
-
-        const duration = status.duration ? Math.round(status.duration / 1000) : 0;
-        const message = `${status.command} ${status.status} in ${duration}s`;
-        
-        if (status.status === 'success') {
-            vscode.window.showInformationMessage(message, 'View Output', 'Open Files')
-                .then(selection => {
-                    if (selection === 'View Output') {
-                        this.emit('show_output', status.id);
-                    } else if (selection === 'Open Files') {
-                        this.emit('open_files', status.outputFiles);
-                    }
+        // Clear the message after 3 seconds
+        setTimeout(() => {
+            if (!this._currentStatus.isRunning) {
+                this.updateStatus({
+                    message: undefined,
+                    progress: undefined
                 });
-        } else {
-            vscode.window.showErrorMessage(message, 'View Details')
-                .then(selection => {
-                    if (selection === 'View Details') {
-                        this.emit('show_error', status.id);
-                    }
+            }
+        }, 3000);
+    }
+
+    public setError(error: string): void {
+        this.updateStatus({
+            isRunning: false,
+            currentAction: undefined,
+            message: `Error: ${error}`,
+            progress: undefined
+        });
+
+        // Clear the error after 5 seconds
+        setTimeout(() => {
+            if (!this._currentStatus.isRunning) {
+                this.updateStatus({
+                    message: undefined
                 });
+            }
+        }, 5000);
+    }
+
+    public setProjects(projects: NxProject[]): void {
+        this._projects = projects;
+        this._updateStatusBar();
+    }
+
+    public getProjects(): NxProject[] {
+        return this._projects;
+    }
+
+    public getCurrentStatus(): StatusInfo {
+        return { ...this._currentStatus };
+    }
+
+    private _updateStatusBar(): void {
+        let text = '$(debug-alt) AI Debug';
+        let tooltip = 'AI Debug Utilities';
+
+        if (this._currentStatus.isRunning) {
+            text = `$(loading~spin) ${this._currentStatus.currentAction || 'Running'}`;
+            tooltip = this._currentStatus.message || 'Command running...';
+            
+            if (this._currentStatus.progress !== undefined) {
+                text += ` (${this._currentStatus.progress}%)`;
+            }
+        } else if (this._currentStatus.message) {
+            text = `$(info) ${this._currentStatus.message}`;
+            tooltip = this._currentStatus.message;
         }
-    }
 
-    private loadHistory(): void {
-        const saved = this.context.globalState.get<StatusHistory[]>(this.persistenceKey);
-        if (saved) {
-            this.history = saved.map(entry => ({
-                ...entry,
-                timestamp: new Date(entry.timestamp)
-            }));
+        if (this._projects.length > 0) {
+            text += ` (${this._projects.length} projects)`;
         }
+
+        this._statusBarItem.text = text;
+        this._statusBarItem.tooltip = tooltip;
+        this._statusBarItem.command = 'aiDebugUtilities.openPanel';
     }
 
-    private saveHistory(): void {
-        this.context.globalState.update(this.persistenceKey, this.history);
-    }
-
-    private getCommandLabel(command: string): string {
-        const labels = {
-            aiDebug: 'AI Debug Analysis',
-            nxTest: 'Run Tests',
-            gitDiff: 'Analyze Changes',
-            prepareToPush: 'Prepare to Push'
-        };
-        return labels[command as keyof typeof labels] || command;
-    }
-
-    private getCommandIcon(command: string): string {
-        const icons = {
-            aiDebug: '🤖',
-            nxTest: '🧪',
-            gitDiff: '📋',
-            prepareToPush: '🚀'
-        };
-        return icons[command as keyof typeof icons] || '⚙️';
-    }
-
-    /**
-     * Dispose of resources
-     */
-    dispose(): void {
-        this.statusBarItem.dispose();
+    public dispose(): void {
+        this._statusBarItem.dispose();
         this.removeAllListeners();
     }
 }

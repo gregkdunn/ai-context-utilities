@@ -13,7 +13,7 @@ import {
   DashboardExport,
   WidgetType,
   DashboardPermission
-} from '../../types';
+} from '../../../types';
 
 /**
  * Interactive Dashboard Engine for Phase 4.4
@@ -128,7 +128,7 @@ export class InteractiveDashboardEngine extends EventEmitter {
     }
 
     // Clean up widgets
-    dashboard.widgets.forEach(widget => {
+    dashboard.widgets.forEach((widget: any) => {
       this.widgets.delete(widget.id);
       this.widgetDataCache.delete(widget.id);
     });
@@ -266,7 +266,7 @@ export class InteractiveDashboardEngine extends EventEmitter {
     dashboard.updatedAt = new Date();
 
     // Refresh all widgets with new filters
-    dashboard.widgets.forEach(widget => {
+    dashboard.widgets.forEach((widget: any) => {
       this.refreshWidgetData(widget.id);
     });
 
@@ -313,13 +313,13 @@ export class InteractiveDashboardEngine extends EventEmitter {
       name: newName,
       description: `Clone of ${original.name}`,
       layout: { ...original.layout },
-      widgets: original.widgets.map(w => ({ ...w })),
+      widgets: original.widgets.map((w: any) => ({ ...w })),
       filters: [...original.filters],
       theme: original.theme,
       refreshInterval: original.refreshInterval,
       isRealTime: original.isRealTime,
       createdBy: userId || 'system',
-      tags: [...original.tags, 'clone']
+      tags: [...(original.tags || []), 'clone']
     };
 
     return this.createDashboard(cloneConfig);
@@ -373,7 +373,7 @@ export class InteractiveDashboardEngine extends EventEmitter {
       views: this.getDashboardViews(dashboardId),
       interactions: this.getDashboardInteractions(dashboardId),
       performance: this.getDashboardPerformance(dashboardId),
-      widgets: dashboard.widgets.map(w => ({
+      widgets: dashboard.widgets.map((w: any) => ({
         id: w.id,
         type: w.type,
         interactions: this.getWidgetInteractions(w.id),
@@ -475,7 +475,7 @@ export class InteractiveDashboardEngine extends EventEmitter {
 
   private setupRealTimeUpdates(dashboardId: string): void {
     const dashboard = this.dashboards.get(dashboardId);
-    if (!dashboard) return;
+    if (!dashboard) {return;}
 
     // Stop existing interval if any
     this.stopRealTimeUpdates(dashboardId);
@@ -498,7 +498,7 @@ export class InteractiveDashboardEngine extends EventEmitter {
 
   private async updateDashboardData(dashboardId: string): Promise<void> {
     const dashboard = this.dashboards.get(dashboardId);
-    if (!dashboard) return;
+    if (!dashboard) {return;}
 
     const updates: RealTimeUpdate[] = [];
 
@@ -641,8 +641,8 @@ export class InteractiveDashboardEngine extends EventEmitter {
       return true;
     }
     
-    const permissions = dashboard.permissions[action];
-    return permissions.includes('*') || permissions.includes(userId);
+    const permissions = dashboard.permissions?.[action];
+    return permissions ? (permissions.includes('*') || permissions.includes(userId)) : false;
   }
 
   private async prepareExportData(dashboard: Dashboard, format: string): Promise<any> {
@@ -650,7 +650,7 @@ export class InteractiveDashboardEngine extends EventEmitter {
       case 'json':
         return {
           dashboard,
-          widgets: dashboard.widgets.map(w => ({
+          widgets: dashboard.widgets.map((w: any) => ({
             ...w,
             data: this.widgetDataCache.get(w.id)
           }))

@@ -5,6 +5,18 @@ export interface NxProject {
     root: string;
     projectType: 'application' | 'library';
     targets?: Record<string, any>;
+    // Add missing ProjectInfo properties for compatibility
+    type: 'nx' | 'angular' | 'npm';
+    packageJsonPath: string;
+}
+
+export interface ProjectInfo {
+    name: string;
+    root: string;
+    projectType: 'application' | 'library';
+    type: 'nx' | 'angular' | 'npm';
+    packageJsonPath: string;
+    targets?: Record<string, any>;
 }
 
 export interface CommandOptions {
@@ -15,6 +27,14 @@ export interface CommandOptions {
     focus?: 'tests' | 'types' | 'performance';
     useExpected?: boolean;
     fullOutput?: boolean;
+    // Shell runner specific options
+    cwd?: string;
+    env?: Record<string, string>;
+    timeout?: number;
+    shell?: boolean;
+    // AI Debug specific options
+    aiContext?: boolean;
+    smartDiff?: boolean;
 }
 
 export interface CommandResult {
@@ -69,13 +89,13 @@ export interface WebviewState {
         timestamp: Date;
         success: boolean;
     };
-    // New streaming state
+    // Streaming state (required)
     isStreaming: boolean;
     currentOutput: string;
     currentAction?: string;
 }
 
-export type OutputType = 'ai-debug-context' | 'jest-output' | 'diff' | 'pr-description';
+export type OutputType = 'ai-debug-context' | 'jest-output' | 'diff' | 'pr-description' | 'pr-description-prompt';
 
 export interface DebugContext {
     testStatus: 'passing' | 'failing' | 'unknown';
@@ -216,6 +236,9 @@ export interface Insight {
     context: InsightContext;
 }
 
+export type InsightData = Insight;
+export type InsightPriority = 'low' | 'medium' | 'high' | 'critical';
+
 export interface ActionSuggestion {
     id: string;
     title: string;
@@ -342,12 +365,17 @@ export interface QueryResult {
 }
 
 export interface PredictionResult {
-    type: 'test-failure' | 'build-failure' | 'performance-degradation' | 'security-issue';
-    probability: number; // 0-1
-    description: string;
-    affectedFiles: string[];
-    prevention: ActionSuggestion[];
-    timeline: string; // e.g., "within 24 hours"
+  id?: string;
+  type: 'test-failure' | 'build-failure' | 'performance-degradation' | 'security-issue';
+  probability: number; // 0-1
+  description: string;
+  affectedFiles: string[];
+  prevention: ActionSuggestion[];
+  timeline: string; // e.g., "within 24 hours"
+  confidence?: number; // 0-1
+  prediction?: string;
+  impact?: 'low' | 'medium' | 'high';
+  recommendation?: string;
 }
 
 export interface WorkflowOptimization {
@@ -696,16 +724,47 @@ export interface PredictiveConfig {
   confidenceThreshold?: number;
 }
 
-export interface PredictionModel {
+// Add missing ModelMetrics interface
+export interface ModelMetrics {
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1Score: number;
+  lastTrained: Date;
+  trainingDataSize: number;
+}
+
+// Add missing AnomalyDetection interface
+export interface AnomalyDetection {
+  id: string;
+  type: string;
+  severity: 'low' | 'medium' | 'high';
+  detectedAt: Date;
+  event: AnalyticsEvent;
+  description: string;
+  confidence: number;
+  affectedMetrics: string[];
+  recommendation: string;
+}
+
+// Update PredictiveModel to match usage
+export interface PredictiveModel {
   id: string;
   name: string;
   type: 'classification' | 'regression' | 'time_series' | 'unsupervised';
-  algorithm: string;
+  algorithm?: string;
   accuracy: number;
+  precision: number;
+  recall: number;
+  f1Score: number;
   lastTrained: Date;
-  features: string[];
+  trainingDataSize: number;
+  features?: string[];
   isActive: boolean;
 }
+
+// Alias for backward compatibility
+export type PredictionModel = PredictiveModel;
 
 export interface ModelTrainingData {
   id: string;
@@ -736,6 +795,7 @@ export interface ForecastResult {
   trend: 'increasing' | 'decreasing' | 'stable';
   confidence: number;
   timeHorizon: number;
+  horizon?: number; // Add missing horizon property
   generatedAt: Date;
   dataPoints: number;
 }
@@ -746,7 +806,7 @@ export interface RiskAssessment {
   criticalFactors: string[];
   recommendations: string[];
   predictions: PredictionResult[];
-  anomalies: AnomalyDetectionResult[];
+  anomalies: AnomalyDetection[]; // Use the correct type
   assessedAt: Date;
 }
 
@@ -852,6 +912,31 @@ export interface MetricFilter {
 }
 
 export type AggregationPeriod = '1m' | '5m' | '1h' | '1d';
+
+// Status tracking types
+export interface CommandStatus {
+    id: string;
+    command: string;
+    action: string;
+    status: 'idle' | 'running' | 'success' | 'error';
+    progress: number;
+    message: string;
+    startTime: Date;
+    endTime?: Date;
+    project: string;
+    output: string;
+    outputFiles: string[];
+    metadata: Record<string, any>;
+}
+
+export interface CommandStats {
+    total: number;
+    successful: number;
+    failed: number;
+    averageDuration: number;
+    lastRun?: Date;
+    recentCommands: CommandStatus[];
+}
 
 // Export plugin types
 export * from './plugin';

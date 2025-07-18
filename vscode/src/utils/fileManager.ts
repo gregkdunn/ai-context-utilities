@@ -1,333 +1,339 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as vscode from 'vscode';
 import { OutputType } from '../types';
 
+export interface FileOperationResult {
+  success: boolean;
+  filePath?: string;
+  error?: string;
+  content?: string;
+}
+
+export interface FileStats {
+  size: number;
+  created: Date;
+  modified: Date;
+  accessed: Date;
+}
+
 export class FileManager {
-    private workspaceRoot: string;
-    private outputDirectory: string;
+  private outputChannel: vscode.OutputChannel;
+  private workspacePath: string;
+  private outputDirectory: string;
+  private watchers: fs.FSWatcher[] = [];
 
-    constructor() {
-        this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
-        this.outputDirectory = ''; // Initialize with empty string
-        this.updateOutputDirectory();
-        
-        // Listen for configuration changes
-        vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('aiDebugUtilities.outputDirectory')) {
-                this.updateOutputDirectory();
-            }
-        });
+  constructor(outputChannel: vscode.OutputChannel) {
+    this.outputChannel = outputChannel;
+    this.workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    this.outputDirectory = path.join(this.workspacePath, '.ai-debug-output');
+    this.ensureOutputDirectory();
+  }
+
+  // Output directory management
+  public getOutputDirectory(): string {
+    return this.outputDirectory;
+  }
+
+  public ensureOutputDirectory(): void {
+    if (!fs.existsSync(this.outputDirectory)) {
+      fs.mkdirSync(this.outputDirectory, { recursive: true });
     }
+  }
 
-    /**
-     * Update output directory from configuration
-     */
-    private updateOutputDirectory() {
-        const config = vscode.workspace.getConfiguration('aiDebugUtilities');
-        const configDir = config.get<string>('outputDirectory') || '.github/instructions/ai_utilities_context';
-        this.outputDirectory = path.join(this.workspaceRoot, configDir);
+  // Initialize output files
+  public async initializeOutputFiles(types: string[]): Promise<Record<string, string>> {
+    const outputFiles: Record<string, string> = {};
+    
+    for (const type of types) {
+      const filePath = this.getOutputFilePath(type);
+      outputFiles[type] = filePath;
+      
+      // Create empty file if it doesn't exist
+      if (!fs.existsSync(filePath)) {
+        await fs.promises.writeFile(filePath, '', 'utf8');
+      }
     }
+    
+    return outputFiles;
+  }
 
-    /**
-     * Get the output directory path
-     */
-    getOutputDirectory(): string {
-        return this.outputDirectory;
+  // Get output file path
+  public getOutputFilePath(fileName: string): string {
+    if (!fileName.endsWith('.txt')) {
+      fileName += '.txt';
     }
+    return path.join(this.outputDirectory, fileName);
+  }
 
-    /**
-     * Ensure output directory exists
-     */
-    ensureOutputDirectory(): void {
-        if (!fs.existsSync(this.outputDirectory)) {
-            fs.mkdirSync(this.outputDirectory, { recursive: true });
-        }
+  // Save output to file
+  public async saveOutput(type: OutputType, content: string): Promise<string> {
+    try {
+      const filePath = this.getOutputFilePath(type);
+      await fs.promises.writeFile(filePath, content, 'utf8');
+      this.outputChannel.appendLine(`Saved ${type} output to: ${filePath}`);
+      return filePath;
+    } catch (error) {
+      const message = `Failed to save ${type} output: ${error}`;
+      this.outputChannel.appendLine(message);
+      throw new Error(message);
     }
+  }
 
-    /**
-     * Save output content to a file
-     */
-    async saveOutput(type: OutputType, content: string): Promise<string> {
-        this.ensureOutputDirectory();
-        
-        const fileName = this.getFileName(type);
-        const filePath = path.join(this.outputDirectory, fileName);
-        
-        try {
-            fs.writeFileSync(filePath, content, 'utf8');
-            return filePath;
-        } catch (error) {
-            throw new Error(`Failed to save ${type} output: ${error}`);
-        }
+  // Get file content
+  public async getFileContent(type: OutputType): Promise<string> {
+    try {
+      const filePath = this.getOutputFilePath(type);
+      
+      if (!fs.existsSync(filePath)) {
+        return '';
+      }
+      
+      return await fs.promises.readFile(filePath, 'utf8');
+    } catch (error) {
+      this.outputChannel.appendLine(`Error reading ${type} file: ${error}`);
+      return '';
     }
+  }
 
-    /**
-     * Read content from an output file
-     */
-    async getFileContent(type: OutputType): Promise<string | null> {
-        const fileName = this.getFileName(type);
-        const filePath = path.join(this.outputDirectory, fileName);
-        
-        try {
-            if (fs.existsSync(filePath)) {
-                return fs.readFileSync(filePath, 'utf8');
-            }
-        } catch (error) {
-            console.error(`Failed to read ${type} file:`, error);
-        }
-        
+  // Get file path
+  public getFilePath(type: OutputType): string {
+    return this.getOutputFilePath(type);
+  }
+
+  // Get file modification time
+  public getFileModTime(type: OutputType): Date | null {
+    try {
+      const filePath = this.getOutputFilePath(type);
+      if (!fs.existsSync(filePath)) {
         return null;
+      }
+      
+      const stats = fs.statSync(filePath);
+      return stats.mtime;
+    } catch (error) {
+      this.outputChannel.appendLine(`Error getting mod time for ${type}: ${error}`);
+      return null;
     }
+  }
 
-    /**
-     * Open a file in VSCode editor
-     */
-    async openFile(filePath: string): Promise<void> {
-        try {
-            const uri = vscode.Uri.file(filePath);
-            const document = await vscode.workspace.openTextDocument(uri);
-            await vscode.window.showTextDocument(document);
-        } catch (error) {
-            vscode.window.showErrorMessage(`Failed to open file: ${error}`);
+  // Get file stats
+  public async getFileStats(filePath: string): Promise<FileStats | null> {
+    try {
+      const stats = await fs.promises.stat(filePath);
+      return {
+        size: stats.size,
+        created: stats.birthtime,
+        modified: stats.mtime,
+        accessed: stats.atime
+      };
+    } catch (error) {
+      this.outputChannel.appendLine(`Error getting file stats for ${filePath}: ${error}`);
+      return null;
+    }
+  }
+
+  // Get all output files
+  public getAllOutputFiles(): Record<string, string> {
+    const files: Record<string, string> = {};
+    
+    try {
+      const outputFiles = fs.readdirSync(this.outputDirectory);
+      
+      for (const file of outputFiles) {
+        if (file.endsWith('.txt')) {
+          const name = file.replace('.txt', '');
+          files[name] = path.join(this.outputDirectory, file);
         }
+      }
+    } catch (error) {
+      this.outputChannel.appendLine(`Error reading output directory: ${error}`);
     }
+    
+    return files;
+  }
 
-    /**
-     * Get file path for output type
-     */
-    getFilePath(type: OutputType): string {
-        const fileName = this.getFileName(type);
-        return path.join(this.outputDirectory, fileName);
-    }
-
-    /**
-     * Check if output file exists
-     */
-    fileExists(type: OutputType): boolean {
-        const filePath = this.getFilePath(type);
-        return fs.existsSync(filePath);
-    }
-
-    /**
-     * Get file modification time
-     */
-    getFileModTime(type: OutputType): Date | null {
-        const filePath = this.getFilePath(type);
-        try {
-            if (fs.existsSync(filePath)) {
-                const stats = fs.statSync(filePath);
-                return stats.mtime;
-            }
-        } catch (error) {
-            console.error(`Failed to get file stats for ${type}:`, error);
-        }
-        return null;
-    }
-
-    /**
-     * Get all output files with their metadata
-     */
-    getAllOutputFiles(): Array<{ type: OutputType; path: string; exists: boolean; modified?: Date }> {
-        const types: OutputType[] = ['ai-debug-context', 'jest-output', 'diff', 'pr-description'];
+  // Cleanup old files
+  public async cleanupOldFiles(maxAge: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
+    try {
+      const files = fs.readdirSync(this.outputDirectory);
+      const now = Date.now();
+      
+      for (const file of files) {
+        const filePath = path.join(this.outputDirectory, file);
+        const stats = fs.statSync(filePath);
         
-        return types.map(type => ({
-            type,
-            path: this.getFilePath(type),
-            exists: this.fileExists(type),
-            modified: this.getFileModTime(type) || undefined
-        }));
-    }
-
-    /**
-     * Clean up old output files
-     */
-    async cleanupOldFiles(maxAge: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
-        const now = Date.now();
-        const files = this.getAllOutputFiles();
-        
-        for (const file of files) {
-            if (file.exists && file.modified) {
-                const age = now - file.modified.getTime();
-                if (age > maxAge) {
-                    try {
-                        fs.unlinkSync(file.path);
-                        console.log(`Cleaned up old file: ${file.path}`);
-                    } catch (error) {
-                        console.error(`Failed to cleanup file ${file.path}:`, error);
-                    }
-                }
-            }
+        if (now - stats.mtime.getTime() > maxAge) {
+          await fs.promises.unlink(filePath);
+          this.outputChannel.appendLine(`Cleaned up old file: ${file}`);
         }
+      }
+    } catch (error) {
+      this.outputChannel.appendLine(`Error cleaning up old files: ${error}`);
     }
+  }
 
-    /**
-     * Copy file content to clipboard
-     */
-    async copyToClipboard(type: OutputType): Promise<void> {
-        const content = await this.getFileContent(type);
-        if (content) {
-            await vscode.env.clipboard.writeText(content);
-            vscode.window.showInformationMessage(`${type} content copied to clipboard`);
-        } else {
-            vscode.window.showWarningMessage(`No ${type} file found`);
+  // Copy to clipboard
+  public async copyToClipboard(type: OutputType): Promise<void> {
+    try {
+      const content = await this.getFileContent(type);
+      await vscode.env.clipboard.writeText(content);
+      vscode.window.showInformationMessage(`${type} content copied to clipboard`);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to copy ${type} to clipboard: ${error}`);
+    }
+  }
+
+  // Open file in editor
+  public async openFile(filePath: string): Promise<void> {
+    try {
+      const document = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(document);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to open file: ${error}`);
+    }
+  }
+
+  // Watch files for changes
+  public watchFiles(callback: (filePath: string, eventType: string) => void): vscode.Disposable {
+    const watcher = fs.watch(this.outputDirectory, (eventType, filename) => {
+      if (filename) {
+        const filePath = path.join(this.outputDirectory, filename);
+        callback(filePath, eventType);
+      }
+    });
+    
+    this.watchers.push(watcher);
+    
+    return {
+      dispose: () => {
+        const index = this.watchers.indexOf(watcher);
+        if (index > -1) {
+          this.watchers.splice(index, 1);
         }
-    }
+        watcher.close();
+      }
+    };
+  }
 
-    /**
-     * Watch for file changes
-     */
-    watchFiles(callback: (type: OutputType, path: string) => void): vscode.Disposable {
-        const pattern = new vscode.RelativePattern(this.outputDirectory, '*.txt');
-        const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-        
-        const onFileChange = (uri: vscode.Uri) => {
-            const fileName = path.basename(uri.fsPath);
-            const type = this.getTypeFromFileName(fileName);
-            if (type) {
-                callback(type, uri.fsPath);
-            }
-        };
+  // Basic file operations
+  public async readFile(filePath: string): Promise<FileOperationResult> {
+    try {
+      const fullPath = path.resolve(this.workspacePath, filePath);
+      const content = await fs.promises.readFile(fullPath, 'utf8');
+      return {
+        success: true,
+        filePath: fullPath,
+        content
+      };
+    } catch (error) {
+      return {
+        success: false,
+        filePath,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
 
-        watcher.onDidChange(onFileChange);
-        watcher.onDidCreate(onFileChange);
-        
-        return watcher;
+  public async writeFile(filePath: string, content: string): Promise<FileOperationResult> {
+    try {
+      const fullPath = path.resolve(this.workspacePath, filePath);
+      await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
+      await fs.promises.writeFile(fullPath, content, 'utf8');
+      
+      this.outputChannel.appendLine(`File written: ${fullPath}`);
+      
+      return {
+        success: true,
+        filePath: fullPath
+      };
+    } catch (error) {
+      return {
+        success: false,
+        filePath,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
+  }
 
-    /**
-     * Initialize output files and return file paths
-     */
-    async initializeOutputFiles(types: string[]): Promise<Record<string, string>> {
-        this.ensureOutputDirectory();
-        const filePaths: Record<string, string> = {};
-        
-        for (const type of types) {
-            const fileName = this.getFileNameFromType(type);
-            filePaths[type] = path.join(this.outputDirectory, fileName);
-        }
-        
-        return filePaths;
-    }
+  public async ensureDirectoryExists(dirPath: string): Promise<void> {
+    const fullPath = path.resolve(this.workspacePath, dirPath);
+    await fs.promises.mkdir(fullPath, { recursive: true });
+  }
 
-    /**
-     * Get output file path by filename
-     */
-    async getOutputFilePath(fileName: string): Promise<string> {
-        this.ensureOutputDirectory();
-        return path.join(this.outputDirectory, fileName);
+  public async fileExists(filePath: string): Promise<boolean> {
+    try {
+      const fullPath = path.resolve(this.workspacePath, filePath);
+      await fs.promises.access(fullPath);
+      return true;
+    } catch {
+      return false;
     }
+  }
 
-    /**
-     * Ensure a directory exists
-     */
-    async ensureDirectoryExists(dirPath: string): Promise<void> {
-        if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
-        }
+  public async deleteFile(filePath: string): Promise<FileOperationResult> {
+    try {
+      const fullPath = path.resolve(this.workspacePath, filePath);
+      await fs.promises.unlink(fullPath);
+      return {
+        success: true,
+        filePath: fullPath
+      };
+    } catch (error) {
+      return {
+        success: false,
+        filePath,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
+  }
 
-    /**
-     * Delete a file if it exists
-     */
-    async deleteFile(filePath: string): Promise<void> {
-        try {
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        } catch (error) {
-            // Ignore errors when deleting files
-        }
+  public async copyFile(sourcePath: string, destPath: string): Promise<FileOperationResult> {
+    try {
+      const fullSourcePath = path.resolve(this.workspacePath, sourcePath);
+      const fullDestPath = path.resolve(this.workspacePath, destPath);
+      
+      await fs.promises.mkdir(path.dirname(fullDestPath), { recursive: true });
+      await fs.promises.copyFile(fullSourcePath, fullDestPath);
+      
+      return {
+        success: true,
+        filePath: fullDestPath
+      };
+    } catch (error) {
+      return {
+        success: false,
+        filePath: destPath,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
+  }
 
-    /**
-     * Write content to a file
-     */
-    async writeFile(filePath: string, content: string): Promise<void> {
-        const dir = path.dirname(filePath);
-        await this.ensureDirectoryExists(dir);
-        fs.writeFileSync(filePath, content, 'utf8');
+  public async listFiles(dirPath: string): Promise<string[]> {
+    try {
+      const fullPath = path.resolve(this.workspacePath, dirPath);
+      const files = await fs.promises.readdir(fullPath);
+      return files.map(file => path.join(dirPath, file));
+    } catch (error) {
+      this.outputChannel.appendLine(`Error listing files in ${dirPath}: ${error}`);
+      return [];
     }
+  }
 
-    /**
-     * Read content from a file
-     */
-    async readFile(filePath: string): Promise<string> {
-        return fs.readFileSync(filePath, 'utf8');
-    }
+  public getWorkspacePath(): string {
+    return this.workspacePath;
+  }
 
-    /**
-     * Get file statistics
-     */
-    async getFileStats(filePath: string): Promise<{ size: string; lines: number }> {
-        try {
-            const stats = fs.statSync(filePath);
-            const content = fs.readFileSync(filePath, 'utf8');
-            const lines = content.split('\n').length;
-            const sizeKB = Math.round(stats.size / 1024);
-            
-            return {
-                size: `${sizeKB}KB`,
-                lines
-            };
-        } catch (error) {
-            return {
-                size: '0KB',
-                lines: 0
-            };
-        }
-    }
+  public getRelativePath(absolutePath: string): string {
+    return path.relative(this.workspacePath, absolutePath);
+  }
 
-    /**
-     * Get file name from type string
-     */
-    private getFileNameFromType(type: string): string {
-        switch (type) {
-            case 'ai-debug-context':
-                return 'ai-debug-context.txt';
-            case 'jest-output':
-                return 'jest-output.txt';
-            case 'diff':
-                return 'diff.txt';
-            case 'pr-description-prompt':
-                return 'pr-description-prompt.txt';
-            default:
-                return `${type}.txt`;
-        }
-    }
-    /**
-     * Get file name for output type
-     */
-    private getFileName(type: OutputType): string {
-        switch (type) {
-            case 'ai-debug-context':
-                return 'ai-debug-context.txt';
-            case 'jest-output':
-                return 'jest-output.txt';
-            case 'diff':
-                return 'diff.txt';
-            case 'pr-description':
-                return 'pr-description-prompt.txt';
-            default:
-                throw new Error(`Unknown output type: ${type}`);
-        }
-    }
+  public getAbsolutePath(relativePath: string): string {
+    return path.resolve(this.workspacePath, relativePath);
+  }
 
-    /**
-     * Get output type from file name
-     */
-    private getTypeFromFileName(fileName: string): OutputType | null {
-        switch (fileName) {
-            case 'ai-debug-context.txt':
-                return 'ai-debug-context';
-            case 'jest-output.txt':
-                return 'jest-output';
-            case 'diff.txt':
-                return 'diff';
-            case 'pr-description-prompt.txt':
-                return 'pr-description';
-            default:
-                return null;
-        }
-    }
+  public dispose(): void {
+    this.watchers.forEach(watcher => watcher.close());
+    this.watchers = [];
+  }
 }

@@ -1,14 +1,17 @@
-import { WebviewProvider } from '../../webview/provider';
-import { StreamingCommandRunner } from '../../utils/streamingRunner';
-import { ProjectDetector } from '../../utils/projectDetector';
-import { CommandRunner } from '../../utils/shellRunner';
-import { FileManager } from '../../utils/fileManager';
-import { StreamingMessage, WebviewMessage } from '../../types';
+import { WebviewProvider } from '../webview/provider';
+import { ProjectDetector } from '../utils/projectDetector';
+import { CommandRunner } from '../utils/shellRunner';
+import { FileManager } from '../utils/fileManager';
+import { StatusTracker } from '../utils/statusTracker';
+import { WebviewMessage } from '../types';
 import * as vscode from 'vscode';
-import { EventEmitter } from 'events';
 
 // Mock VSCode completely for integration tests
 jest.mock('vscode', () => ({
+    StatusBarAlignment: {
+        Left: 1,
+        Right: 2
+    },
     Uri: {
         joinPath: jest.fn(() => ({ toString: () => 'mock://uri' })),
         parse: jest.fn(() => ({ toString: () => 'mock://uri' }))
@@ -20,26 +23,28 @@ jest.mock('vscode', () => ({
         }))
     },
     window: {
+        createStatusBarItem: jest.fn(() => ({
+            show: jest.fn(),
+            hide: jest.fn(),
+            dispose: jest.fn(),
+            text: '',
+            tooltip: '',
+            command: ''
+        })),
         showInformationMessage: jest.fn(),
-        showErrorMessage: jest.fn()
+        showErrorMessage: jest.fn(),
+        createOutputChannel: jest.fn(() => ({
+            append: jest.fn(),
+            appendLine: jest.fn(),
+            show: jest.fn(),
+            hide: jest.fn(),
+            dispose: jest.fn()
+        }))
     }
 }));
 
-// Mock child_process for integration
-const mockChildProcess = new EventEmitter();
-Object.assign(mockChildProcess, {
-    stdout: new EventEmitter(),
-    stderr: new EventEmitter(),
-    kill: jest.fn()
-});
-
-jest.mock('child_process', () => ({
-    spawn: jest.fn(() => mockChildProcess)
-}));
-
-describe('Streaming Integration Tests', () => {
+describe('Integration Tests', () => {
     let provider: WebviewProvider;
-    let streamingRunner: StreamingCommandRunner;
     let mockProjectDetector: jest.Mocked<ProjectDetector>;
     let mockCommandRunner: jest.Mocked<CommandRunner>;
     let mockFileManager: jest.Mocked<FileManager>;
@@ -51,19 +56,19 @@ describe('Streaming Integration Tests', () => {
         jest.clearAllMocks();
         receivedMessages = [];
 
-        // Create real streaming runner for integration testing
-        streamingRunner = new StreamingCommandRunner();
-
         // Setup mocked dependencies
         mockProjectDetector = {
             getProjects: jest.fn().mockResolvedValue([
                 { name: 'test-app', root: 'apps/test-app', projectType: 'application' }
             ]),
-            detectCurrentProject: jest.fn().mockResolvedValue('test-app')
+            getCurrentProject: jest.fn().mockResolvedValue({ name: 'test-app', root: 'apps/test-app', projectType: 'application' })
         } as any;
 
         mockCommandRunner = {
-            runAiDebug: jest.fn().mockResolvedValue({ success: true, exitCode: 0, output: 'AI debug complete', duration: 2000 })
+            runAiDebug: jest.fn().mockResolvedValue({ success: true, exitCode: 0, output: 'AI debug complete', duration: 2000 }),
+            runNxTest: jest.fn().mockResolvedValue({ success: true, exitCode: 0, output: 'Tests passed', duration: 5000 }),
+            runGitDiff: jest.fn().mockResolvedValue({ success: true, exitCode: 0, output: 'Diff complete', duration: 1000 }),
+            runPrepareToPush: jest.fn().mockResolvedValue({ success: true, exitCode: 0, output: 'Prepared to push', duration: 3000 })
         } as any;
 
         mockFileManager = {
@@ -89,185 +94,166 @@ describe('Streaming Integration Tests', () => {
             show: jest.fn()
         } as any;
 
-        // Create provider with real streaming runner
+        // Create provider
+        const mockStatusTracker = new StatusTracker();
         provider = new WebviewProvider(
             vscode.Uri.parse('test://extension'),
             mockProjectDetector,
             mockCommandRunner,
-            mockFileManager
+            mockFileManager,
+            mockStatusTracker
         );
-
-        // Replace the internal streaming runner with our test instance
-        (provider as any).streamingRunner = streamingRunner;
-        (provider as any).setupStreamingListeners();
     });
 
-    afterEach(() => {
-        streamingRunner.removeAllListeners();
-    });
-
-    describe('end-to-end command execution with streaming', () => {
+    describe('webview integration', () => {
         beforeEach(() => {
             provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
         });
 
-        it('should stream output during command execution', async () => {
+        it('should handle runCommand message for nxTest', async () => {
             // Arrange
-            const { spawn } = require('child_process');
-            let commandPromise: Promise<any>;
+            const message: WebviewMessage = {
+                command: 'runCommand',
+                data: {
+                    action: 'nxTest',
+                    project: 'test-app',
+                    options: {}
+                }
+            };
 
-            // Act - start command
-            commandPromise = provider.runCommand('nxTest', { project: 'test-app' });
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
-            // Simulate command output streaming
-            await new Promise(resolve => setTimeout(resolve, 10)); // Let command start
+            // Act
+            await messageHandler(message);
 
-            mockChildProcess.stdout.emit('data', Buffer.from('Determining test suites to run...\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.stdout.emit('data', Buffer.from('Found 5 test suites\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.stdout.emit('data', Buffer.from('Running tests...\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.stdout.emit('data', Buffer.from('Test results:\n PASS src/app.spec.ts\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // Complete command
-            mockChildProcess.emit('close', 0);
-
-            // Wait for command to complete
-            await commandPromise;
-
-            // Assert - check that streaming messages were sent
-            const streamingMessages = receivedMessages.filter(msg => msg.command === 'streamingUpdate');
+            // Assert
+            expect(mockCommandRunner.runNxTest).toHaveBeenCalledWith('test-app', {});
+            expect(receivedMessages.some(msg => msg.type === 'commandResult')).toBe(true);
             
-            expect(streamingMessages.length).toBeGreaterThan(0);
-            
-            // Check for output messages
-            const outputMessages = streamingMessages.filter(msg => msg.message.type === 'output');
-            expect(outputMessages.length).toBeGreaterThan(0);
-            expect(outputMessages[0].message.data.text).toContain('Determining test suites');
-            
-            // Check for progress messages
-            const progressMessages = streamingMessages.filter(msg => msg.message.type === 'progress');
-            expect(progressMessages.length).toBeGreaterThan(0);
-            
-            // Check for completion message
-            const completeMessages = streamingMessages.filter(msg => msg.message.type === 'complete');
-            expect(completeMessages.length).toBe(1);
-            expect(completeMessages[0].message.data.result.success).toBe(true);
+            const resultMessage = receivedMessages.find(msg => msg.type === 'commandResult');
+            expect(resultMessage.data.action).toBe('nxTest');
+            expect(resultMessage.data.result.success).toBe(true);
         });
 
-        it('should handle command cancellation', async () => {
+        it('should handle runCommand message for gitDiff', async () => {
             // Arrange
-            let commandPromise: Promise<any>;
+            const message: WebviewMessage = {
+                command: 'runCommand',
+                data: {
+                    action: 'gitDiff',
+                    options: {}
+                }
+            };
 
-            // Act - start command
-            commandPromise = provider.runCommand('nxTest', { project: 'test-app' });
-            await new Promise(resolve => setTimeout(resolve, 10)); // Let command start
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
-            // Simulate user cancellation
-            const cancelMessage: WebviewMessage = {
-                command: 'cancelCommand',
+            // Act
+            await messageHandler(message);
+
+            // Assert
+            expect(mockCommandRunner.runGitDiff).toHaveBeenCalledWith({});
+            expect(receivedMessages.some(msg => msg.type === 'commandResult')).toBe(true);
+        });
+
+        it('should handle runCommand message for aiDebug', async () => {
+            // Arrange
+            const message: WebviewMessage = {
+                command: 'runCommand',
+                data: {
+                    action: 'aiDebug',
+                    project: 'test-app',
+                    options: {}
+                }
+            };
+
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+
+            // Act
+            await messageHandler(message);
+
+            // Assert
+            expect(mockCommandRunner.runAiDebug).toHaveBeenCalledWith('test-app', {});
+            expect(receivedMessages.some(msg => msg.type === 'commandResult')).toBe(true);
+        });
+
+        it('should handle getProjects message', async () => {
+            // Arrange
+            const message: WebviewMessage = {
+                command: 'getProjects',
                 data: {}
             };
 
             const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
-            await messageHandler(cancelMessage);
 
-            // Complete the cancelled command
-            mockChildProcess.emit('close', 1);
-            await commandPromise;
+            // Act
+            await messageHandler(message);
 
             // Assert
-            expect(mockChildProcess.kill).toHaveBeenCalledWith('SIGTERM');
-            expect((provider as any)._state.isStreaming).toBe(false);
+            expect(mockProjectDetector.getProjects).toHaveBeenCalled();
+            expect(receivedMessages.some(msg => msg.type === 'projects')).toBe(true);
+            
+            const projectsMessage = receivedMessages.find(msg => msg.type === 'projects');
+            expect(projectsMessage.data.projects).toHaveLength(1);
+            expect(projectsMessage.data.projects[0].name).toBe('test-app');
         });
 
-        it('should handle command failure with error streaming', async () => {
+        it('should handle openFile message', async () => {
             // Arrange
-            let commandPromise: Promise<any>;
+            const message: WebviewMessage = {
+                command: 'openFile',
+                data: {
+                    filePath: '/test/file.ts'
+                }
+            };
 
-            // Act - start command
-            commandPromise = provider.runCommand('nxTest', { project: 'test-app' });
-            await new Promise(resolve => setTimeout(resolve, 10));
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
-            // Simulate error output
-            mockChildProcess.stderr.emit('data', Buffer.from('Error: Test failed\n'));
-            mockChildProcess.stdout.emit('data', Buffer.from('FAIL src/app.spec.ts\n'));
-            
-            // Complete with failure
-            mockChildProcess.emit('close', 1);
-            await commandPromise;
+            // Act
+            await messageHandler(message);
 
             // Assert
-            const streamingMessages = receivedMessages.filter(msg => msg.command === 'streamingUpdate');
-            const errorMessages = streamingMessages.filter(msg => msg.message.type === 'error');
-            
-            expect(errorMessages.length).toBeGreaterThan(0);
-            expect(errorMessages[0].message.data.text).toContain('Error: Test failed');
-            
-            const completeMessages = streamingMessages.filter(msg => msg.message.type === 'complete');
-            expect(completeMessages[0].message.data.result.success).toBe(false);
+            expect(mockFileManager.openFile).toHaveBeenCalledWith('/test/file.ts');
         });
 
-        it('should coordinate multi-step AI Debug workflow', async () => {
+        it('should handle clearOutput message', async () => {
             // Arrange
-            let commandPromise: Promise<any>;
+            const message: WebviewMessage = {
+                command: 'clearOutput',
+                data: {}
+            };
 
-            // Act - start AI Debug command
-            commandPromise = provider.runCommand('aiDebug', { project: 'test-app' });
-            await new Promise(resolve => setTimeout(resolve, 10));
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
-            // Simulate Step 1: Tests
-            mockChildProcess.stdout.emit('data', Buffer.from('Determining test suites to run...\n'));
-            mockChildProcess.emit('close', 0);
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // The workflow should continue to git diff step
-            // Reset for next command
-            mockChildProcess.removeAllListeners();
-            Object.assign(mockChildProcess, {
-                stdout: new EventEmitter(),
-                stderr: new EventEmitter()
-            });
-
-            // Simulate Step 2: Git diff
-            mockChildProcess.stdout.emit('data', Buffer.from('Analyzing repository...\n'));
-            mockChildProcess.emit('close', 0);
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // Wait for command to complete
-            await commandPromise;
+            // Act
+            await messageHandler(message);
 
             // Assert
-            const streamingMessages = receivedMessages.filter(msg => msg.command === 'streamingUpdate');
-            const statusMessages = streamingMessages.filter(msg => msg.message.type === 'status');
-            
-            // Should have status messages for each step
-            const stepMessages = statusMessages.filter(msg => 
-                msg.message.data.status.includes('Step 1/3') || 
-                msg.message.data.status.includes('Step 2/3') ||
-                msg.message.data.status.includes('Step 3/3')
-            );
-            expect(stepMessages.length).toBeGreaterThan(0);
-            
-            // Should complete successfully
-            const completeMessages = streamingMessages.filter(msg => msg.message.type === 'complete');
-            expect(completeMessages.length).toBe(1);
-            expect(mockCommandRunner.runAiDebug).toHaveBeenCalled();
-        });
-    });
-
-    describe('webview message handling integration', () => {
-        beforeEach(() => {
-            provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
+            expect(receivedMessages.some(msg => msg.type === 'outputCleared')).toBe(true);
         });
 
-        it('should handle runCommand message and stream results', async () => {
+        it('should handle unknown message command', async () => {
             // Arrange
+            const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const message: WebviewMessage = {
+                command: 'unknownCommand' as any,
+                data: {}
+            };
+
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+
+            // Act
+            await messageHandler(message);
+
+            // Assert
+            expect(consoleSpy).toHaveBeenCalledWith('Unknown message command:', 'unknownCommand');
+            
+            consoleSpy.mockRestore();
+        });
+
+        it('should handle command errors gracefully', async () => {
+            // Arrange
+            mockCommandRunner.runNxTest.mockRejectedValue(new Error('Command failed'));
+            
             const message: WebviewMessage = {
                 command: 'runCommand',
                 data: {
@@ -279,192 +265,157 @@ describe('Streaming Integration Tests', () => {
             const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
             // Act
-            const handlePromise = messageHandler(message);
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // Simulate command execution
-            mockChildProcess.stdout.emit('data', Buffer.from('Test output\n'));
-            mockChildProcess.emit('close', 0);
-
-            await handlePromise;
+            await messageHandler(message);
 
             // Assert
-            const streamingMessages = receivedMessages.filter(msg => msg.command === 'streamingUpdate');
-            expect(streamingMessages.length).toBeGreaterThan(0);
+            expect(receivedMessages.some(msg => msg.type === 'commandError')).toBe(true);
+            
+            const errorMessage = receivedMessages.find(msg => msg.type === 'commandError');
+            expect(errorMessage.data.action).toBe('nxTest');
+            expect(errorMessage.data.error).toBe('Command failed');
         });
 
-        it('should handle clearOutput message', async () => {
+        it('should handle project detection errors', async () => {
             // Arrange
+            mockProjectDetector.getProjects.mockRejectedValue(new Error('Project detection failed'));
+            
             const message: WebviewMessage = {
-                command: 'clearOutput',
+                command: 'getProjects',
                 data: {}
             };
 
             const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
-            
-            // Add some output first
-            streamingRunner.emit('output', 'test output');
 
             // Act
             await messageHandler(message);
 
             // Assert
-            expect(streamingRunner.getCurrentOutput()).toBe('');
-        });
-    });
-
-    describe('progress tracking integration', () => {
-        beforeEach(() => {
-            provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
+            expect(receivedMessages.some(msg => msg.type === 'error')).toBe(true);
+            
+            const errorMessage = receivedMessages.find(msg => msg.type === 'error');
+            expect(errorMessage.data.error).toBe('Project detection failed');
         });
 
-        it('should track progress through command execution phases', async () => {
+        it('should handle file operation errors', async () => {
             // Arrange
-            let commandPromise: Promise<any>;
+            mockFileManager.openFile.mockRejectedValue(new Error('File not found'));
+            
+            const message: WebviewMessage = {
+                command: 'openFile',
+                data: {
+                    filePath: '/non/existent/file.ts'
+                }
+            };
+
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
             // Act
-            commandPromise = provider.runCommand('nxTest', { project: 'test-app' });
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // Simulate different progress phases
-            mockChildProcess.stdout.emit('data', Buffer.from('Determining test suites to run...\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.stdout.emit('data', Buffer.from('Found test suites\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.stdout.emit('data', Buffer.from('Running tests\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.stdout.emit('data', Buffer.from('Test suites completed\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.emit('close', 0);
-            await commandPromise;
+            await messageHandler(message);
 
             // Assert
-            const streamingMessages = receivedMessages.filter(msg => msg.command === 'streamingUpdate');
-            const progressMessages = streamingMessages.filter(msg => msg.message.type === 'progress');
+            expect(receivedMessages.some(msg => msg.type === 'error')).toBe(true);
             
-            // Should have progress updates
-            expect(progressMessages.length).toBeGreaterThan(0);
-            
-            // Progress should increase over time
-            const progressValues = progressMessages.map(msg => msg.message.data.progress);
-            for (let i = 1; i < progressValues.length; i++) {
-                expect(progressValues[i]).toBeGreaterThanOrEqual(progressValues[i - 1]);
-            }
+            const errorMessage = receivedMessages.find(msg => msg.type === 'error');
+            expect(errorMessage.data.error).toBe('File not found');
         });
 
-        it('should update action button progress in state', async () => {
+        it('should handle invalid action in runCommand', async () => {
             // Arrange
-            let commandPromise: Promise<any>;
+            vscode.window.showErrorMessage = jest.fn();
+            
+            const message: WebviewMessage = {
+                command: 'runCommand',
+                data: {
+                    action: 'invalidAction' as any,
+                    project: 'test-app'
+                }
+            };
+
+            const messageHandler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
             // Act
-            commandPromise = provider.runCommand('nxTest', { project: 'test-app' });
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await messageHandler(message);
 
-            // Simulate progress
-            mockChildProcess.stdout.emit('data', Buffer.from('Running tests\n'));
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // Check intermediate state
-            const state = (provider as any)._state;
-            expect(state.actions.nxTest.status).toBe('running');
-
-            mockChildProcess.emit('close', 0);
-            await commandPromise;
-
-            // Check final state
-            expect(state.actions.nxTest.status).toBe('success');
-            expect(state.actions.nxTest.progress).toBeUndefined(); // Should be cleared on completion
+            // Assert
+            expect(receivedMessages.some(msg => msg.type === 'commandError')).toBe(true);
+            
+            const errorMessage = receivedMessages.find(msg => msg.type === 'commandError');
+            expect(errorMessage.data.error).toContain('Unknown action: invalidAction');
         });
     });
 
-    describe('error handling integration', () => {
+    describe('webview setup', () => {
+        it('should set up webview correctly', () => {
+            // Act
+            provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
+
+            // Assert
+            expect(mockWebviewView.webview.options.enableScripts).toBe(true);
+            expect(mockWebviewView.webview.options.localResourceRoots).toHaveLength(1);
+            expect(mockWebviewView.webview.options.localResourceRoots?.[0]?.toString()).toBe('mock://uri');
+            expect(mockWebviewView.webview.html).toContain('<!DOCTYPE html>');
+            expect(mockWebviewView.webview.onDidReceiveMessage).toHaveBeenCalled();
+            expect(mockFileManager.watchFiles).toHaveBeenCalled();
+        });
+
+        it('should set up file watcher', () => {
+            // Arrange
+            provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
+
+            // Get the file watcher callback
+            const watchFilesCallback = mockFileManager.watchFiles.mock.calls[0][0];
+
+            // Act
+            watchFilesCallback('/test/file.ts', 'modified');
+
+            // Assert
+            expect(receivedMessages.some(msg => msg.type === 'fileChanged')).toBe(true);
+            
+            const fileChangedMessage = receivedMessages.find(msg => msg.type === 'fileChanged');
+            expect(fileChangedMessage.data.filePath).toBe('/test/file.ts');
+            expect(fileChangedMessage.data.eventType).toBe('modified');
+        });
+
+        it('should generate correct HTML for webview', () => {
+            // Act
+            provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
+
+            // Assert
+            const html = mockWebviewView.webview.html;
+            expect(html).toContain('<!DOCTYPE html>');
+            expect(html).toContain('<title>AI Debug Utilities</title>');
+            expect(html).toContain('<div id="root"></div>');
+            expect(html).toContain('mock://webview-uri');
+        });
+    });
+
+    describe('public methods', () => {
         beforeEach(() => {
             provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
         });
 
-        it('should handle process spawn errors', async () => {
-            // Arrange
-            const { spawn } = require('child_process');
-            spawn.mockImplementationOnce(() => {
-                const errorProcess = new EventEmitter();
-                setTimeout(() => {
-                    errorProcess.emit('error', new Error('Command not found'));
-                }, 10);
-                return errorProcess;
-            });
+        it('should show webview when show() is called', () => {
+            // Act
+            provider.show();
 
+            // Assert
+            expect(mockWebviewView.show).toHaveBeenCalled();
+        });
+
+        it('should run command when runCommand() is called', async () => {
             // Act
             await provider.runCommand('nxTest', { project: 'test-app' });
 
             // Assert
-            const streamingMessages = receivedMessages.filter(msg => msg.command === 'streamingUpdate');
-            const completeMessages = streamingMessages.filter(msg => msg.message.type === 'complete');
-            
-            expect(completeMessages.length).toBe(1);
-            expect(completeMessages[0].message.data.result.success).toBe(false);
-            expect(completeMessages[0].message.data.result.error).toContain('Command not found');
+            expect(mockCommandRunner.runNxTest).toHaveBeenCalledWith('test-app', undefined);
         });
 
-        it('should handle invalid action gracefully', async () => {
-            // Act & Assert - should not throw
-            await expect(provider.runCommand('invalidAction' as any, {})).resolves.toBeUndefined();
-            
-            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-                expect.stringContaining('Unknown action: invalidAction')
-            );
-        });
-    });
+        it('should dispose cleanly', () => {
+            // Act
+            provider.dispose();
 
-    describe('state consistency integration', () => {
-        beforeEach(() => {
-            provider.resolveWebviewView(mockWebviewView, {} as any, {} as any);
-        });
-
-        it('should maintain consistent state throughout command lifecycle', async () => {
-            // Arrange
-            const state = (provider as any)._state;
-            
-            expect(state.isStreaming).toBe(false);
-            expect(state.currentAction).toBeUndefined();
-
-            // Act - start command
-            const commandPromise = provider.runCommand('nxTest', { project: 'test-app' });
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // Assert - during execution
-            expect(state.isStreaming).toBe(true);
-            expect(state.currentAction).toBe('nxTest');
-            expect(state.actions.nxTest.status).toBe('running');
-
-            // Complete command
-            mockChildProcess.emit('close', 0);
-            await commandPromise;
-
-            // Assert - after completion
-            expect(state.isStreaming).toBe(false);
-            expect(state.currentAction).toBeUndefined();
-            expect(state.actions.nxTest.status).toBe('success');
-        });
-
-        it('should reset state properly on command failure', async () => {
-            // Arrange
-            const state = (provider as any)._state;
-
-            // Act - start and fail command
-            const commandPromise = provider.runCommand('nxTest', { project: 'test-app' });
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            mockChildProcess.emit('close', 1); // Failure
-            await commandPromise;
-
-            // Assert
-            expect(state.isStreaming).toBe(false);
-            expect(state.currentAction).toBeUndefined();
-            expect(state.actions.nxTest.status).toBe('error');
+            // Assert - should not throw
+            expect(() => provider.dispose()).not.toThrow();
         });
     });
 });

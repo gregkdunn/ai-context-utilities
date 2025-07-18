@@ -52,6 +52,61 @@
         "command": "aiDebugUtilities.runPrepareToPush",
         "title": "Prepare to Push (Lint + Format)",
         "category": "AI Debug"
+      },
+      {
+        "command": "nx.runAffected",
+        "title": "Run Affected Command",
+        "category": "NX"
+      },
+      {
+        "command": "nx.testAffected",
+        "title": "Test Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.lintAffected",
+        "title": "Lint Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.buildAffected",
+        "title": "Build Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.showAffectedProjects",
+        "title": "Show Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.selectBaseBranch",
+        "title": "Select Base Branch",
+        "category": "NX"
+      },
+      {
+        "command": "git.interactiveDiff",
+        "title": "Interactive Git Diff",
+        "category": "Git"
+      },
+      {
+        "command": "git.compareCommits",
+        "title": "Compare Commits",
+        "category": "Git"
+      },
+      {
+        "command": "git.compareBranches",
+        "title": "Compare Branches",
+        "category": "Git"
+      },
+      {
+        "command": "git.showCommitHistory",
+        "title": "Show Commit History",
+        "category": "Git"
+      },
+      {
+        "command": "git.enhancedDiff",
+        "title": "Enhanced Diff Analysis",
+        "category": "Git"
       }
     ],
     "views": {
@@ -135,6 +190,33 @@
           "type": "number",
           "default": 7,
           "description": "Number of days to retain backup files"
+        },
+        "nxAngular.defaultBase": {
+          "type": "string",
+          "default": "main",
+          "description": "Default base branch for affected calculations"
+        },
+        "nxAngular.enableAffectedMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic affected mode for commands"
+        },
+        "nxAngular.parallelExecutions": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Number of parallel executions for affected commands"
+        },
+        "flipperDetection.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Flipper feature flag detection"
+        },
+        "flipperDetection.includePRSection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include Flipper section in PR descriptions"
         }
       }
     },
@@ -146,24 +228,45 @@
         "when": "workspaceHasNxProject"
       },
       {
-        "command": "aiDebugUtilities.runAiDebug",
-        "key": "ctrl+shift+a",
-        "mac": "cmd+shift+a",
+        "command": "nx.runAffected",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n",
         "when": "workspaceHasNxProject"
+      },
+      {
+        "command": "git.interactiveDiff",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "aiDebugUtilities.runAiDebug",
-          "when": "resourceExtname == .ts || resourceExtname == .spec.ts",
-          "group": "aiDebug@1"
+          "command": "nx.runAffected",
+          "when": "workspaceHasNxProject",
+          "group": "nx@1"
+        },
+        {
+          "command": "nx.showAffectedProjects",
+          "when": "workspaceHasNxProject",
+          "group": "nx@2"
+        },
+        {
+          "command": "git.interactiveDiff",
+          "group": "git@1"
         }
       ],
       "commandPalette": [
         {
           "command": "aiDebugUtilities.openPanel",
           "when": "workspaceHasNxProject"
+        },
+        {
+          "command": "nx.runAffected",
+          "when": "workspaceHasNxProject"
+        },
+        {
+          "command": "git.interactiveDiff"
         }
       ]
     }
@@ -176,6 +279,13 @@
     "lint": "eslint src --ext ts",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:watch:silent": "jest --watch --silent",
+    "dev": "npm run compile:watch & npm run test:watch:silent",
+    "compile:watch": "tsc -w -p ./",
+    "test:fix": "npm run lint:fix && npm run test",
+    "lint:fix": "eslint src --ext ts --fix",
+    "quick-test": "npm run compile && npm run test:utils",
+    "fix-and-test": "npm run lint:fix && npm run quick-test",
     "test:coverage": "jest --coverage",
     "test:commands": "jest --testPathPattern=src/commands/__tests__",
     "test:integration": "jest --testPathPattern=integration.test.ts",
@@ -186,8 +296,13 @@
     "test:filemanager": "jest --testPathPattern=fileManager",
     "test:enhanced": "jest --testPathPattern=enhanced",
     "test:batch": "jest --testPathPattern=batch",
+    "test:nx": "jest --testPathPattern=src/services/nx",
+    "test:git": "jest --testPathPattern=src/services/git",
+    "test:flipper": "jest --testPathPattern=src/services/flipper",
+    "test:phase5": "jest --testPathPattern=src/services/nx|src/services/git|src/services/flipper",
     "test:angular": "cd angular-app && npm test",
     "test:angular:coverage": "cd angular-app && npm run test:coverage",
+    "test:all": "npm run test && npm run test:phase5 && npm run test:angular",
     "build:angular": "node scripts/build-angular.js",
     "build:angular:watch": "cd angular-app && npm run watch",
     "dev:angular": "cd angular-app && npm start",

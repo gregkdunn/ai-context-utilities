@@ -5,7 +5,8 @@ import {
   PluginContext, 
   PluginCommand,
   AIProvider,
-  AIProviderPlugin
+  AIResponse,
+  AISuggestion
 } from '../../../types/plugin';
 import * as vscode from 'vscode';
 
@@ -23,13 +24,7 @@ export class AIProviderPlugin implements Plugin {
         type: 'ai-provider',
         name: 'ai-provider',
         description: 'Provide AI-powered insights and recommendations',
-        permissions: [
-          {
-            type: 'network',
-            scope: 'ai-services',
-            reason: 'Connect to external AI services for analysis'
-          }
-        ]
+        permissions: ['network:ai-services:Connect to external AI services for analysis']
       },
       {
         type: 'command',
@@ -40,7 +35,11 @@ export class AIProviderPlugin implements Plugin {
   };
 
   private api?: PluginAPI;
-  private providers: Map<string, AIProvider> = new Map();
+  private aiProviderMap: Map<string, AIProvider> = new Map();
+  
+  get providers(): any[] {
+    return [];
+  }
   
   get aiProviders(): AIProvider[] {
     return [
@@ -50,15 +49,17 @@ export class AIProviderPlugin implements Plugin {
         description: 'AI-powered code analysis and suggestions',
         capabilities: ['code-analysis', 'bug-detection', 'optimization'],
         
-        generateInsights: async (data: any, context: PluginContext): Promise<any[]> => {
-          return await this.generateCodeInsights(data, context);
+        generateInsights: async (data: any, context: any): Promise<AIResponse> => {
+          const insights = await this.generateCodeInsights(data, context);
+          return { response: JSON.stringify(insights), suggestions: insights.map((i: any) => ({ title: i.title, description: i.description })) };
         },
         
-        processQuery: async (query: string, context: PluginContext): Promise<any> => {
-          return await this.processNaturalLanguageQuery(query, context);
+        processQuery: async (query: string, context: any): Promise<AIResponse> => {
+          const result = await this.processNaturalLanguageQuery(query, context);
+          return { response: result.response, suggestions: result.suggestions };
         },
         
-        suggestActions: async (context: PluginContext): Promise<any[]> => {
+        suggestActions: async (context: any): Promise<AISuggestion[]> => {
           return await this.suggestContextualActions(context);
         }
       },
@@ -68,15 +69,17 @@ export class AIProviderPlugin implements Plugin {
         description: 'AI-powered test analysis and recommendations',
         capabilities: ['test-analysis', 'coverage-optimization', 'test-generation'],
         
-        generateInsights: async (data: any, context: PluginContext): Promise<any[]> => {
-          return await this.generateTestInsights(data, context);
+        generateInsights: async (data: any, context: any): Promise<AIResponse> => {
+          const insights = await this.generateTestInsights(data, context);
+          return { response: JSON.stringify(insights), suggestions: insights.map((i: any) => ({ title: i.title, description: i.description })) };
         },
         
-        processQuery: async (query: string, context: PluginContext): Promise<any> => {
-          return await this.processTestQuery(query, context);
+        processQuery: async (query: string, context: any): Promise<AIResponse> => {
+          const result = await this.processTestQuery(query, context);
+          return { response: result.response, suggestions: result.suggestions };
         },
         
-        suggestActions: async (context: PluginContext): Promise<any[]> => {
+        suggestActions: async (context: any): Promise<AISuggestion[]> => {
           return await this.suggestTestActions(context);
         }
       },
@@ -86,15 +89,17 @@ export class AIProviderPlugin implements Plugin {
         description: 'AI-powered performance analysis and optimization',
         capabilities: ['performance-analysis', 'optimization', 'monitoring'],
         
-        generateInsights: async (data: any, context: PluginContext): Promise<any[]> => {
-          return await this.generatePerformanceInsights(data, context);
+        generateInsights: async (data: any, context: any): Promise<AIResponse> => {
+          const insights = await this.generatePerformanceInsights(data, context);
+          return { response: JSON.stringify(insights), suggestions: insights.map((i: any) => ({ title: i.title, description: i.description })) };
         },
         
-        processQuery: async (query: string, context: PluginContext): Promise<any> => {
-          return await this.processPerformanceQuery(query, context);
+        processQuery: async (query: string, context: any): Promise<AIResponse> => {
+          const result = await this.processPerformanceQuery(query, context);
+          return { response: result.response, suggestions: result.suggestions };
         },
         
-        suggestActions: async (context: PluginContext): Promise<any[]> => {
+        suggestActions: async (context: any): Promise<AISuggestion[]> => {
           return await this.suggestPerformanceActions(context);
         }
       }
@@ -111,14 +116,14 @@ export class AIProviderPlugin implements Plugin {
         icon: 'eye',
         
         execute: async (context: PluginContext, args?: any[]): Promise<any> => {
-          const provider = this.providers.get('code-analysis-ai');
+          const provider = this.aiProviderMap.get('code-analysis-ai');
           if (!provider) {
             throw new Error('Code analysis AI provider not available');
           }
           
           const currentFile = context.currentFile;
           if (!currentFile) {
-            this.api?.showNotification('No file selected', 'warning');
+            this.api?.showNotification?.('No file selected', 'warning');
             return;
           }
           
@@ -129,10 +134,10 @@ export class AIProviderPlugin implements Plugin {
             language: this.getLanguageFromFile(currentFile)
           };
           
-          const insights = await provider.generateInsights(codeData, context);
+          const insights = await provider.generateInsights?.(codeData, context);
           
           // Display results
-          const report = this.formatCodeReview(insights);
+          const report = this.formatCodeReview(insights as any);
           const doc = await vscode.workspace.openTextDocument({
             content: report,
             language: 'markdown'
@@ -160,15 +165,15 @@ export class AIProviderPlugin implements Plugin {
             return;
           }
           
-          const provider = this.providers.get('code-analysis-ai');
+          const provider = this.aiProviderMap.get('code-analysis-ai');
           if (!provider) {
             throw new Error('AI provider not available');
           }
           
-          const answer = await provider.processQuery(question, context);
+          const answer = await provider.processQuery?.(question, context);
           
           // Show answer in a notification or document
-          if (answer.length > 200) {
+          if (answer && answer.response && answer.response.length > 200) {
             const doc = await vscode.workspace.openTextDocument({
               content: `# AI Assistant Response\n\n**Question:** ${question}\n\n**Answer:** ${answer.response}\n\n${answer.suggestions ? '## Suggestions\n' + answer.suggestions.map(s => `- ${s.title}: ${s.description}`).join('\n') : ''}`,
               language: 'markdown'
@@ -176,7 +181,7 @@ export class AIProviderPlugin implements Plugin {
             
             await vscode.window.showTextDocument(doc);
           } else {
-            this.api?.showNotification(answer.response, 'info');
+            this.api?.showNotification?.(answer?.response || 'No response', 'info');
           }
           
           return answer;
@@ -190,18 +195,23 @@ export class AIProviderPlugin implements Plugin {
         icon: 'zap',
         
         execute: async (context: PluginContext, args?: any[]): Promise<any> => {
-          const provider = this.providers.get('performance-ai');
+          const provider = this.aiProviderMap.get('performance-ai');
           if (!provider) {
             throw new Error('Performance AI provider not available');
           }
           
-          const suggestions = await provider.suggestActions(context);
+          const suggestions = await provider.suggestActions?.(context);
+          
+          if (!suggestions) {
+            this.api?.showNotification?.('No optimization suggestions available', 'info');
+            return [];
+          }
           
           // Show optimization suggestions
           const items = suggestions.map(suggestion => ({
             label: suggestion.title,
             description: suggestion.description,
-            detail: `Impact: ${suggestion.impact} | Effort: ${suggestion.effort}`
+            detail: `Impact: ${(suggestion as any).impact} | Effort: ${(suggestion as any).effort}`
           }));
           
           const selected = await vscode.window.showQuickPick(items, {
@@ -210,7 +220,7 @@ export class AIProviderPlugin implements Plugin {
           });
           
           if (selected) {
-            const suggestion = suggestions.find(s => s.title === selected.label);
+            const suggestion = suggestions.find(s => s.title === selected?.label);
             if (suggestion) {
               await this.applyOptimization(suggestion, context);
             }
@@ -227,26 +237,26 @@ export class AIProviderPlugin implements Plugin {
     
     // Register AI providers
     for (const provider of this.aiProviders) {
-      this.providers.set(provider.id, provider);
+      this.aiProviderMap.set(provider.id, provider);
     }
     
     // Register commands
     for (const command of this.commands) {
-      api.registerCommand(command);
+      api.registerCommand(command.id, command.execute);
     }
     
     // Listen for AI events
-    api.on('ai:query', (data) => this.onAIQuery(data, context));
-    api.on('ai:analysis-request', (data) => this.onAnalysisRequest(data, context));
+    api.on?.('ai:query', (data) => this.onAIQuery(data, context));
+    api.on?.('ai:analysis-request', (data) => this.onAnalysisRequest(data, context));
     
     console.log('AI Provider Plugin activated');
   }
 
   async deactivate(api: PluginAPI, context: PluginContext): Promise<void> {
     // Cleanup
-    api.off('ai:query');
-    api.off('ai:analysis-request');
-    this.providers.clear();
+    api.off?.('ai:query');
+    api.off?.('ai:analysis-request');
+    this.aiProviderMap.clear();
     
     console.log('AI Provider Plugin deactivated');
   }
@@ -716,7 +726,7 @@ export class AIProviderPlugin implements Plugin {
 
   private async applyOptimization(suggestion: any, context: PluginContext): Promise<void> {
     // Implementation for applying optimization suggestions
-    this.api?.showNotification(`Applied optimization: ${suggestion.title}`, 'info');
+    this.api?.showNotification?.(`Applied optimization: ${suggestion.title}`, 'info');
   }
 
   private async onAIQuery(data: any, context: PluginContext): Promise<void> {

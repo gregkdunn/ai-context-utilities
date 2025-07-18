@@ -30,19 +30,23 @@ const MockedFileManager = FileManager as jest.MockedClass<typeof FileManager>;
 jest.mock('../../utils/streamingRunner');
 const MockedStreamingCommandRunner = StreamingCommandRunner as jest.MockedClass<typeof StreamingCommandRunner>;
 
-// Mock fs module
-jest.mock('fs', () => ({
-    promises: {
+// Mock fs module with proper setup
+jest.mock('fs', () => {
+    const mockPromises = {
         unlink: jest.fn(),
         copyFile: jest.fn(),
         readFile: jest.fn(),
         writeFile: jest.fn()
-    },
-    existsSync: jest.fn(),
-    statSync: jest.fn(),
-    readFileSync: jest.fn(),
-    createWriteStream: jest.fn()
-}));
+    };
+    
+    return {
+        promises: mockPromises,
+        existsSync: jest.fn(),
+        statSync: jest.fn(),
+        readFileSync: jest.fn(),
+        createWriteStream: jest.fn()
+    };
+});
 
 // Mock child_process
 jest.mock('child_process', () => ({
@@ -64,6 +68,7 @@ describe('NxTestCommand', () => {
     let nxTestCommand: NxTestCommand;
     let mockFileManager: jest.Mocked<FileManager>;
     let mockFs: jest.Mocked<typeof fs>;
+    let mockFsPromises: any;
     let mockSpawn: jest.MockedFunction<any>;
 
     beforeEach(() => {
@@ -71,15 +76,18 @@ describe('NxTestCommand', () => {
         
         // Setup FileManager mock
         mockFileManager = {
-            getOutputFilePath: jest.fn().mockResolvedValue('/test/jest-output.txt'),
+            getOutputFilePath: jest.fn().mockReturnValue('/test/jest-output.txt'),
             ensureDirectoryExists: jest.fn(),
             getFileStats: jest.fn().mockResolvedValue({
-                size: '10KB',
-                lines: 100
+                size: 1024,
+                created: new Date(),
+                modified: new Date(),
+                accessed: new Date()
             })
         } as any;
 
         mockFs = fs as jest.Mocked<typeof fs>;
+        mockFsPromises = mockFs.promises;
         mockSpawn = require('child_process').spawn;
 
         MockedFileManager.mockImplementation(() => mockFileManager);
@@ -93,8 +101,8 @@ describe('NxTestCommand', () => {
             mockFs.existsSync.mockReturnValue(true);
             mockFs.statSync.mockReturnValue({ size: 1000 } as any);
             mockFs.readFileSync.mockReturnValue('test output\nline 2\nline 3');
-            mockFs.promises.readFile.mockResolvedValue('test output content');
-            mockFs.promises.writeFile.mockResolvedValue(undefined);
+            mockFsPromises.readFile.mockResolvedValue('test output content');
+            mockFsPromises.writeFile.mockResolvedValue(undefined);
             mockFs.createWriteStream.mockReturnValue({
                 write: jest.fn(),
                 end: jest.fn()
@@ -139,10 +147,10 @@ describe('NxTestCommand', () => {
             const project = 'test-project';
             const options: CommandOptions = { useExpected: true };
 
-            mockFileManager.getOutputFilePath.mockImplementation((fileName) => {
-                if (fileName === 'jest-output.txt') return Promise.resolve('/test/jest-output.txt');
-                if (fileName === 'jest-output-expected.txt') return Promise.resolve('/test/jest-output-expected.txt');
-                return Promise.resolve('/test/' + fileName);
+            mockFileManager.getOutputFilePath.mockImplementation((fileName: string) => {
+                if (fileName === 'jest-output.txt') {return '/test/jest-output.txt';}
+                if (fileName === 'jest-output-expected.txt') {return '/test/jest-output-expected.txt';}
+                return '/test/' + fileName;
             });
 
             // Act
@@ -150,7 +158,7 @@ describe('NxTestCommand', () => {
 
             // Assert
             expect(result.success).toBe(true);
-            expect(mockFs.promises.copyFile).toHaveBeenCalledWith(
+            expect(mockFsPromises.copyFile).toHaveBeenCalledWith(
                 '/test/jest-output-expected.txt',
                 '/test/jest-output.txt'
             );
@@ -203,7 +211,7 @@ describe('NxTestCommand', () => {
 
             // Assert
             // Verify that full output is used instead of AI-optimized
-            expect(mockFs.promises.copyFile).toHaveBeenCalled();
+            expect(mockFsPromises.copyFile).toHaveBeenCalled();
         });
 
         it('should handle missing raw output file', async () => {
@@ -240,17 +248,17 @@ describe('NxTestCommand', () => {
             const outputFile = '/tmp/output.txt';
             const content = '\x1b[32mGreen text\x1b[0m\r\nNormal text';
             
-            mockFs.promises.readFile.mockResolvedValue(content);
-            mockFs.promises.writeFile.mockResolvedValue(undefined);
+            mockFsPromises.readFile.mockResolvedValue(content);
+            mockFsPromises.writeFile.mockResolvedValue(undefined);
 
             // Act
             const result = await (nxTestCommand as any).cleanAnsiCodes(inputFile, outputFile);
 
             // Assert
             expect(result).toBe(true);
-            expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
+            expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
                 outputFile,
-                'Green textNormal text'
+                'Green text\nNormal text'
             );
         });
 
@@ -259,7 +267,7 @@ describe('NxTestCommand', () => {
             const inputFile = '/tmp/input.txt';
             const outputFile = '/tmp/output.txt';
             
-            mockFs.promises.readFile.mockRejectedValue(new Error('File not found'));
+            mockFsPromises.readFile.mockRejectedValue(new Error('File not found'));
 
             // Act
             const result = await (nxTestCommand as any).cleanAnsiCodes(inputFile, outputFile);
@@ -285,18 +293,18 @@ Tests: 10 passed, 10 total
 Time: 7.579 s
             `.trim();
 
-            mockFs.promises.readFile.mockResolvedValue(testOutput);
-            mockFs.promises.writeFile.mockResolvedValue(undefined);
+            mockFsPromises.readFile.mockResolvedValue(testOutput);
+            mockFsPromises.writeFile.mockResolvedValue(undefined);
 
             // Act
             await (nxTestCommand as any).createAiOptimizedOutput(inputFile, outputFile, testArgs, exitCode);
 
             // Assert
-            expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
+            expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
                 outputFile,
                 expect.stringContaining('STATUS: ✅ PASSED')
             );
-            expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
+            expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
                 outputFile,
                 expect.stringContaining('EXECUTIVE SUMMARY')
             );
@@ -320,22 +328,22 @@ Tests: 0 passed, 1 failed, 1 total
 Time: 3.123 s
             `.trim();
 
-            mockFs.promises.readFile.mockResolvedValue(testOutput);
-            mockFs.promises.writeFile.mockResolvedValue(undefined);
+            mockFsPromises.readFile.mockResolvedValue(testOutput);
+            mockFsPromises.writeFile.mockResolvedValue(undefined);
 
             // Act
             await (nxTestCommand as any).createAiOptimizedOutput(inputFile, outputFile, testArgs, exitCode);
 
             // Assert
-            expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
+            expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
                 outputFile,
                 expect.stringContaining('STATUS: ❌ FAILED')
             );
-            expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
+            expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
                 outputFile,
                 expect.stringContaining('FAILURE ANALYSIS')
             );
-            expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
+            expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
                 outputFile,
                 expect.stringContaining('COMPILATION/RUNTIME ERRORS')
             );

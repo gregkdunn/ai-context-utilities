@@ -23,6 +23,10 @@ export class PluginMarketplaceService implements PluginMarketplace {
     }
   }
 
+  async search(query: string): Promise<PluginInfo[]> {
+    return this.searchPlugins(query);
+  }
+  
   async searchPlugins(query: string): Promise<PluginInfo[]> {
     // In a real implementation, this would search a remote registry
     // For now, we'll search local plugins and simulate some results
@@ -63,6 +67,10 @@ export class PluginMarketplaceService implements PluginMarketplace {
     throw new Error(`Plugin not found: ${id}`);
   }
 
+  async install(id: string, version?: string): Promise<void> {
+    return this.installPlugin(id, version);
+  }
+  
   async installPlugin(id: string, version?: string): Promise<void> {
     try {
       // In a real implementation, this would download from a registry
@@ -118,11 +126,15 @@ export class PluginMarketplaceService implements PluginMarketplace {
       vscode.window.showInformationMessage(`Plugin ${pluginInfo.name} installed successfully!`);
       
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to install plugin: ${error.message}`);
+      vscode.window.showErrorMessage(`Failed to install plugin: ${(error as Error).message}`);
       throw error;
     }
   }
 
+  async update(id: string, version?: string): Promise<void> {
+    return this.updatePlugin(id, version);
+  }
+  
   async updatePlugin(id: string, version?: string): Promise<void> {
     try {
       const pluginInfo = await this.getPlugin(id);
@@ -143,11 +155,15 @@ export class PluginMarketplaceService implements PluginMarketplace {
       vscode.window.showInformationMessage(`Plugin ${pluginInfo.name} updated to version ${targetVersion}!`);
       
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to update plugin: ${error.message}`);
+      vscode.window.showErrorMessage(`Failed to update plugin: ${(error as Error).message}`);
       throw error;
     }
   }
 
+  async uninstall(id: string): Promise<void> {
+    return this.uninstallPlugin(id);
+  }
+  
   async uninstallPlugin(id: string): Promise<void> {
     try {
       const pluginDir = path.join(this.pluginsDirectory, id);
@@ -162,7 +178,7 @@ export class PluginMarketplaceService implements PluginMarketplace {
       }
       
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to uninstall plugin: ${error.message}`);
+      vscode.window.showErrorMessage(`Failed to uninstall plugin: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -171,7 +187,7 @@ export class PluginMarketplaceService implements PluginMarketplace {
     const plugins: PluginInfo[] = [];
     
     try {
-      const manifests = await this.discoveryService.discoverPlugins([this.pluginsDirectory]);
+      const manifests = await this.discoveryService.discoverPlugins(this.pluginsDirectory);
       
       for (const manifest of manifests) {
         const pluginInfo: PluginInfo = {
