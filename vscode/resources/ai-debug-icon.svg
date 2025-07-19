@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" fill-rule="evenodd">
+    <!-- Background circle -->
+    <circle cx="8" cy="8" r="7" fill="#007ACC" stroke="#ffffff" stroke-width="1"/>
+    
+    <!-- AI brain/network pattern -->
+    <g stroke="#ffffff" stroke-width="1" fill="none">
+      <!-- Central node -->
+      <circle cx="8" cy="8" r="1.5" fill="#ffffff"/>
+      
+      <!-- Connection lines -->
+      <line x1="8" y1="8" x2="4" y2="5"/>
+      <line x1="8" y1="8" x2="12" y2="5"/>
+      <line x1="8" y1="8" x2="4" y2="11"/>
+      <line x1="8" y1="8" x2="12" y2="11"/>
+      
+      <!-- Outer nodes -->
+      <circle cx="4" cy="5" r="0.8" fill="#ffffff"/>
+      <circle cx="12" cy="5" r="0.8" fill="#ffffff"/>
+      <circle cx="4" cy="11" r="0.8" fill="#ffffff"/>
+      <circle cx="12" cy="11" r="0.8" fill="#ffffff"/>
+    </g>
+    
+    <!-- Debug symbol (small bug icon) -->
+    <g transform="translate(10, 10) scale(0.8)">
+      <ellipse cx="3" cy="2" rx="2" ry="1.5" fill="#ffcc00"/>
+      <ellipse cx="3" cy="4" rx="1.5" ry="1" fill="#ffcc00"/>
+      <line x1="1" y1="2.5" x2="0" y2="2" stroke="#ffcc00" stroke-width="0.5"/>
+      <line x1="5" y1="2.5" x2="6" y2="2" stroke="#ffcc00" stroke-width="0.5"/>
+    </g>
+  </g>
+</svg>

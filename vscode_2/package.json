@@ -1,0 +1,130 @@
+{
+  "name": "ai-debug-context",
+  "displayName": "AI Debug Context",
+  "description": "AI-powered test debugging and PR generation for NX Angular projects",
+  "version": "2.0.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "nx",
+    "angular",
+    "testing",
+    "jest",
+    "ai",
+    "debugging",
+    "copilot",
+    "pr-description"
+  ],
+  "activationEvents": [
+    "onCommand:ai-debug-context.start",
+    "workspaceContains:**/*.test.{js,ts,jsx,tsx}"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ai-debug-context",
+          "title": "AI Debug Context",
+          "icon": "$(debug-alt)"
+        }
+      ]
+    },
+    "views": {
+      "ai-debug-context": [
+        {
+          "type": "webview",
+          "id": "ai-debug-context.mainView",
+          "name": "AI Debug Context"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ai-debug-context.runAITestDebug",
+        "title": "AI Test Debug",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "ai-debug-context.openMainView",
+        "title": "Open AI Debug Context",
+        "icon": "$(debug-alt)"
+      }
+    ],
+    "configuration": {
+      "title": "AI Debug Context",
+      "properties": {
+        "aiDebugContext.outputDirectory": {
+          "type": "string",
+          "default": ".github/instructions/ai_utilities_context",
+          "description": "Directory where AI debug output files are saved"
+        },
+        "aiDebugContext.nxBaseBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "Default base branch for NX affected calculations"
+        },
+        "aiDebugContext.copilot.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable GitHub Copilot integration"
+        },
+        "aiDebugContext.jira.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Jira integration for PR descriptions"
+        },
+        "aiDebugContext.jira.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Jira base URL (e.g., https://company.atlassian.net)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "npm run build:webview && tsc -p ./",
+    "compile:ts-only": "tsc -p ./",
+    "watch": "concurrently \"npm run watch:webview\" \"npm run watch:ts\"",
+    "watch:ts": "tsc -watch -p ./",
+    "watch:webview": "cd webview-ui && npm run watch",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "dev": "npm run watch",
+    "lint:fix": "eslint src --ext ts --fix",
+    "test:coverage": "jest --coverage",
+    "build:webview": "cd webview-ui && npm run build",
+    "dev:webview": "cd webview-ui && npm start",
+    "install:webview": "cd webview-ui && npm install",
+    "package": "npm run compile && vsce package",
+    "setup": "npm install && npm run install:webview",
+    "test:all": "npm run test && cd webview-ui && npm run test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "20.x",
+    "@types/jest": "^29.5.12",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0",
+    "@vscode/test-electron": "^2.3.9",
+    "@vscode/vsce": "^2.24.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "simple-git": "^3.20.0"
+  }
+}
