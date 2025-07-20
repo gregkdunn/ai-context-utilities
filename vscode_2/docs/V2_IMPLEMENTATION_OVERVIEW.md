@@ -137,7 +137,7 @@ vscode_2/
 
 ## Next Implementation Steps
 
-### Phase 1: Foundation (Current Priority)
+### Phase 1: Foundation
 1. **Build and Test Current Implementation**
    - Run all existing tests
    - Build Angular webview

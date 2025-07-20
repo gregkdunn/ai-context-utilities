@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, signal, computed, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { VscodeService } from './services/vscode.service';
 import { Subscription } from 'rxjs';
@@ -56,7 +56,7 @@ export interface WorkflowState {
             <div class="bg-vscode-editor-background border border-vscode-panel-border rounded-lg p-4">
               <div class="flex items-center gap-2 mb-2">
                 <span class="text-xl">🧪</span>
-                <h3 class="font-semibold">Test Configuration</h3>
+                <h3 class="font-semibold">Test Selection</h3>
               </div>
               <p class="text-sm text-vscode-descriptionForeground mb-3">{{ getTestConfigStatus() }}</p>
               <button
@@ -108,7 +108,7 @@ export interface WorkflowState {
             </button>
             @if (!canRunAIDebug()) {
               <p class="text-vscode-descriptionForeground text-sm mt-3">
-                Complete file selection and test configuration to continue
+                Complete file selection and test selection to continue
               </p>
             }
           </div>
@@ -125,6 +125,7 @@ export interface WorkflowState {
       <!-- Test Selection Module -->
       @if (activeModule() === 'test-selection') {
         <app-test-selector
+          #testSelector
           (configurationChanged)="onTestConfigurationChanged($event)">
         </app-test-selector>
       }
@@ -168,6 +169,8 @@ export interface WorkflowState {
 })
 export class AppComponent implements OnInit, OnDestroy {
   private subscription = new Subscription();
+  
+  @ViewChild('testSelector') testSelector?: TestSelectorComponent;
   
   // Module navigation
   activeModule = signal<'overview' | 'file-selection' | 'test-selection' | 'ai-debug' | 'pr-generator'>('overview');
@@ -221,7 +224,15 @@ export class AppComponent implements OnInit, OnDestroy {
       case 'uncommitted':
         return `${selection.files.length} uncommitted files`;
       case 'commit':
-        return `Commit: ${selection.commit?.hash.substring(0, 7) || 'Unknown'}`;
+        const selectedCommits = selection.commits;
+        if (selectedCommits && selectedCommits.length > 0) {
+          if (selectedCommits.length === 1) {
+            return `Commit: ${selectedCommits[0].hash.substring(0, 7)}`;
+          } else {
+            return `${selectedCommits.length} commits selected`;
+          }
+        }
+        return 'No commits selected';
       case 'branch-diff':
         return 'Branch to main diff';
       default:
@@ -253,6 +264,13 @@ export class AppComponent implements OnInit, OnDestroy {
   // Event handlers
   onFileSelectionChanged(selection: FileSelection) {
     this.fileSelection.set(selection);
+    
+    // Reset test configuration when file selection changes
+    this.testConfiguration.set(null);
+    if (this.testSelector) {
+      this.testSelector.resetConfiguration();
+    }
+    
     this.saveState();
     this.vscode.postMessage('fileSelectionChanged', selection);
   }
@@ -286,6 +304,13 @@ export class AppComponent implements OnInit, OnDestroy {
       case 'resetState':
         this.resetAllState();
         break;
+      case 'navigateToModule':
+        if (message.data?.module) {
+          this.showModule(message.data.module);
+        }
+        break;
+      // Note: gitDiffGenerated is now handled within file-selection module
+      // No need to navigate to separate git-diff module
     }
   }
 

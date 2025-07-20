@@ -1,5 +1,7 @@
 import { simpleGit, SimpleGit } from 'simple-git';
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { FileChange, GitCommit } from '../types';
 
 export class GitIntegration {
@@ -115,5 +117,118 @@ export class GitIntegration {
 
   getWorkspaceRoot(): string {
     return this.workspaceRoot;
+  }
+
+  /**
+   * Generate and save diff to a file, with streaming output support
+   */
+  async generateDiffWithStreaming(
+    mode: 'uncommitted' | 'commit' | 'branch-diff',
+    commitHash?: string,
+    outputCallback?: (output: string) => void
+  ): Promise<{ content: string; filePath: string }> {
+    try {
+      let diffContent: string;
+      let filename: string;
+
+      outputCallback?.('Starting git diff generation...\n');
+
+      switch (mode) {
+        case 'uncommitted':
+          outputCallback?.('Generating diff for uncommitted changes...\n');
+          diffContent = await this.getDiffForUncommittedChanges();
+          filename = `uncommitted-changes-${Date.now()}.diff`;
+          break;
+        case 'commit':
+          if (!commitHash) {
+            throw new Error('Commit hash required for commit diff mode');
+          }
+          outputCallback?.(`Generating diff for commit ${commitHash}...\n`);
+          diffContent = await this.getDiffForCommit(commitHash);
+          filename = `commit-${commitHash.substring(0, 7)}-${Date.now()}.diff`;
+          break;
+        case 'branch-diff':
+          outputCallback?.('Generating diff from current branch to main...\n');
+          diffContent = await this.getDiffFromMainBranch();
+          filename = `branch-diff-${Date.now()}.diff`;
+          break;
+        default:
+          throw new Error(`Unsupported diff mode: ${mode}`);
+      }
+
+      outputCallback?.('Writing diff to file...\n');
+      const filePath = await this.saveDiffToFile(diffContent, filename);
+      
+      outputCallback?.(`Diff saved successfully to ${filePath}\n`);
+      outputCallback?.('Diff generation complete!\n');
+
+      return { content: diffContent, filePath };
+    } catch (error) {
+      const errorMessage = `Failed to generate diff: ${error}`;
+      outputCallback?.(errorMessage + '\n');
+      throw error;
+    }
+  }
+
+  /**
+   * Save diff content to a file in the workspace
+   */
+  private async saveDiffToFile(content: string, filename: string): Promise<string> {
+    const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+    
+    // Ensure directory exists
+    if (!fs.existsSync(diffDir)) {
+      fs.mkdirSync(diffDir, { recursive: true });
+    }
+
+    const filePath = path.join(diffDir, filename);
+    fs.writeFileSync(filePath, content, 'utf8');
+    
+    return filePath;
+  }
+
+  /**
+   * Open a diff file in VSCode
+   */
+  async openDiffFile(filePath: string): Promise<void> {
+    try {
+      const document = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(document);
+    } catch (error) {
+      throw new Error(`Failed to open diff file: ${error}`);
+    }
+  }
+
+  /**
+   * Delete a diff file
+   */
+  async deleteDiffFile(filePath: string): Promise<void> {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (error) {
+      throw new Error(`Failed to delete diff file: ${error}`);
+    }
+  }
+
+  /**
+   * Get all existing diff files
+   */
+  async getExistingDiffFiles(): Promise<string[]> {
+    const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+    
+    if (!fs.existsSync(diffDir)) {
+      return [];
+    }
+
+    try {
+      return fs.readdirSync(diffDir)
+        .filter(file => file.endsWith('.diff'))
+        .map(file => path.join(diffDir, file));
+    } catch (error) {
+      console.error('Failed to read diff directory:', error);
+      return [];
+    }
   }
 }

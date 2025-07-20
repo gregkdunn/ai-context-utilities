@@ -21,22 +21,65 @@ export class CopilotIntegration {
         return;
       }
 
-      // Select appropriate models for different tasks
-      const models = await vscode.lm.selectChatModels({ 
-        vendor: 'copilot', 
-        family: 'gpt-4o' 
-      });
+      // Try different model selection strategies
+      let models: any[] = [];
+      
+      // Strategy 1: Try to get all available models first
+      try {
+        models = await vscode.lm.selectChatModels();
+        console.log(`Found ${models.length} total available models`);
+      } catch (error) {
+        console.warn('Failed to get all models:', error);
+      }
+      
+      // Strategy 2: If no models found or we want Copilot specifically, try Copilot vendor
+      if (models.length === 0) {
+        try {
+          models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+          console.log(`Found ${models.length} Copilot models`);
+        } catch (error) {
+          console.warn('Failed to get Copilot models:', error);
+        }
+      }
+      
+      // Strategy 3: Try other common configurations
+      if (models.length === 0) {
+        const strategies = [
+          { vendor: 'copilot', family: 'gpt-4' },
+          { vendor: 'copilot', family: 'gpt-3.5-turbo' },
+          { family: 'gpt-4' },
+          { family: 'gpt-3.5-turbo' }
+        ];
+        
+        for (const strategy of strategies) {
+          try {
+            models = await vscode.lm.selectChatModels(strategy);
+            if (models.length > 0) {
+              console.log(`Found ${models.length} models with strategy:`, strategy);
+              break;
+            }
+          } catch (error) {
+            console.warn(`Strategy ${JSON.stringify(strategy)} failed:`, error);
+          }
+        }
+      }
       
       if (models.length === 0) {
-        console.warn('No Copilot models available. Please ensure GitHub Copilot is active.');
+        console.warn('No language models available. Please ensure GitHub Copilot is active and you have access to language models.');
         this.isEnabled = false;
         return;
       }
       
       this.models = models;
-      console.log(`Initialized ${models.length} Copilot models`);
+      console.log(`Successfully initialized ${models.length} language models`);
+      
+      // Log model details for debugging
+      models.forEach((model, index) => {
+        console.log(`Model ${index}: vendor=${model.vendor}, family=${model.family}, name=${model.name}`);
+      });
+      
     } catch (error) {
-      console.error('Failed to initialize Copilot models:', error);
+      console.error('Failed to initialize language models:', error);
       this.isEnabled = false;
     }
   }
@@ -53,15 +96,47 @@ export class CopilotIntegration {
     return this.models.length > 0;
   }
 
+  async getDiagnostics(): Promise<any> {
+    const diagnostics: any = {
+      isEnabled: this.isEnabled,
+      modelsAvailable: this.models.length,
+      vscodeLmApiAvailable: typeof vscode.lm !== 'undefined',
+      models: this.models.map(m => ({
+        vendor: m.vendor,
+        family: m.family,
+        name: m.name
+      }))
+    };
+    
+    // Try to get all available models for debugging
+    try {
+      const allModels = await vscode.lm.selectChatModels();
+      diagnostics.allAvailableModels = allModels.map(m => ({
+        vendor: m.vendor,
+        family: m.family,
+        name: m.name
+      }));
+    } catch (error) {
+      diagnostics.allModelsError = error instanceof Error ? error.message : String(error);
+    }
+    
+    return diagnostics;
+  }
+
   async analyzeTestFailures(context: DebugContext): Promise<TestAnalysis> {
     if (!await this.isAvailable()) {
       // Return mock response for now
-      console.warn('GitHub Copilot not available, returning mock analysis');
+      console.warn('GitHub Copilot not available, returning fallback analysis');
+      const diagnostics = await this.getDiagnostics();
       return {
-        rootCause: 'Copilot integration not available - using fallback analysis',
+        rootCause: 'GitHub Copilot Not available - will use fallback analysis',
         specificFixes: [],
-        preventionStrategies: ['Ensure GitHub Copilot extension is installed and active'],
-        additionalTests: ['Mock test suggestions would appear here']
+        preventionStrategies: [
+          'Ensure GitHub Copilot extension is installed and active',
+          'Check that you have access to language models in VSCode',
+          `Diagnostics: ${JSON.stringify(diagnostics, null, 2)}`
+        ],
+        additionalTests: ['Fallback test suggestions based on common patterns']
       };
     }
 
@@ -123,11 +198,15 @@ Please analyze these test failures and provide solutions in the exact JSON forma
   async suggestNewTests(context: DebugContext): Promise<TestSuggestions> {
     if (!await this.isAvailable()) {
       // Return mock response for now
-      console.warn('GitHub Copilot not available, returning mock suggestions');
+      console.warn('GitHub Copilot not available, returning fallback suggestions');
       return {
         newTests: [],
-        missingCoverage: ['Copilot integration not available'],
-        improvements: ['Install and activate GitHub Copilot extension']
+        missingCoverage: ['AI analysis not available - using fallback'],
+        improvements: [
+          'Install and activate GitHub Copilot extension',
+          'Ensure you have access to VSCode Language Models',
+          'Check extension logs for more details'
+        ]
       };
     }
 
@@ -174,11 +253,15 @@ Based on the code changes, suggest new tests that should be added to ensure comp
   async detectFalsePositives(context: DebugContext): Promise<FalsePositiveAnalysis> {
     if (!await this.isAvailable()) {
       // Return mock response for now
-      console.warn('GitHub Copilot not available, returning mock analysis');
+      console.warn('GitHub Copilot not available, returning fallback analysis');
       return {
         suspiciousTests: [],
         mockingIssues: [],
-        recommendations: ['Install and activate GitHub Copilot extension for AI analysis']
+        recommendations: [
+          'Install and activate GitHub Copilot extension for AI analysis',
+          'Ensure you have access to VSCode Language Models',
+          'Fallback analysis: Review tests manually for over-mocking'
+        ]
       };
     }
 

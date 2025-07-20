@@ -1,6 +1,8 @@
 import { Component, Input, Output, EventEmitter, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { VscodeService } from '../../services/vscode.service';
+import { CopilotDiagnosticsComponent } from '../../components/copilot-diagnostics/copilot-diagnostics.component';
 import { FileSelection } from '../file-selection/file-selector.component';
 import { TestConfiguration } from '../test-selection/test-selector.component';
 
@@ -34,7 +36,7 @@ export interface DebugWorkflowState {
 @Component({
   selector: 'app-ai-debug',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CopilotDiagnosticsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="bg-vscode-editor-background p-4 rounded-lg border border-vscode-panel-border">
@@ -48,7 +50,7 @@ export interface DebugWorkflowState {
         </div>
       </div>
 
-      <!-- Prerequisites Check -->
+      <!-- Enhanced Copilot Status Section -->
       <div class="mb-6 space-y-3">
         <h4 class="text-vscode-foreground font-medium">Prerequisites</h4>
         <div class="grid gap-2">
@@ -84,9 +86,23 @@ export interface DebugWorkflowState {
             <span class="text-vscode-descriptionForeground text-xs">
               {{ copilotAvailable() ? 'Available' : 'Not available - will use fallback analysis' }}
             </span>
+            @if (!copilotAvailable()) {
+              <button 
+                (click)="showDiagnostics = !showDiagnostics"
+                class="ml-2 px-2 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
+                {{ showDiagnostics ? 'Hide' : 'Diagnose' }}
+              </button>
+            }
           </div>
         </div>
       </div>
+
+      <!-- Copilot Diagnostics Section -->
+      @if (showDiagnostics && !copilotAvailable()) {
+        <div class="mb-6">
+          <app-copilot-diagnostics></app-copilot-diagnostics>
+        </div>
+      }
 
       <!-- Main Action Button -->
       @if (workflowState().phase === 'idle') {
@@ -325,6 +341,7 @@ export class AIDebugComponent implements OnInit {
   });
 
   copilotAvailable = signal<boolean>(false);
+  showDiagnostics = false;
 
   workflowPhases = [
     { key: 'collecting-context', label: 'Context', icon: '📁' },
@@ -333,8 +350,80 @@ export class AIDebugComponent implements OnInit {
     { key: 'generating-report', label: 'Report', icon: '📄' }
   ];
 
+  constructor(private vscode: VscodeService) {}
+
   ngOnInit() {
     this.checkCopilotAvailability();
+    this.setupMessageHandlers();
+  }
+
+  private setupMessageHandlers() {
+    // Listen for messages from the backend
+    this.vscode.onMessage().subscribe(message => {
+      if (!message) return;
+      
+      switch (message.command) {
+        case 'copilotAvailability':
+          console.log('Received Copilot availability:', message.data);
+          this.copilotAvailable.set(message.data?.available || false);
+          break;
+        case 'copilotDiagnosticsComplete':
+          console.log('Received Copilot diagnostics:', message.data);
+          // Update availability based on diagnostic results - use same logic as CopilotDiagnosticsComponent
+          if (message.data?.modelsAvailable > 0) {
+            this.copilotAvailable.set(true);
+            console.log('Copilot is available: models found =', message.data.modelsAvailable);
+          } else {
+            this.copilotAvailable.set(false);
+            console.log('Copilot not available: models found =', message.data?.modelsAvailable || 0);
+          }
+          break;
+        case 'workflowStateUpdate':
+          // Handle workflow state updates from backend
+          this.handleWorkflowStateUpdate(message.data);
+          break;
+        case 'aiAnalysisComplete':
+          // Handled in performAIAnalysis method
+          break;
+        case 'testResults':
+          // Handled in runTests method
+          break;
+        case 'workflowError':
+          // Handle errors
+          console.error('Workflow error:', message.data?.error);
+          break;
+      }
+    });
+  }
+
+  private handleWorkflowStateUpdate(data: any) {
+    // Update local workflow state based on backend updates
+    if (data.step && data.progress !== undefined) {
+      this.updateWorkflowState({
+        phase: this.mapBackendStepToPhase(data.step),
+        progress: data.progress,
+        message: data.message
+      });
+    }
+  }
+
+  private mapBackendStepToPhase(step: string): DebugWorkflowState['phase'] {
+    switch (step) {
+      case 'collecting-context':
+        return 'collecting-context';
+      case 'running-tests':
+        return 'running-tests';
+      case 'analyzing-with-ai':
+        return 'analyzing-results';
+      case 'generating-pr':
+        return 'generating-report';
+      case 'complete':
+        return 'complete';
+      case 'error':
+        return 'error';
+      default:
+        return 'idle';
+    }
   }
 
   canStartWorkflow(): boolean {
@@ -362,7 +451,15 @@ export class AIDebugComponent implements OnInit {
       case 'uncommitted':
         return `${this.fileSelection.files.length} files`;
       case 'commit':
-        return this.fileSelection.commit?.hash.substring(0, 7) || 'No commit';
+        const selectedCommits = this.fileSelection.commits;
+        if (selectedCommits && selectedCommits.length > 0) {
+          if (selectedCommits.length === 1) {
+            return selectedCommits[0].hash.substring(0, 7);
+          } else {
+            return `${selectedCommits.length} commits`;
+          }
+        }
+        return 'No commits';
       case 'branch-diff':
         return 'Branch to main';
       default:
@@ -511,91 +608,135 @@ export class AIDebugComponent implements OnInit {
     this.workflowState.update(current => ({ ...current, ...updates }));
   }
 
-  private async checkCopilotAvailability() {
-    // Mock check - will be replaced with actual Copilot API check
-    await this.simulateDelay(500);
-    this.copilotAvailable.set(Math.random() > 0.3); // 70% chance of being available for demo
+  private async checkCopilotAvailability(): Promise<void> {
+    try {
+      // Request real Copilot availability check from backend
+      this.vscode.postMessage('checkCopilotAvailability', {});
+      
+      // Also get diagnostic information for better troubleshooting
+      this.vscode.postMessage('runCopilotDiagnostics', {});
+      
+      // Add a small delay then request diagnostics again to ensure we get the latest status
+      setTimeout(() => {
+        this.vscode.postMessage('runCopilotDiagnostics', {});
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to check Copilot availability:', error);
+      this.copilotAvailable.set(false);
+    }
   }
 
   private async runTests(): Promise<TestResult[]> {
-    // Mock test execution - will be replaced with actual test runner integration
-    await this.simulateDelay(3000);
+    // Request real test execution from backend
+    return new Promise((resolve, reject) => {
+      // Set up message listener for test results
+      const subscription = this.vscode.onMessage().subscribe(message => {
+        if (message?.command === 'testResults') {
+          subscription.unsubscribe();
+          
+          // Convert backend test results to component format
+          const testResults: TestResult[] = message.data.results.map((result: any) => ({
+            name: result.name || 'Unknown test',
+            status: result.status || 'failed',
+            duration: result.duration || 0,
+            file: result.file || 'Unknown file',
+            error: result.error,
+            stackTrace: result.stackTrace
+          }));
+          
+          resolve(testResults);
+        } else if (message?.command === 'workflowError') {
+          subscription.unsubscribe();
+          reject(new Error(message.data?.error || 'Test execution failed'));
+        }
+      });
 
-    // Generate mock test results based on configuration
-    const mockResults: TestResult[] = [
-      {
-        name: 'should render component correctly',
-        status: 'passed',
-        duration: 245,
-        file: 'src/app/component.spec.ts'
-      },
-      {
-        name: 'should handle user input',
-        status: 'failed',
-        duration: 189,
-        file: 'src/app/component.spec.ts',
-        error: 'Expected true to be false',
-        stackTrace: 'at Object.toBe (src/app/component.spec.ts:25:23)'
-      },
-      {
-        name: 'should call service method',
-        status: 'passed',
-        duration: 156,
-        file: 'src/app/service.spec.ts'
-      },
-      {
-        name: 'should validate form input',
-        status: 'skipped',
-        duration: 0,
-        file: 'src/app/form.spec.ts'
+      // Request test execution based on configuration
+      if (this.testConfiguration?.mode === 'affected') {
+        this.vscode.postMessage('runAffectedTests', { baseBranch: 'main' });
+      } else if (this.testConfiguration?.project) {
+        // Run tests for single project  
+        this.vscode.postMessage('runProjectTests', { 
+          projectName: this.testConfiguration.project 
+        });
+      } else {
+        subscription.unsubscribe();
+        reject(new Error('No valid test configuration found'));
       }
-    ];
 
-    return mockResults;
+      // Set timeout to prevent hanging
+      setTimeout(() => {
+        subscription.unsubscribe();
+        reject(new Error('Test execution timeout'));
+      }, 300000); // 5 minute timeout
+    });
   }
 
   private async performAIAnalysis(testResults: TestResult[]): Promise<AIAnalysis> {
-    // Mock AI analysis - will be replaced with actual Copilot integration
-    await this.simulateDelay(2000);
+    // Request real AI analysis from backend
+    return new Promise((resolve, reject) => {
+      // Set up message listener for AI analysis results
+      const subscription = this.vscode.onMessage().subscribe(message => {
+        if (message?.command === 'aiAnalysisComplete') {
+          subscription.unsubscribe();
+          
+          const { type, analysis, falsePositives, suggestions } = message.data;
+          
+          // Convert backend analysis to component format
+          const aiAnalysis: AIAnalysis = {
+            type: type === 'failure-analysis' ? 'failure-analysis' : 'success-analysis'
+          };
 
-    const failedTests = testResults.filter(t => t.status === 'failed');
-    
-    if (failedTests.length > 0) {
-      // Failure analysis
-      return {
-        type: 'failure-analysis',
-        rootCause: 'The test failure appears to be caused by incorrect expectations in the component test. The test is expecting a boolean value to be false, but the component is returning true.',
-        suggestedFixes: [
-          'Update the test expectation to match the actual component behavior',
-          'Check if the component logic needs to be modified to return false',
-          'Verify that the test setup is correctly initializing the component state'
-        ],
-        newTestSuggestions: [
-          'Add test for edge cases in user input handling',
-          'Add integration test for component-service interaction',
-          'Add test for error handling scenarios'
-        ]
-      };
-    } else {
-      // Success analysis
-      return {
-        type: 'success-analysis',
-        falsePositiveWarnings: [
-          'The skipped test for form validation should be implemented',
-          'Consider adding more edge case tests for user input scenarios'
-        ],
-        codeImprovements: [
-          'Consider adding more descriptive test names',
-          'Add setup and teardown methods for better test isolation',
-          'Consider using test data builders for complex object creation'
-        ],
-        newTestSuggestions: [
-          'Add performance tests for component rendering',
-          'Add accessibility tests using testing-library',
-          'Add tests for component lifecycle methods'
-        ]
-      };
-    }
+          if (type === 'failure-analysis' && analysis) {
+            aiAnalysis.rootCause = analysis.rootCause;
+            aiAnalysis.suggestedFixes = analysis.specificFixes?.map((fix: any) => 
+              `${fix.file}:${fix.lineNumber} - ${fix.explanation}`
+            ) || analysis.preventionStrategies || [];
+          } else if (type === 'success-analysis') {
+            aiAnalysis.falsePositiveWarnings = falsePositives?.recommendations || [];
+            aiAnalysis.codeImprovements = falsePositives?.suspiciousTests?.map((test: any) => 
+              `${test.file}: ${test.suggestion}`
+            ) || [];
+          }
+
+          // Add test suggestions
+          aiAnalysis.newTestSuggestions = suggestions?.newTests?.map((test: any) => 
+            `${test.testName}: ${test.reasoning}`
+          ) || suggestions?.improvements || [];
+          
+          resolve(aiAnalysis);
+        } else if (message?.command === 'workflowError') {
+          subscription.unsubscribe();
+          reject(new Error(message.data?.error || 'AI analysis failed'));
+        }
+      });
+
+      // Get git diff for analysis
+      let gitDiff = '';
+      
+      // Prepare git diff based on file selection
+      if (this.fileSelection?.mode === 'uncommitted') {
+        this.vscode.postMessage('getGitDiff'); // This will be used in the analysis
+        gitDiff = 'uncommitted-changes'; // Placeholder
+      } else if (this.fileSelection?.mode === 'commit' && this.fileSelection.commits) {
+        gitDiff = `commit-${this.fileSelection.commits[0]?.hash || 'unknown'}`;
+      } else if (this.fileSelection?.mode === 'branch-diff') {
+        gitDiff = 'branch-diff';
+      }
+
+      // Request AI analysis with context
+      this.vscode.postMessage('runAIAnalysis', {
+        gitDiff,
+        testResults,
+        analysisType: testResults.some(test => test.status === 'failed') ? 'failure' : 'success'
+      });
+
+      // Set timeout to prevent hanging
+      setTimeout(() => {
+        subscription.unsubscribe();
+        reject(new Error('AI analysis timeout'));
+      }, 120000); // 2 minute timeout
+    });
   }
 
   private simulateDelay(ms: number): Promise<void> {

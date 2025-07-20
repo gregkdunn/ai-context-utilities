@@ -54,11 +54,50 @@ describe('AppComponent', () => {
       files: [{ path: 'test.ts', status: 'modified' as const, selected: true }]
     };
 
+    // Set initial test configuration
+    const initialTestConfig = {
+      mode: 'affected' as const,
+      testFiles: [],
+      command: 'nx affected --target=test'
+    };
+    component.testConfiguration.set(initialTestConfig);
+
     component.onFileSelectionChanged(fileSelection);
     
     expect(component.fileSelection()).toEqual(fileSelection);
+    expect(component.testConfiguration()).toBeNull(); // Should be reset
     expect(mockVscodeService.postMessage).toHaveBeenCalledWith('fileSelectionChanged', fileSelection);
     expect(mockVscodeService.setState).toHaveBeenCalled();
+  });
+
+  it('should reset test configuration when file selection changes', () => {
+    // Set initial test configuration
+    const testConfig = {
+      mode: 'project' as const,
+      project: 'test-project',
+      testFiles: [],
+      command: 'nx test test-project'
+    };
+    component.testConfiguration.set(testConfig);
+    expect(component.testConfiguration()).toEqual(testConfig);
+
+    // Change file selection
+    const fileSelection = {
+      mode: 'commit' as const,
+      files: [],
+      commits: [{
+        hash: 'abc123',
+        message: 'test commit',
+        author: 'test author',
+        date: new Date(),
+        files: [],
+        selected: true
+      }]
+    };
+
+    component.onFileSelectionChanged(fileSelection);
+    
+    expect(component.testConfiguration()).toBeNull();
   });
 
   it('should handle test configuration changes', () => {
@@ -84,7 +123,7 @@ describe('AppComponent', () => {
     });
     expect(component.getFileSelectionStatus()).toBe('1 uncommitted files');
 
-    // Test config status
+    // Test selection status (updated name)
     expect(component.getTestConfigStatus()).toBe('Not configured');
     
     component.testConfiguration.set({

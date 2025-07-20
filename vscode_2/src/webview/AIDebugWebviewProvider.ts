@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from 'fs';
 import { GitIntegration } from '../services/GitIntegration';
 import { NXWorkspaceManager } from '../services/NXWorkspaceManager';
 import { CopilotIntegration } from '../services/CopilotIntegration';
-import { TestRunner } from '../services/TestRunner';
+import { CopilotDiagnosticsService } from '../services/CopilotDiagnosticsService';
+import { TestRunner, TestExecutionOptions } from '../services/TestRunner';
 import { WorkflowState, WorkflowConfig, WebviewMessage } from '../types';
 
 export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
@@ -12,13 +13,17 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private workflowState: WorkflowState = { step: 'idle' };
 
+  private copilotDiagnostics: CopilotDiagnosticsService;
+
   constructor(
     private context: vscode.ExtensionContext,
     private gitIntegration: GitIntegration,
     private nxManager: NXWorkspaceManager,
     private copilot: CopilotIntegration,
     private testRunner: TestRunner
-  ) {}
+  ) {
+    this.copilotDiagnostics = new CopilotDiagnosticsService(context, copilot);
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -52,6 +57,21 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
         this.saveState();
       }
     });
+
+    // Send initial Copilot availability when webview becomes visible
+    webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible) {
+        this.sendInitialStatus();
+      }
+    });
+
+    // Send initial status immediately if already visible
+    if (webviewView.visible) {
+      // Delay slightly to ensure webview is ready
+      setTimeout(() => {
+        this.sendInitialStatus();
+      }, 100);
+    }
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
@@ -383,6 +403,84 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
         case 'getGitDiff':
           await this.getGitDiff();
           break;
+        case 'getUncommittedChanges':
+          await this.getUncommittedChanges();
+          break;
+        case 'getCommitHistory':
+          await this.getCommitHistory(message.data?.limit);
+          break;
+        case 'getBranchDiff':
+          await this.getBranchDiff();
+          break;
+        case 'getDiffForCommit':
+          await this.getDiffForCommit(message.data?.commitHash);
+          break;
+        case 'getCurrentBranch':
+          await this.getCurrentBranch();
+          break;
+        case 'getNXProjects':
+          await this.getNXProjects();
+          break;
+        case 'getAffectedProjects':
+          await this.getAffectedProjects(message.data?.baseBranch);
+          break;
+        case 'runProjectTests':
+          await this.runProjectTests(message.data?.projectName);
+          break;
+        case 'runAffectedTests':
+          await this.runAffectedTests(message.data?.baseBranch);
+          break;
+        case 'isNXWorkspace':
+          await this.checkNXWorkspace();
+          break;
+        case 'getProjectTestFiles':
+          await this.getProjectTestFiles(message.data?.projectName);
+          break;
+        case 'getMultipleProjectTestFiles':
+          await this.getMultipleProjectTestFiles(message.data?.projectNames);
+          break;
+        case 'checkCopilotAvailability':
+          await this.checkCopilotAvailability();
+          break;
+        case 'runAIAnalysis':
+          await this.runAIAnalysis(message.data);
+          break;
+        case 'generatePRDescription':
+          await this.generatePRDescription(message.data);
+          break;
+        case 'runCopilotDiagnostics':
+          await this.runCopilotDiagnostics();
+          break;
+        case 'executeCopilotAction':
+          await this.executeCopilotAction(message.data?.action);
+          break;
+        case 'getCopilotCommands':
+          await this.getCopilotCommands();
+          break;
+        case 'generateGitDiff':
+          await this.generateGitDiff(message.data);
+          break;
+        case 'rerunGitDiff':
+          await this.rerunGitDiff(message.data);
+          break;
+        case 'openDiffFile':
+          await this.openDiffFile(message.data?.filePath);
+          break;
+        case 'deleteDiffFile':
+          await this.deleteDiffFile(message.data?.filePath);
+          break;
+        case 'runTests':
+          await this.runTestsWithStreaming(message.data);
+          break;
+        case 'cancelTestRun':
+          await this.cancelTestRun();
+          break;
+        case 'openOutputFile':
+          await this.openOutputFile(message.data?.filePath);
+          break;
+        case 'deleteOutputFile':
+          await this.deleteOutputFile(message.data?.filePath);
+          break;
         case 'resetWorkflow':
           this.resetWorkflow();
           break;
@@ -402,6 +500,226 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       this.sendMessage('workflowError', { error: `Failed to get git diff: ${error}` });
     }
+  }
+
+  private async getUncommittedChanges(): Promise<void> {
+    try {
+      const changes = await this.gitIntegration.getUncommittedChanges();
+      this.sendMessage('uncommittedChanges', changes);
+    } catch (error) {
+      console.error('Failed to get uncommitted changes:', error);
+      this.sendMessage('workflowError', { error: `Failed to get uncommitted changes: ${error}` });
+    }
+  }
+
+  private async getCommitHistory(limit: number = 50): Promise<void> {
+    try {
+      const commits = await this.gitIntegration.getCommitHistory(limit);
+      this.sendMessage('commitHistory', commits);
+    } catch (error) {
+      console.error('Failed to get commit history:', error);
+      this.sendMessage('workflowError', { error: `Failed to get commit history: ${error}` });
+    }
+  }
+
+  private async getBranchDiff(): Promise<void> {
+    try {
+      const diff = await this.gitIntegration.getDiffFromMainBranch();
+      // Parse diff to get basic stats
+      const stats = this.parseDiffStats(diff);
+      this.sendMessage('branchDiff', { diff, stats });
+    } catch (error) {
+      console.error('Failed to get branch diff:', error);
+      this.sendMessage('workflowError', { error: `Failed to get branch diff: ${error}` });
+    }
+  }
+
+  private async getDiffForCommit(commitHash: string): Promise<void> {
+    try {
+      if (!commitHash) {
+        throw new Error('Commit hash is required');
+      }
+      const diff = await this.gitIntegration.getDiffForCommit(commitHash);
+      this.sendMessage('commitDiff', { commitHash, diff });
+    } catch (error) {
+      console.error(`Failed to get diff for commit ${commitHash}:`, error);
+      this.sendMessage('workflowError', { error: `Failed to get diff for commit: ${error}` });
+    }
+  }
+
+  private async getCurrentBranch(): Promise<void> {
+    try {
+      const branch = await this.gitIntegration.getCurrentBranch();
+      this.sendMessage('currentBranch', branch);
+    } catch (error) {
+      console.error('Failed to get current branch:', error);
+      this.sendMessage('workflowError', { error: `Failed to get current branch: ${error}` });
+    }
+  }
+
+  private async checkNXWorkspace(): Promise<void> {
+    try {
+      const isNX = await this.nxManager.isNXWorkspace();
+      this.sendMessage('nxWorkspaceStatus', { isNXWorkspace: isNX });
+    } catch (error) {
+      console.error('Failed to check NX workspace:', error);
+      this.sendMessage('workflowError', { error: `Failed to check NX workspace: ${error}` });
+    }
+  }
+
+  private async getNXProjects(): Promise<void> {
+    try {
+      const projects = await this.nxManager.listProjects();
+      this.sendMessage('nxProjects', projects);
+    } catch (error) {
+      console.error('Failed to get NX projects:', error);
+      this.sendMessage('workflowError', { error: `Failed to get NX projects: ${error}` });
+    }
+  }
+
+  private async getAffectedProjects(baseBranch: string = 'main'): Promise<void> {
+    try {
+      const affectedProjects = await this.nxManager.getAffectedProjects(baseBranch);
+      this.sendMessage('affectedProjects', { projects: affectedProjects, baseBranch });
+    } catch (error) {
+      console.error('Failed to get affected projects:', error);
+      this.sendMessage('workflowError', { error: `Failed to get affected projects: ${error}` });
+    }
+  }
+
+  private async runProjectTests(projectName: string): Promise<void> {
+    try {
+      if (!projectName) {
+        throw new Error('Project name is required');
+      }
+      
+      this.updateWorkflowState({ step: 'running-tests', progress: 0, message: `Running tests for ${projectName}...` });
+      
+      const testResults = await this.nxManager.runProjectTests(projectName);
+      
+      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'Tests completed!' });
+      this.sendMessage('testResults', { project: projectName, results: testResults });
+    } catch (error) {
+      console.error(`Failed to run tests for project ${projectName}:`, error);
+      this.updateWorkflowState({ step: 'error', message: `Failed to run tests: ${error}` });
+    }
+  }
+
+  private async runAffectedTests(baseBranch: string = 'main'): Promise<void> {
+    try {
+      this.updateWorkflowState({ step: 'running-tests', progress: 0, message: 'Running affected tests...' });
+      
+      const testResults = await this.nxManager.runAffectedTests(baseBranch);
+      
+      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'Affected tests completed!' });
+      this.sendMessage('testResults', { type: 'affected', baseBranch, results: testResults });
+    } catch (error) {
+      console.error('Failed to run affected tests:', error);
+      this.updateWorkflowState({ step: 'error', message: `Failed to run affected tests: ${error}` });
+    }
+  }
+
+  private async getProjectTestFiles(projectName: string): Promise<void> {
+    try {
+      if (!projectName) {
+        throw new Error('Project name is required');
+      }
+
+      // Get project configuration to find test files
+      const projects = await this.nxManager.listProjects();
+      const project = projects.find(p => p.name === projectName);
+      
+      if (!project) {
+        throw new Error(`Project ${projectName} not found`);
+      }
+
+      // Find test files in the project directory
+      const testFiles = await this.findTestFiles(project.root);
+      
+      this.sendMessage('projectTestFiles', { projectName, testFiles });
+    } catch (error) {
+      console.error(`Failed to get test files for project ${projectName}:`, error);
+      this.sendMessage('workflowError', { error: `Failed to get test files: ${error}` });
+    }
+  }
+
+  private async findTestFiles(projectRoot: string): Promise<any[]> {
+    const { readdir, stat } = require('fs').promises;
+    const path = require('path');
+    
+    const testFiles: any[] = [];
+    const fullPath = path.join(this.nxManager.getWorkspacePath(), projectRoot);
+    
+    try {
+      const findTestFilesRecursive = async (dir: string, relativePath: string = '') => {
+        const entries = await readdir(dir);
+        
+        for (const entry of entries) {
+          const entryPath = path.join(dir, entry);
+          const relativeEntryPath = path.join(relativePath, entry);
+          const stats = await stat(entryPath);
+          
+          if (stats.isDirectory() && !entry.startsWith('.') && entry !== 'node_modules') {
+            await findTestFilesRecursive(entryPath, relativeEntryPath);
+          } else if (stats.isFile() && (entry.endsWith('.spec.ts') || entry.endsWith('.test.ts'))) {
+            // Count test cases in the file (simple heuristic)
+            const testCount = await this.countTestsInFile(entryPath);
+            
+            testFiles.push({
+              path: relativeEntryPath,
+              selected: false,
+              testCount
+            });
+          }
+        }
+      };
+      
+      await findTestFilesRecursive(fullPath);
+    } catch (error) {
+      console.warn(`Could not scan directory ${fullPath}:`, error);
+    }
+    
+    return testFiles;
+  }
+
+  private async countTestsInFile(filePath: string): Promise<number> {
+    try {
+      const { readFile } = require('fs').promises;
+      const content = await readFile(filePath, 'utf-8');
+      
+      // Simple regex to count test cases
+      const testMatches = content.match(/\b(it|test)\s*\(/g);
+      return testMatches ? testMatches.length : 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  private parseDiffStats(diff: string): { filesChanged: number; additions: number; deletions: number } {
+    // Simple diff stats parser
+    const lines = diff.split('\n');
+    const files = new Set<string>();
+    let additions = 0;
+    let deletions = 0;
+
+    for (const line of lines) {
+      if (line.startsWith('diff --git')) {
+        const match = line.match(/diff --git a\/(.*?) b\/(.*?)$/);
+        if (match && match[1]) {
+          files.add(match[1]);
+        }
+      } else if (line.startsWith('+') && !line.startsWith('+++')) {
+        additions++;
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        deletions++;
+      }
+    }
+
+    return {
+      filesChanged: files.size,
+      additions,
+      deletions
+    };
   }
 
   private async handleModuleSelection(moduleType: string): Promise<void> {
@@ -479,21 +797,84 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleTestFailures(gitDiff: string, testResults: any[]): Promise<void> {
-    // TODO: Implement AI analysis for test failures
-    console.log('Handling test failures with AI analysis...');
-    
-    // Placeholder: Show basic info about failures
-    const failures = testResults.filter(t => t.status === 'failed');
-    vscode.window.showWarningMessage(`${failures.length} tests failed. AI analysis will be implemented.`);
-    this.sendMessage('testFailures', { count: failures.length, failures });
+    try {
+      console.log('Analyzing test failures with AI...');
+      
+      // Prepare debug context for AI analysis
+      const debugContext = {
+        gitDiff,
+        testResults,
+        projectInfo: await this.getProjectInfo()
+      };
+
+      // Use Copilot to analyze test failures
+      const testAnalysis = await this.copilot.analyzeTestFailures(debugContext);
+      
+      // Get new test suggestions
+      const testSuggestions = await this.copilot.suggestNewTests(debugContext);
+
+      // Send comprehensive analysis to webview
+      this.sendMessage('aiAnalysisComplete', {
+        type: 'failure-analysis',
+        analysis: testAnalysis,
+        suggestions: testSuggestions,
+        testResults
+      });
+
+      // Show summary notification
+      const failures = testResults.filter(t => t.status === 'failed');
+      const analysisMessage = await this.copilot.isAvailable() 
+        ? `AI analyzed ${failures.length} test failures with actionable recommendations`
+        : `Found ${failures.length} test failures (Copilot unavailable - using fallback analysis)`;
+      
+      vscode.window.showWarningMessage(analysisMessage);
+      
+    } catch (error) {
+      console.error('Failed to analyze test failures:', error);
+      this.sendMessage('workflowError', { 
+        error: `AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
   }
 
   private async handleTestSuccess(gitDiff: string, testResults: any[]): Promise<void> {
-    // TODO: Implement AI analysis for successful tests (false positive detection, new test suggestions)
-    console.log('Handling successful tests with AI analysis...');
-    
-    vscode.window.showInformationMessage('All tests passed! AI analysis for test suggestions will be implemented.');
-    this.sendMessage('testSuccess', { count: testResults.length });
+    try {
+      console.log('Analyzing successful tests with AI...');
+      
+      // Prepare debug context for AI analysis
+      const debugContext = {
+        gitDiff,
+        testResults,
+        projectInfo: await this.getProjectInfo()
+      };
+
+      // Use Copilot to detect false positives
+      const falsePositiveAnalysis = await this.copilot.detectFalsePositives(debugContext);
+      
+      // Get new test suggestions
+      const testSuggestions = await this.copilot.suggestNewTests(debugContext);
+
+      // Send comprehensive analysis to webview
+      this.sendMessage('aiAnalysisComplete', {
+        type: 'success-analysis',
+        falsePositives: falsePositiveAnalysis,
+        suggestions: testSuggestions,
+        testResults
+      });
+
+      // Show summary notification
+      const analysisMessage = await this.copilot.isAvailable()
+        ? `AI analyzed ${testResults.length} passing tests and provided improvement suggestions`
+        : `${testResults.length} tests passed (Copilot unavailable - using fallback analysis)`;
+      
+      vscode.window.showInformationMessage(analysisMessage);
+      
+    } catch (error) {
+      console.error('Failed to analyze successful tests:', error);
+      this.sendMessage('workflowError', { 
+        error: `AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
   }
 
   private resetWorkflow(): void {
@@ -509,6 +890,603 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
   private sendMessage(command: string, data?: any): void {
     if (this.view) {
       this.view.webview.postMessage({ command, data });
+    }
+  }
+
+  private async sendInitialStatus(): Promise<void> {
+    try {
+      // Send Copilot availability status
+      await this.checkCopilotAvailability();
+      
+      // Send initial workflow state
+      this.sendMessage('workflowStateUpdate', this.workflowState);
+      
+      console.log('Initial status sent to webview');
+    } catch (error) {
+      console.error('Failed to send initial status:', error);
+    }
+  }
+
+  private async checkCopilotAvailability(): Promise<void> {
+    try {
+      const isAvailable = await this.copilot.isAvailable();
+      
+      // Get diagnostic information for better troubleshooting
+      const diagnostics = await this.copilot.getDiagnostics();
+      
+      this.sendMessage('copilotAvailability', { 
+        available: isAvailable,
+        diagnostics 
+      });
+      
+      console.log(`Copilot availability: ${isAvailable}`, diagnostics);
+    } catch (error) {
+      console.error('Failed to check Copilot availability:', error);
+      this.sendMessage('copilotAvailability', { 
+        available: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  }
+
+  private async runAIAnalysis(data: { gitDiff: string; testResults: any[]; analysisType?: string }): Promise<void> {
+    try {
+      const { gitDiff, testResults, analysisType } = data;
+      
+      if (!gitDiff || !testResults) {
+        throw new Error('Git diff and test results are required for AI analysis');
+      }
+
+      // Prepare debug context
+      const debugContext = {
+        gitDiff,
+        testResults,
+        projectInfo: await this.getProjectInfo()
+      };
+
+      this.updateWorkflowState({ step: 'analyzing-with-ai', progress: 70, message: 'Running AI analysis...' });
+
+      // Determine analysis type if not specified
+      const hasFailures = testResults.some((test: any) => test.status === 'failed');
+      const actualAnalysisType = analysisType || (hasFailures ? 'failure' : 'success');
+
+      let analysisResults: any = {};
+
+      switch (actualAnalysisType) {
+        case 'failure':
+          analysisResults.testAnalysis = await this.copilot.analyzeTestFailures(debugContext);
+          break;
+        case 'success':
+          analysisResults.falsePositiveAnalysis = await this.copilot.detectFalsePositives(debugContext);
+          break;
+        case 'comprehensive':
+          // Run all types of analysis
+          analysisResults.testAnalysis = hasFailures ? await this.copilot.analyzeTestFailures(debugContext) : null;
+          analysisResults.falsePositiveAnalysis = await this.copilot.detectFalsePositives(debugContext);
+          break;
+      }
+
+      // Always get test suggestions
+      analysisResults.testSuggestions = await this.copilot.suggestNewTests(debugContext);
+
+      this.sendMessage('aiAnalysisComplete', {
+        type: actualAnalysisType,
+        ...analysisResults,
+        testResults
+      });
+
+      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'AI analysis completed!' });
+
+    } catch (error) {
+      console.error('AI analysis failed:', error);
+      this.updateWorkflowState({ step: 'error', message: `AI analysis failed: ${error}` });
+      this.sendMessage('workflowError', { error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  }
+
+  private async generatePRDescription(data: { gitDiff: string; testResults?: any[]; template?: string; jiraTickets?: string[]; featureFlags?: string[] }): Promise<void> {
+    try {
+      // For now, this is a placeholder for PR description generation
+      // In a full implementation, this would use the Copilot service with PR-specific prompts
+      
+      const { gitDiff, testResults, template, jiraTickets, featureFlags } = data;
+      
+      if (!gitDiff) {
+        throw new Error('Git diff is required for PR description generation');
+      }
+
+      this.updateWorkflowState({ step: 'generating-pr', progress: 90, message: 'Generating PR description...' });
+
+      // TODO: Implement actual PR description generation using Copilot
+      // For now, generate a basic description based on the diff
+      const prDescription = this.generateBasicPRDescription(gitDiff, testResults, jiraTickets, featureFlags);
+
+      this.sendMessage('prDescriptionGenerated', {
+        description: prDescription,
+        template: template || 'standard',
+        jiraTickets: jiraTickets || [],
+        featureFlags: featureFlags || []
+      });
+
+      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'PR description generated!' });
+
+    } catch (error) {
+      console.error('PR description generation failed:', error);
+      this.sendMessage('workflowError', { error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  }
+
+  private async getMultipleProjectTestFiles(projectNames: string[]): Promise<void> {
+    try {
+      if (!projectNames || projectNames.length === 0) {
+        throw new Error('Project names are required');
+      }
+
+      let allTestFiles: any[] = [];
+
+      // Get test files for each project
+      for (const projectName of projectNames) {
+        const projects = await this.nxManager.listProjects();
+        const project = projects.find(p => p.name === projectName);
+        
+        if (project) {
+          const testFiles = await this.findTestFiles(project.root);
+          // Add project prefix to distinguish files from different projects
+          const prefixedFiles = testFiles.map(file => ({
+            ...file,
+            path: `${projectName}/${file.path}`,
+            project: projectName
+          }));
+          allTestFiles = allTestFiles.concat(prefixedFiles);
+        }
+      }
+      
+      this.sendMessage('multipleProjectTestFiles', { projectNames, testFiles: allTestFiles });
+    } catch (error) {
+      console.error(`Failed to get test files for projects ${projectNames}:`, error);
+      this.sendMessage('workflowError', { error: `Failed to get test files: ${error}` });
+    }
+  }
+
+  private async getProjectInfo(): Promise<any> {
+    try {
+      // Get basic project information for AI context
+      const workspacePath = this.nxManager.getWorkspacePath();
+      const packageJsonPath = require('path').join(workspacePath, 'package.json');
+      
+      let projectInfo: any = {
+        name: 'Unknown Project',
+        type: 'NX Workspace',
+        framework: 'Unknown',
+        testFramework: 'Unknown',
+        dependencies: []
+      };
+
+      try {
+        const { readFile } = require('fs').promises;
+        const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
+        
+        projectInfo.name = packageJson.name || 'Unknown Project';
+        
+        // Detect framework
+        if (packageJson.dependencies?.['@angular/core'] || packageJson.devDependencies?.['@angular/core']) {
+          projectInfo.framework = 'Angular';
+        } else if (packageJson.dependencies?.['react'] || packageJson.devDependencies?.['react']) {
+          projectInfo.framework = 'React';
+        } else if (packageJson.dependencies?.['vue'] || packageJson.devDependencies?.['vue']) {
+          projectInfo.framework = 'Vue';
+        }
+        
+        // Detect test framework
+        if (packageJson.devDependencies?.['jest'] || packageJson.dependencies?.['jest']) {
+          projectInfo.testFramework = 'Jest';
+        } else if (packageJson.devDependencies?.['vitest'] || packageJson.dependencies?.['vitest']) {
+          projectInfo.testFramework = 'Vitest';
+        } else if (packageJson.devDependencies?.['mocha'] || packageJson.dependencies?.['mocha']) {
+          projectInfo.testFramework = 'Mocha';
+        }
+        
+        // Get key dependencies
+        projectInfo.dependencies = Object.keys({
+          ...packageJson.dependencies,
+          ...packageJson.devDependencies
+        }).slice(0, 20); // Limit to first 20 dependencies
+        
+      } catch (error) {
+        console.warn('Could not read package.json:', error);
+      }
+
+      return projectInfo;
+    } catch (error) {
+      console.error('Failed to get project info:', error);
+      return {
+        name: 'Unknown Project',
+        type: 'NX Workspace',
+        framework: 'Unknown',
+        testFramework: 'Unknown',
+        dependencies: []
+      };
+    }
+  }
+
+  private generateBasicPRDescription(gitDiff: string, testResults?: any[], jiraTickets?: string[], featureFlags?: string[]): string {
+    // Basic PR description generator - in a full implementation, this would use Copilot
+    const lines = gitDiff.split('\n');
+    const modifiedFiles = lines
+      .filter(line => line.startsWith('diff --git'))
+      .map(line => {
+        const match = line.match(/diff --git a\/(.*?) b\/(.*?)$/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean);
+
+    let description = '## Summary\n\n';
+    description += 'This PR includes changes to the following areas:\n\n';
+    
+    // Categorize files
+    const categories: { [key: string]: string[] } = {
+      Components: [],
+      Services: [],
+      Tests: [],
+      Configuration: [],
+      Other: []
+    };
+
+    modifiedFiles.forEach(file => {
+      if (file?.includes('.component.')) categories.Components.push(file);
+      else if (file?.includes('.service.')) categories.Services.push(file);
+      else if (file?.includes('.spec.') || file?.includes('.test.')) categories.Tests.push(file);
+      else if (file?.includes('config') || file?.includes('.json') || file?.includes('.yml')) categories.Configuration.push(file);
+      else if (file) categories.Other.push(file);
+    });
+
+    Object.entries(categories).forEach(([category, files]) => {
+      if (files.length > 0) {
+        description += `### ${category}\n`;
+        files.forEach(file => {
+          description += `- ${file}\n`;
+        });
+        description += '\n';
+      }
+    });
+
+    // Add test results if available
+    if (testResults && testResults.length > 0) {
+      const passed = testResults.filter(t => t.status === 'passed').length;
+      const failed = testResults.filter(t => t.status === 'failed').length;
+      description += '## Test Results\n\n';
+      description += `- ✅ ${passed} tests passing\n`;
+      if (failed > 0) {
+        description += `- ❌ ${failed} tests failing\n`;
+      }
+      description += '\n';
+    }
+
+    // Add Jira tickets if provided
+    if (jiraTickets && jiraTickets.length > 0) {
+      description += '## Related Issues\n\n';
+      jiraTickets.forEach(ticket => {
+        description += `- ${ticket}\n`;
+      });
+      description += '\n';
+    }
+
+    // Add feature flags if detected
+    if (featureFlags && featureFlags.length > 0) {
+      description += '## Feature Flags\n\n';
+      featureFlags.forEach(flag => {
+        description += `- ${flag}\n`;
+      });
+      description += '\n';
+    }
+
+    description += '## Deployment Notes\n\n';
+    description += '- [ ] Ensure all tests are passing\n';
+    description += '- [ ] Verify no breaking changes\n';
+    if (featureFlags && featureFlags.length > 0) {
+      description += '- [ ] Feature flags configured properly\n';
+    }
+
+    return description;
+  }
+
+  private async runCopilotDiagnostics(): Promise<void> {
+    try {
+      console.log('Running Copilot diagnostics...');
+      const diagnostics = await this.copilotDiagnostics.runDiagnostics();
+      this.sendMessage('copilotDiagnosticsComplete', diagnostics);
+    } catch (error) {
+      console.error('Failed to run Copilot diagnostics:', error);
+      this.sendMessage('workflowError', { 
+        error: `Diagnostics failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async getCopilotCommands(): Promise<void> {
+    try {
+      // Import the command helper dynamically
+      const { CopilotCommandHelper } = await import('../services/CopilotCommandHelper');
+      
+      const commands = await CopilotCommandHelper.getAvailableCopilotCommands();
+      const status = await CopilotCommandHelper.getCopilotExtensionStatus();
+      
+      this.sendMessage('copilotCommandsAvailable', {
+        commands,
+        extensionStatus: status
+      });
+    } catch (error) {
+      console.error('Failed to get Copilot commands:', error);
+      this.sendMessage('copilotCommandsAvailable', {
+        commands: [],
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  private async executeCopilotAction(action: string): Promise<void> {
+    try {
+      if (!action) {
+        throw new Error('Action is required');
+      }
+      
+      console.log(`Executing Copilot action: ${action}`);
+      const result = await this.copilotDiagnostics.executeAction(action);
+      
+      this.sendMessage('copilotActionComplete', result);
+      
+      // Show notification to user
+      if (result.success) {
+        vscode.window.showInformationMessage(result.message);
+      } else {
+        vscode.window.showWarningMessage(result.message);
+      }
+    } catch (error) {
+      console.error(`Failed to execute Copilot action ${action}:`, error);
+      const errorMessage = `Action failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      this.sendMessage('workflowError', { error: errorMessage });
+      vscode.window.showErrorMessage(errorMessage);
+    }
+  }
+
+  private async generateGitDiff(data: { mode: 'uncommitted' | 'commit' | 'branch-diff'; commitHash?: string }): Promise<void> {
+    try {
+      const { mode, commitHash } = data;
+      
+      if (!mode) {
+        throw new Error('Diff mode is required');
+      }
+
+      // Start streaming output
+      this.sendMessage('gitDiffProgress', { output: 'Initializing git diff generation...\n' });
+
+      // Generate diff with streaming
+      const result = await this.gitIntegration.generateDiffWithStreaming(
+        mode,
+        commitHash,
+        (output) => {
+          // Stream output to webview
+          this.sendMessage('gitDiffProgress', { output });
+        }
+      );
+
+      // Send completion message
+      this.sendMessage('gitDiffComplete', {
+        mode,
+        content: result.content,
+        filePath: result.filePath,
+        timestamp: new Date(),
+        status: 'complete'
+      });
+
+      // Also send message to show git diff view
+      this.sendMessage('gitDiffGenerated', {
+        mode,
+        content: result.content,
+        filePath: result.filePath,
+        timestamp: new Date(),
+        status: 'complete'
+      });
+
+    } catch (error) {
+      console.error('Failed to generate git diff:', error);
+      this.sendMessage('gitDiffError', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        mode: data.mode
+      });
+    }
+  }
+
+  private async rerunGitDiff(data: { mode: 'uncommitted' | 'commit' | 'branch-diff'; commitHash?: string }): Promise<void> {
+    // Rerun is the same as generate, just called from a different context
+    await this.generateGitDiff(data);
+  }
+
+  private async openDiffFile(filePath: string): Promise<void> {
+    try {
+      if (!filePath) {
+        throw new Error('File path is required');
+      }
+
+      await this.gitIntegration.openDiffFile(filePath);
+      
+      // Show success notification
+      vscode.window.showInformationMessage('Diff file opened successfully');
+      
+    } catch (error) {
+      console.error('Failed to open diff file:', error);
+      const errorMessage = `Failed to open diff file: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      vscode.window.showErrorMessage(errorMessage);
+      this.sendMessage('workflowError', { error: errorMessage });
+    }
+  }
+
+  private async deleteDiffFile(filePath: string): Promise<void> {
+    try {
+      if (!filePath) {
+        throw new Error('File path is required');
+      }
+
+      // Ask for confirmation
+      const confirmation = await vscode.window.showWarningMessage(
+        'Are you sure you want to delete this diff file?',
+        { modal: true },
+        'Delete',
+        'Cancel'
+      );
+
+      if (confirmation === 'Delete') {
+        await this.gitIntegration.deleteDiffFile(filePath);
+        
+        // Notify webview that file was deleted
+        this.sendMessage('gitDiffFileDeleted', { filePath });
+        
+        // Show success notification
+        vscode.window.showInformationMessage('Diff file deleted successfully');
+      }
+      
+    } catch (error) {
+      console.error('Failed to delete diff file:', error);
+      const errorMessage = `Failed to delete diff file: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      vscode.window.showErrorMessage(errorMessage);
+      this.sendMessage('workflowError', { error: errorMessage });
+    }
+  }
+
+  private async runTestsWithStreaming(config: any): Promise<void> {
+    try {
+      if (!config) {
+        throw new Error('Test configuration is required');
+      }
+
+      const { mode, project, projects, command } = config;
+      const startTime = new Date().toISOString();
+      
+      // Notify test execution started
+      this.sendMessage('testExecutionStarted', {
+        command,
+        startTime,
+        mode
+      });
+
+      // Create execution options with streaming callback
+      const executionOptions: TestExecutionOptions = {
+        command,
+        mode: mode as 'project' | 'affected',
+        projects: projects || (project ? [project] : undefined),
+        saveToFile: true,
+        outputCallback: (output: string) => {
+          // Stream output in real-time
+          this.sendMessage('testExecutionOutput', {
+            output,
+            append: true
+          });
+        }
+      };
+
+      // Execute tests with streaming
+      const result = await this.testRunner.executeTests(executionOptions);
+      
+      // Notify completion
+      this.sendMessage('testExecutionCompleted', {
+        exitCode: result.exitCode,
+        endTime: new Date().toISOString(),
+        outputFile: result.outputFile,
+        results: result.results
+      });
+
+      // Update workflow state
+      this.updateWorkflowState({ 
+        step: 'complete', 
+        progress: 100, 
+        message: `Tests completed with exit code ${result.exitCode}` 
+      });
+
+    } catch (error) {
+      console.error('Failed to run tests with streaming:', error);
+      
+      this.sendMessage('testExecutionError', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        endTime: new Date().toISOString()
+      });
+      
+      this.updateWorkflowState({ 
+        step: 'error', 
+        message: `Test execution failed: ${error}` 
+      });
+    }
+  }
+
+  private async cancelTestRun(): Promise<void> {
+    try {
+      const cancelled = this.testRunner.cancelCurrentExecution();
+      
+      if (cancelled) {
+        this.sendMessage('testExecutionError', {
+          error: 'Test execution cancelled by user',
+          endTime: new Date().toISOString()
+        });
+        
+        this.updateWorkflowState({ 
+          step: 'idle', 
+          message: 'Test execution cancelled' 
+        });
+        
+        vscode.window.showInformationMessage('Test execution cancelled');
+      } else {
+        vscode.window.showWarningMessage('No test execution is currently running');
+      }
+    } catch (error) {
+      console.error('Failed to cancel test run:', error);
+      vscode.window.showErrorMessage(`Failed to cancel test run: ${error}`);
+    }
+  }
+
+  private async openOutputFile(filePath: string): Promise<void> {
+    try {
+      if (!filePath) {
+        throw new Error('Output file path is required');
+      }
+
+      await this.testRunner.openOutputFile(filePath);
+      vscode.window.showInformationMessage('Output file opened successfully');
+      
+    } catch (error) {
+      console.error('Failed to open output file:', error);
+      const errorMessage = `Failed to open output file: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      vscode.window.showErrorMessage(errorMessage);
+      this.sendMessage('workflowError', { error: errorMessage });
+    }
+  }
+
+  private async deleteOutputFile(filePath: string): Promise<void> {
+    try {
+      if (!filePath) {
+        throw new Error('Output file path is required');
+      }
+
+      // Ask for confirmation
+      const confirmation = await vscode.window.showWarningMessage(
+        'Are you sure you want to delete this test output file?',
+        { modal: true },
+        'Delete',
+        'Cancel'
+      );
+
+      if (confirmation === 'Delete') {
+        await this.testRunner.deleteOutputFile(filePath);
+        
+        // Notify webview that file was deleted
+        this.sendMessage('testOutputFileDeleted', { filePath });
+        
+        vscode.window.showInformationMessage('Test output file deleted successfully');
+      }
+      
+    } catch (error) {
+      console.error('Failed to delete output file:', error);
+      const errorMessage = `Failed to delete output file: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      vscode.window.showErrorMessage(errorMessage);
+      this.sendMessage('workflowError', { error: errorMessage });
     }
   }
 
