@@ -343,6 +343,16 @@ export interface FileSelection {
                 </span>
               </button>
             }
+
+            <button
+              (click)="cleanupAllDiffFiles()"
+              [disabled]="isGeneratingDiff()"
+              class="px-3 py-1 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50">
+              <span class="flex items-center gap-1">
+                <span>🧹</span>
+                <span>Clean All</span>
+              </span>
+            </button>
           </div>
 
           <!-- Error Display -->
@@ -494,6 +504,7 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
 
   selectMode(mode: 'uncommitted' | 'commit' | 'branch-diff') {
     this.currentMode.set(mode);
+    this.clearDiffDisplayOnSelectionChange();
     this.emitSelection();
   }
 
@@ -524,6 +535,7 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
     if (index !== -1) {
       files[index].selected = !files[index].selected;
       this.uncommittedFiles.set([...files]);
+      this.clearDiffDisplayOnSelectionChange();
       this.emitSelection();
     }
   }
@@ -533,6 +545,7 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
     const allSelected = this.areAllSelected();
     files.forEach(f => f.selected = !allSelected);
     this.uncommittedFiles.set([...files]);
+    this.clearDiffDisplayOnSelectionChange();
     this.emitSelection();
   }
 
@@ -556,6 +569,7 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
     }
     
     this.updateSelectedCommits();
+    this.clearDiffDisplayOnSelectionChange();
     this.emitSelection();
   }
   
@@ -627,6 +641,7 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
     this.commits.set([...allCommits]);
     
     this.selectedCommits.set([]);
+    this.clearDiffDisplayOnSelectionChange();
     this.emitSelection();
   }
 
@@ -690,6 +705,9 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
     this.branchDiffStats.set(null);
     this.selectedCommits.set([]);
     
+    // Clear any existing diff display
+    this.clearDiffDisplayOnSelectionChange();
+    
     // Reload from Git
     this.loadInitialData();
   }
@@ -735,6 +753,23 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
     this.streamingOutput.set('');
   }
 
+  clearDiffDisplayOnSelectionChange() {
+    // Only clear if there's currently a diff displayed
+    if (this.showDiffDisplay()) {
+      this.showDiffDisplay.set(false);
+      this.diffDisplayData.set(null);
+      this.streamingOutput.set('');
+      
+      // Show a subtle notification that diff was cleared due to selection change
+      this.vscode.postMessage('showNotification', { 
+        message: 'Git diff cleared due to selection change',
+        type: 'info'
+      });
+      
+      console.log('Git diff cleared due to selection change');
+    }
+  }
+
   rerunDiff() {
     if (!this.diffDisplayData()) return;
     
@@ -773,6 +808,10 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
     if (filePath) {
       this.vscode.postMessage('deleteDiffFile', { filePath });
     }
+  }
+
+  cleanupAllDiffFiles() {
+    this.vscode.postMessage('cleanupAllDiffFiles');
   }
 
   copyDiffToClipboard() {
@@ -857,6 +896,9 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
             break;
           case 'gitDiffFileDeleted':
             this.handleGitDiffFileDeleted(message.data);
+            break;
+          case 'allDiffFilesDeleted':
+            this.handleAllDiffFilesDeleted(message.data);
             break;
           case 'workflowError':
             this.handleError(message.data?.error);
@@ -952,6 +994,18 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
         ...current,
         filePath: undefined
       });
+    }
+  }
+
+  private handleAllDiffFilesDeleted(data: { deleted: number; errors: string[] }) {
+    // Clear current diff display since all files were deleted
+    this.showDiffDisplay.set(false);
+    this.diffDisplayData.set(null);
+    this.streamingOutput.set('');
+    
+    console.log(`All diff files cleaned up: ${data.deleted} deleted, ${data.errors.length} errors`);
+    if (data.errors.length > 0) {
+      console.warn('Cleanup errors:', data.errors);
     }
   }
 

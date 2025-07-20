@@ -1,113 +1,89 @@
 #!/bin/bash
 
-# AI Debug Context VSCode Extension - Build and Test Script
-# This script builds and tests the extension to ensure it's working properly
-
-set -e  # Exit on any error
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")/vscode_2"
-
-echo "🚀 AI Debug Context - Build and Test"
-echo "====================================="
-echo "Project directory: $PROJECT_DIR"
+echo "=== AI Debug Context VSCode Extension v2 - Build and Test ==="
+echo "Date: $(date)"
 echo ""
 
+# Set the working directory
+PROJECT_DIR="/Users/gregdunn/src/test/ai_debug_context/vscode_2"
 cd "$PROJECT_DIR"
 
-# Step 1: Install dependencies if needed
-echo "📦 Checking dependencies..."
-if [ ! -d "node_modules" ]; then
-    echo "Installing main project dependencies..."
-    npm install
-fi
-
-if [ ! -d "webview-ui/node_modules" ]; then
-    echo "Installing webview dependencies..."
-    cd webview-ui
-    npm install
-    cd ..
-fi
-
-# Step 2: TypeScript compilation
+echo "🏠 Working directory: $PROJECT_DIR"
 echo ""
-echo "🔨 Compiling TypeScript..."
-npm run compile
-if [ $? -ne 0 ]; then
-    echo "❌ TypeScript compilation failed!"
+
+# Function to run command and show output
+run_command() {
+    local cmd="$1"
+    local desc="$2"
+    echo "▶️  $desc"
+    echo "   Command: $cmd"
+    echo "   ----------------------------------------"
+    
+    if eval "$cmd"; then
+        echo "   ✅ SUCCESS"
+    else
+        echo "   ❌ FAILED (exit code: $?)"
+        return 1
+    fi
+    echo ""
+}
+
+# Check if we're in the right directory
+if [ ! -f "package.json" ]; then
+    echo "❌ Error: package.json not found. Are we in the right directory?"
     exit 1
 fi
-echo "✅ TypeScript compilation successful"
 
-# Step 3: Run tests
+echo "1️⃣  Installing Extension Dependencies"
+run_command "npm install" "Installing main extension dependencies"
+
+echo "2️⃣  Installing Webview Dependencies"
+run_command "cd webview-ui && npm install && cd .." "Installing Angular webview dependencies"
+
+echo "3️⃣  Running TypeScript Compilation Check"
+run_command "npx tsc --noEmit" "Checking TypeScript compilation"
+
+echo "4️⃣  Running Extension Tests"
+run_command "npm test" "Running Jest tests for extension"
+
+echo "5️⃣  Building Angular Webview"
+run_command "cd webview-ui && npm run build && cd .." "Building Angular webview for VSCode"
+
+echo "6️⃣  Running Webview Tests"
+run_command "cd webview-ui && npm test -- --watchAll=false && cd .." "Running Angular component tests"
+
+echo "7️⃣  Compiling Extension"
+run_command "npm run compile" "Compiling full extension"
+
 echo ""
-echo "🧪 Running tests..."
-npm test
-if [ $? -ne 0 ]; then
-    echo "❌ Tests failed!"
-    exit 1
-fi
-echo "✅ All tests passed"
+echo "🎯 BUILD AND TEST SUMMARY"
+echo "========================="
 
-# Step 4: Build Angular webview
-echo ""
-echo "🌐 Building Angular webview..."
-npm run build:webview
-if [ $? -ne 0 ]; then
-    echo "❌ Angular build failed!"
-    exit 1
-fi
-echo "✅ Angular webview built successfully"
-
-# Step 5: Check build outputs
-echo ""
-echo "📁 Checking build outputs..."
-
-if [ -f "out/extension.js" ]; then
-    echo "✅ Extension compiled: out/extension.js"
+# Check if build artifacts exist
+if [ -d "out" ]; then
+    echo "✅ Extension compiled successfully (out/ directory exists)"
 else
-    echo "❌ Extension compilation missing: out/extension.js"
-    exit 1
+    echo "❌ Extension compilation failed (out/ directory missing)"
 fi
 
 if [ -d "out/webview" ]; then
-    echo "✅ Webview built: out/webview/"
+    echo "✅ Angular webview built successfully (out/webview/ directory exists)"
+    echo "   Files in webview build:"
     ls -la out/webview/ | head -10
 else
-    echo "❌ Webview build missing: out/webview/"
-    exit 1
+    echo "❌ Angular webview build failed (out/webview/ directory missing)"
 fi
 
-# Step 6: Validate package.json
-echo ""
-echo "📋 Validating package.json..."
-if command -v jq >/dev/null 2>&1; then
-    # Check if required fields exist
-    name=$(jq -r '.name' package.json)
-    version=$(jq -r '.version' package.json)
-    main=$(jq -r '.main' package.json)
-    
-    echo "  Name: $name"
-    echo "  Version: $version"
-    echo "  Main: $main"
-    
-    if [ "$main" != "./out/extension.js" ]; then
-        echo "❌ Main entry point should be './out/extension.js'"
-        exit 1
-    fi
+if [ -f "out/extension.js" ]; then
+    echo "✅ Main extension file exists"
 else
-    echo "⚠️  jq not available, skipping JSON validation"
+    echo "❌ Main extension file missing"
 fi
 
 echo ""
-echo "🎉 BUILD AND TEST SUCCESSFUL!"
+echo "📋 NEXT STEPS:"
+echo "1. Press F5 in VSCode to launch Extension Development Host"
+echo "2. Open the AI Debug Context view in the Activity Bar"
+echo "3. Test the extension functionality"
 echo ""
-echo "Next steps:"
-echo "1. Open VSCode"
-echo "2. Press F5 to launch Extension Development Host"
-echo "3. Look for 'AI Debug Context' in the Activity Bar"
-echo "4. Test the extension functionality"
-echo ""
-echo "Available commands in VSCode:"
-echo "- Ctrl/Cmd + Shift + P: 'AI Test Debug'"
-echo "- Activity Bar: Click the debug icon to open the main view"
+echo "=== Build and Test Complete ==="

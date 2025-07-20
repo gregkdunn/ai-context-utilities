@@ -105,28 +105,175 @@ export class TestRunner {
     });
   }
 
+  /**
+   * Execute tests with automatic cleanup of old test output files
+   */
+  async executeTestsWithCleanup(options: TestExecutionOptions): Promise<{
+    results: TestResult[];
+    exitCode: number;
+    outputFile?: string;
+  }> {
+    try {
+      // Clean up old test output files before generating new ones
+      if (options.saveToFile && options.outputCallback) {
+        options.outputCallback('Cleaning up old test output files...\n');
+        await this.cleanupOldTestOutputFiles(options.outputCallback);
+        options.outputCallback('Old test output files cleaned up\n');
+      }
+
+      // Execute the tests
+      return await this.executeTests(options);
+    } catch (error) {
+      const errorMessage = `Failed to execute tests with cleanup: ${error}`;
+      if (options.outputCallback) {
+        options.outputCallback(errorMessage + '\n');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up old test output files before generating a new one
+   */
+  private async cleanupOldTestOutputFiles(
+    outputCallback?: (output: string) => void,
+    keepLatest: number = 3
+  ): Promise<void> {
+    try {
+      const testOutputDir = path.join(this.workspacePath, this.outputDirectory);
+      
+      if (!fs.existsSync(testOutputDir)) {
+        outputCallback?.('No test output directory found, nothing to clean up\n');
+        return;
+      }
+
+      // Get all test output files with their stats
+      const files = fs.readdirSync(testOutputDir)
+        .filter(file => file.startsWith('test-output-') && file.endsWith('.log'))
+        .map(file => {
+          const filePath = path.join(testOutputDir, file);
+          const stats = fs.statSync(filePath);
+          return {
+            name: file,
+            path: filePath,
+            mtime: stats.mtime
+          };
+        })
+        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Sort by newest first
+
+      if (files.length === 0) {
+        outputCallback?.('No test output files found to clean up\n');
+        return;
+      }
+
+      outputCallback?.(`Found ${files.length} existing test output files\n`);
+
+      // Keep the latest N files, delete the rest
+      const filesToDelete = files.slice(keepLatest);
+      
+      if (filesToDelete.length === 0) {
+        outputCallback?.(`Keeping all ${files.length} files (within limit of ${keepLatest})\n`);
+        return;
+      }
+
+      outputCallback?.(`Keeping ${Math.min(files.length, keepLatest)} newest files, deleting ${filesToDelete.length} old files\n`);
+      
+      let deletedCount = 0;
+      for (const file of filesToDelete) {
+        try {
+          fs.unlinkSync(file.path);
+          deletedCount++;
+          outputCallback?.(`Deleted: ${file.name}\n`);
+        } catch (error) {
+          outputCallback?.(`Failed to delete ${file.name}: ${error}\n`);
+        }
+      }
+      
+      outputCallback?.(`Successfully deleted ${deletedCount} old test output files\n`);
+      
+    } catch (error) {
+      outputCallback?.(`Error during cleanup: ${error}\n`);
+      // Don't throw error - cleanup failure shouldn't stop test execution
+    }
+  }
+
+  /**
+   * Clean up all test output files (for manual cleanup)
+   */
+  async cleanupAllTestOutputFiles(): Promise<{ deleted: number; errors: string[] }> {
+    const testOutputDir = path.join(this.workspacePath, this.outputDirectory);
+    const result = { deleted: 0, errors: [] as string[] };
+    
+    if (!fs.existsSync(testOutputDir)) {
+      return result;
+    }
+
+    try {
+      const files = fs.readdirSync(testOutputDir)
+        .filter(file => file.startsWith('test-output-') && file.endsWith('.log'))
+        .map(file => path.join(testOutputDir, file));
+
+      for (const filePath of files) {
+        try {
+          fs.unlinkSync(filePath);
+          result.deleted++;
+        } catch (error) {
+          result.errors.push(`Failed to delete ${path.basename(filePath)}: ${error}`);
+        }
+      }
+      
+    } catch (error) {
+      result.errors.push(`Failed to read test output directory: ${error}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get all existing test output files
+   */
+  async getExistingTestOutputFiles(): Promise<string[]> {
+    const testOutputDir = path.join(this.workspacePath, this.outputDirectory);
+    
+    if (!fs.existsSync(testOutputDir)) {
+      return [];
+    }
+
+    try {
+      return fs.readdirSync(testOutputDir)
+        .filter(file => file.startsWith('test-output-') && file.endsWith('.log'))
+        .map(file => path.join(testOutputDir, file));
+    } catch (error) {
+      console.error('Failed to read test output directory:', error);
+      return [];
+    }
+  }
+
   async runAffectedTests(base: string = 'main'): Promise<TestResult[]> {
-    const result = await this.executeTests({
+    const result = await this.executeTestsWithCleanup({
       command: `npx nx affected --target=test --base=${base} --head=HEAD --output-style=stream`,
-      mode: 'affected'
+      mode: 'affected',
+      saveToFile: true
     });
     return result.results;
   }
 
   async runProjectTests(projectName: string): Promise<TestResult[]> {
-    const result = await this.executeTests({
+    const result = await this.executeTestsWithCleanup({
       command: `npx nx test ${projectName}`,
       mode: 'project',
-      projects: [projectName]
+      projects: [projectName],
+      saveToFile: true
     });
     return result.results;
   }
 
   async runMultipleProjectTests(projectNames: string[]): Promise<TestResult[]> {
-    const result = await this.executeTests({
+    const result = await this.executeTestsWithCleanup({
       command: `npx nx run-many --target=test --projects=${projectNames.join(',')}`,
       mode: 'project',
-      projects: projectNames
+      projects: projectNames,
+      saveToFile: true
     });
     return result.results;
   }

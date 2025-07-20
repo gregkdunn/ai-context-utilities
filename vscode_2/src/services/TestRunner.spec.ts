@@ -238,8 +238,8 @@ describe('TestRunner', () => {
   });
 
   describe('runAffectedTests', () => {
-    it('should call executeTests with affected configuration', async () => {
-      const spy = jest.spyOn(testRunner, 'executeTests').mockResolvedValue({
+    it('should call executeTestsWithCleanup with affected configuration', async () => {
+      const spy = jest.spyOn(testRunner, 'executeTestsWithCleanup').mockResolvedValue({
         results: [],
         exitCode: 0
       });
@@ -248,14 +248,15 @@ describe('TestRunner', () => {
 
       expect(spy).toHaveBeenCalledWith({
         command: 'npx nx affected --target=test --base=develop --head=HEAD --output-style=stream',
-        mode: 'affected'
+        mode: 'affected',
+        saveToFile: true
       });
     });
   });
 
   describe('runProjectTests', () => {
-    it('should call executeTests with project configuration', async () => {
-      const spy = jest.spyOn(testRunner, 'executeTests').mockResolvedValue({
+    it('should call executeTestsWithCleanup with project configuration', async () => {
+      const spy = jest.spyOn(testRunner, 'executeTestsWithCleanup').mockResolvedValue({
         results: [],
         exitCode: 0
       });
@@ -265,14 +266,15 @@ describe('TestRunner', () => {
       expect(spy).toHaveBeenCalledWith({
         command: 'npx nx test app1',
         mode: 'project',
-        projects: ['app1']
+        projects: ['app1'],
+        saveToFile: true
       });
     });
   });
 
   describe('runMultipleProjectTests', () => {
-    it('should call executeTests with multiple projects configuration', async () => {
-      const spy = jest.spyOn(testRunner, 'executeTests').mockResolvedValue({
+    it('should call executeTestsWithCleanup with multiple projects configuration', async () => {
+      const spy = jest.spyOn(testRunner, 'executeTestsWithCleanup').mockResolvedValue({
         results: [],
         exitCode: 0
       });
@@ -282,7 +284,8 @@ describe('TestRunner', () => {
       expect(spy).toHaveBeenCalledWith({
         command: 'npx nx run-many --target=test --projects=app1,lib1',
         mode: 'project',
-        projects: ['app1', 'lib1']
+        projects: ['app1', 'lib1'],
+        saveToFile: true
       });
     });
   });

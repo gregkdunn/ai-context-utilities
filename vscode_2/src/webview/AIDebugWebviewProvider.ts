@@ -469,6 +469,12 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
         case 'deleteDiffFile':
           await this.deleteDiffFile(message.data?.filePath);
           break;
+        case 'cleanupAllDiffFiles':
+          await this.cleanupAllDiffFiles();
+          break;
+        case 'cleanupAllTestOutputFiles':
+          await this.cleanupAllTestOutputFiles();
+          break;
         case 'runTests':
           await this.runTestsWithStreaming(message.data);
           break;
@@ -1384,8 +1390,8 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
         }
       };
 
-      // Execute tests with streaming
-      const result = await this.testRunner.executeTests(executionOptions);
+      // Execute tests with automatic cleanup and streaming
+      const result = await this.testRunner.executeTestsWithCleanup(executionOptions);
       
       // Notify completion
       this.sendMessage('testExecutionCompleted', {
@@ -1485,6 +1491,88 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       console.error('Failed to delete output file:', error);
       const errorMessage = `Failed to delete output file: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      vscode.window.showErrorMessage(errorMessage);
+      this.sendMessage('workflowError', { error: errorMessage });
+    }
+  }
+
+  private async cleanupAllDiffFiles(): Promise<void> {
+    try {
+      // Ask for confirmation
+      const confirmation = await vscode.window.showWarningMessage(
+        'Are you sure you want to delete all git diff files?',
+        { modal: true },
+        'Delete All',
+        'Cancel'
+      );
+
+      if (confirmation === 'Delete All') {
+        const result = await this.gitIntegration.cleanupAllDiffFiles();
+        
+        // Notify webview about the cleanup
+        this.sendMessage('allDiffFilesDeleted', result);
+        
+        // Show success notification
+        if (result.deleted > 0) {
+          vscode.window.showInformationMessage(
+            `Successfully deleted ${result.deleted} diff file${result.deleted === 1 ? '' : 's'}`
+          );
+        } else {
+          vscode.window.showInformationMessage('No diff files found to delete');
+        }
+        
+        // Show errors if any
+        if (result.errors.length > 0) {
+          vscode.window.showWarningMessage(
+            `Cleanup completed with ${result.errors.length} error${result.errors.length === 1 ? '' : 's'}`
+          );
+        }
+      }
+      
+    } catch (error) {
+      console.error('Failed to cleanup all diff files:', error);
+      const errorMessage = `Failed to cleanup diff files: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      vscode.window.showErrorMessage(errorMessage);
+      this.sendMessage('workflowError', { error: errorMessage });
+    }
+  }
+
+  private async cleanupAllTestOutputFiles(): Promise<void> {
+    try {
+      // Ask for confirmation
+      const confirmation = await vscode.window.showWarningMessage(
+        'Are you sure you want to delete all test output files?',
+        { modal: true },
+        'Delete All',
+        'Cancel'
+      );
+
+      if (confirmation === 'Delete All') {
+        const result = await this.testRunner.cleanupAllTestOutputFiles();
+        
+        // Notify webview about the cleanup
+        this.sendMessage('allTestOutputFilesDeleted', result);
+        
+        // Show success notification
+        if (result.deleted > 0) {
+          vscode.window.showInformationMessage(
+            `Successfully deleted ${result.deleted} test output file${result.deleted === 1 ? '' : 's'}`
+          );
+        } else {
+          vscode.window.showInformationMessage('No test output files found to delete');
+        }
+        
+        // Show errors if any
+        if (result.errors.length > 0) {
+          vscode.window.showWarningMessage(
+            `Cleanup completed with ${result.errors.length} error${result.errors.length === 1 ? '' : 's'}`
+          );
+        }
+      }
+      
+    } catch (error) {
+      console.error('Failed to cleanup all test output files:', error);
+      const errorMessage = `Failed to cleanup test output files: ${error instanceof Error ? error.message : 'Unknown error'}`;
       vscode.window.showErrorMessage(errorMessage);
       this.sendMessage('workflowError', { error: errorMessage });
     }

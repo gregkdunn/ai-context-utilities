@@ -132,6 +132,11 @@ export class GitIntegration {
       let filename: string;
 
       outputCallback?.('Starting git diff generation...\n');
+      
+      // Clean up old diff files before generating new one
+      outputCallback?.('Cleaning up old diff files...\n');
+      await this.cleanupOldDiffFiles(outputCallback);
+      outputCallback?.('Old diff files cleaned up\n');
 
       switch (mode) {
         case 'uncommitted':
@@ -167,6 +172,71 @@ export class GitIntegration {
       const errorMessage = `Failed to generate diff: ${error}`;
       outputCallback?.(errorMessage + '\n');
       throw error;
+    }
+  }
+
+  /**
+   * Clean up old diff files before generating a new one
+   */
+  private async cleanupOldDiffFiles(
+    outputCallback?: (output: string) => void,
+    keepLatest: number = 3
+  ): Promise<void> {
+    try {
+      const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+      
+      if (!fs.existsSync(diffDir)) {
+        outputCallback?.('No diff directory found, nothing to clean up\n');
+        return;
+      }
+
+      // Get all diff files with their stats
+      const files = fs.readdirSync(diffDir)
+        .filter(file => file.endsWith('.diff'))
+        .map(file => {
+          const filePath = path.join(diffDir, file);
+          const stats = fs.statSync(filePath);
+          return {
+            name: file,
+            path: filePath,
+            mtime: stats.mtime
+          };
+        })
+        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Sort by newest first
+
+      if (files.length === 0) {
+        outputCallback?.('No diff files found to clean up\n');
+        return;
+      }
+
+      outputCallback?.(`Found ${files.length} existing diff files\n`);
+
+      // Keep the latest N files, delete the rest
+      const filesToDelete = files.slice(keepLatest);
+      
+      if (filesToDelete.length === 0) {
+        outputCallback?.(`Keeping all ${files.length} files (within limit of ${keepLatest})\n`);
+        return;
+      }
+
+      outputCallback?.(`Keeping ${Math.min(files.length, keepLatest)} newest files, deleting ${filesToDelete.length} old files\n`);
+      
+      let deletedCount = 0;
+      for (const file of filesToDelete) {
+        try {
+          fs.unlinkSync(file.path);
+          deletedCount++;
+          outputCallback?.(`Deleted: ${file.name}\n`);
+        } catch (error) {
+          outputCallback?.(`Failed to delete ${file.name}: ${error}\n`);
+        }
+      }
+      
+      outputCallback?.(`Successfully deleted ${deletedCount} old diff files\n`);
+      
+    } catch (error) {
+      outputCallback?.(`Error during cleanup: ${error}\n`);
+      // Don't throw error - cleanup failure shouldn't stop diff generation
     }
   }
 
@@ -230,5 +300,37 @@ export class GitIntegration {
       console.error('Failed to read diff directory:', error);
       return [];
     }
+  }
+
+  /**
+   * Clean up all diff files (for manual cleanup)
+   */
+  async cleanupAllDiffFiles(): Promise<{ deleted: number; errors: string[] }> {
+    const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+    const result = { deleted: 0, errors: [] as string[] };
+    
+    if (!fs.existsSync(diffDir)) {
+      return result;
+    }
+
+    try {
+      const files = fs.readdirSync(diffDir)
+        .filter(file => file.endsWith('.diff'))
+        .map(file => path.join(diffDir, file));
+
+      for (const filePath of files) {
+        try {
+          fs.unlinkSync(filePath);
+          result.deleted++;
+        } catch (error) {
+          result.errors.push(`Failed to delete ${path.basename(filePath)}: ${error}`);
+        }
+      }
+      
+    } catch (error) {
+      result.errors.push(`Failed to read diff directory: ${error}`);
+    }
+
+    return result;
   }
 }

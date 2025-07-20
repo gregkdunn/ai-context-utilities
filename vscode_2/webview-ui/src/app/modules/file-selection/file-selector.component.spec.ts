@@ -306,4 +306,121 @@ describe('FileSelectorComponent', () => {
       expect(component.areAllSelected()).toBe(true);
     });
   });
+
+  // Git Diff Clearing Tests
+  describe('Git Diff Clearing on Selection Change', () => {
+    beforeEach(() => {
+      // Setup a mock diff display
+      component.showDiffDisplay.set(true);
+      component.diffDisplayData.set({
+        mode: 'uncommitted',
+        content: 'test diff content',
+        timestamp: new Date(),
+        status: 'complete'
+      });
+      component.streamingOutput.set('some streaming output');
+    });
+
+    it('should clear diff when mode changes', () => {
+      expect(component.showDiffDisplay()).toBe(true);
+      
+      component.selectMode('commit');
+      
+      expect(component.showDiffDisplay()).toBe(false);
+      expect(component.diffDisplayData()).toBeNull();
+      expect(component.streamingOutput()).toBe('');
+      expect(mockVscodeService.postMessage).toHaveBeenCalledWith('showNotification', {
+        message: 'Git diff cleared due to selection change',
+        type: 'info'
+      });
+    });
+
+    it('should clear diff when file selection changes', () => {
+      const mockChanges = [
+        { path: 'test.ts', status: 'modified' }
+      ];
+      component['handleUncommittedChangesResponse'](mockChanges);
+      
+      expect(component.showDiffDisplay()).toBe(true);
+      
+      component.toggleFileSelection(component.uncommittedFiles()[0]);
+      
+      expect(component.showDiffDisplay()).toBe(false);
+      expect(component.diffDisplayData()).toBeNull();
+      expect(component.streamingOutput()).toBe('');
+    });
+
+    it('should clear diff when select all is toggled', () => {
+      const mockChanges = [
+        { path: 'test.ts', status: 'modified' },
+        { path: 'another.ts', status: 'added' }
+      ];
+      component['handleUncommittedChangesResponse'](mockChanges);
+      
+      expect(component.showDiffDisplay()).toBe(true);
+      
+      component.toggleSelectAll();
+      
+      expect(component.showDiffDisplay()).toBe(false);
+      expect(component.diffDisplayData()).toBeNull();
+      expect(component.streamingOutput()).toBe('');
+    });
+
+    it('should clear diff when commit selection changes', () => {
+      const testCommits = [
+        { hash: 'commit1', message: 'Test commit', author: 'Author', date: new Date(), files: [], selected: false }
+      ];
+      component.commits.set(testCommits);
+      component.filteredCommits.set(testCommits);
+      component.selectMode('commit');
+      
+      expect(component.showDiffDisplay()).toBe(true);
+      
+      component.selectCommit(testCommits[0]);
+      
+      expect(component.showDiffDisplay()).toBe(false);
+      expect(component.diffDisplayData()).toBeNull();
+      expect(component.streamingOutput()).toBe('');
+    });
+
+    it('should clear diff when commit selection is cleared', () => {
+      const testCommits = [
+        { hash: 'commit1', message: 'Test commit', author: 'Author', date: new Date(), files: [], selected: true }
+      ];
+      component.commits.set(testCommits);
+      component.filteredCommits.set(testCommits);
+      component.selectedCommits.set(testCommits);
+      component.selectMode('commit');
+      
+      expect(component.showDiffDisplay()).toBe(true);
+      
+      component.clearCommitSelection();
+      
+      expect(component.showDiffDisplay()).toBe(false);
+      expect(component.diffDisplayData()).toBeNull();
+      expect(component.streamingOutput()).toBe('');
+    });
+
+    it('should clear diff when data is refreshed', () => {
+      expect(component.showDiffDisplay()).toBe(true);
+      
+      component.refreshData();
+      
+      expect(component.showDiffDisplay()).toBe(false);
+      expect(component.diffDisplayData()).toBeNull();
+      expect(component.streamingOutput()).toBe('');
+    });
+
+    it('should not show notification if no diff is displayed', () => {
+      // Clear the diff display first
+      component.showDiffDisplay.set(false);
+      component.diffDisplayData.set(null);
+      mockVscodeService.postMessage.mockClear();
+      
+      component.clearDiffDisplayOnSelectionChange();
+      
+      // Should not post notification message
+      expect(mockVscodeService.postMessage).not.toHaveBeenCalledWith('showNotification', expect.any(Object));
+    });
+  });
 });

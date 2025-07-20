@@ -1,21 +1,27 @@
 #!/bin/bash
 
-# Change to vscode_2 directory
-cd /Users/gregdunn/src/test/ai_debug_context/vscode_2
+# Script to run tests for the VSCode Extension v2
+echo "Running tests for AI Debug Context VSCode Extension v2..."
 
-echo "=== Running VSCode Extension Tests ==="
-npm test
+# Change to the webview-ui directory
+cd /Users/gregdunn/src/test/ai_debug_context/vscode_2/webview-ui
 
-echo ""
-echo "=== Running Angular Webview Tests ==="
-cd webview-ui
-npm test -- --passWithNoTests
+echo "Current directory: $(pwd)"
 
-echo ""
-echo "=== Build Status Check ==="
-cd ..
-npm run compile
+# Run Jest tests for the Angular components
+echo "Running Angular component tests..."
+npm test -- --passWithNoTests --watchAll=false
 
-echo ""
-echo "=== Webview Build Check ==="
-npm run build:webview
+echo "Angular tests completed."
+
+# Run VSCode extension tests if they exist
+echo "Checking for VSCode extension tests..."
+cd ../
+if [ -f "jest.config.js" ]; then
+  echo "Running VSCode extension tests..."
+  npm test
+else
+  echo "No jest.config.js found in main extension directory"
+fi
+
+echo "All tests completed."
