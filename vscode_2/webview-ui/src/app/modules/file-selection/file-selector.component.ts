@@ -392,7 +392,8 @@ export interface FileSelection {
                   <label class="text-vscode-descriptionForeground">
                     <input 
                       type="checkbox" 
-                      [(ngModel)]="wrapLines"
+                      [checked]="wrapLines()"
+                      (change)="wrapLines.set(!wrapLines())"
                       class="mr-1">
                     Wrap lines
                   </label>
@@ -409,8 +410,8 @@ export interface FileSelection {
                 class="bg-vscode-editor-background border border-vscode-panel-border rounded overflow-auto"
                 [style.max-height.px]="maxDiffHeight()">
                 <pre 
-                  [class.whitespace-pre-wrap]="wrapLines"
-                  [class.whitespace-pre]="!wrapLines"
+                  [class.whitespace-pre-wrap]="wrapLines()"
+                  [class.whitespace-pre]="!wrapLines()"
                   class="p-3 text-sm font-mono text-vscode-editor-foreground">{{ diffDisplayData()?.content }}</pre>
               </div>
               

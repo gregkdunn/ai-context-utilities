@@ -1139,11 +1139,17 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     };
 
     modifiedFiles.forEach(file => {
-      if (file?.includes('.component.')) categories.Components.push(file);
-      else if (file?.includes('.service.')) categories.Services.push(file);
-      else if (file?.includes('.spec.') || file?.includes('.test.')) categories.Tests.push(file);
-      else if (file?.includes('config') || file?.includes('.json') || file?.includes('.yml')) categories.Configuration.push(file);
-      else if (file) categories.Other.push(file);
+      if (file?.includes('.component.')) {
+        categories.Components.push(file);
+      } else if (file?.includes('.service.')) {
+        categories.Services.push(file);
+      } else if (file?.includes('.spec.') || file?.includes('.test.')) {
+        categories.Tests.push(file);
+      } else if (file?.includes('config') || file?.includes('.json') || file?.includes('.yml')) {
+        categories.Configuration.push(file);
+      } else if (file) {
+        categories.Other.push(file);
+      }
     });
 
     Object.entries(categories).forEach(([category, files]) => {

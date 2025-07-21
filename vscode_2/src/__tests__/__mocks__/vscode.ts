@@ -156,6 +156,15 @@ export const extensions = {
   })
 };
 
+// Language Model API mocks (for Copilot integration)
+export const lm = {
+  selectChatModels: jest.fn().mockResolvedValue([])
+};
+
+export const LanguageModelChatMessage = {
+  User: jest.fn().mockImplementation((content) => ({ content, role: 'user' }))
+};
+
 // Additional mocks that might be needed
 export const EventEmitter = jest.fn().mockImplementation(() => ({
   event: jest.fn(),

@@ -295,8 +295,12 @@ export class CopilotDiagnosticsService {
       const currentPart = currentParts[i] || 0;
       const requiredPart = requiredParts[i] || 0;
       
-      if (currentPart > requiredPart) return true;
-      if (currentPart < requiredPart) return false;
+      if (currentPart > requiredPart) {
+        return true;
+      }
+      if (currentPart < requiredPart) {
+        return false;
+      }
     }
     
     return true; // Equal versions
