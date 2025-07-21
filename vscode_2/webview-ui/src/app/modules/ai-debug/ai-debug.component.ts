@@ -30,7 +30,31 @@ export interface DebugWorkflowState {
   message: string;
   testResults?: TestResult[];
   aiAnalysis?: AIAnalysis;
+  copilotAnalysis?: CopilotAnalysisResult;
+  gitDiffFilePath?: string;
+  testResultsFilePath?: string;
   error?: string;
+}
+
+export interface CopilotAnalysisResult {
+  type: 'failure-analysis' | 'success-analysis';
+  analysisFilePath?: string;
+  rootCause?: string;
+  specificFixes?: Array<{
+    file: string;
+    lineNumber: number;
+    oldCode: string;
+    newCode: string;
+    explanation: string;
+  }>;
+  preventionStrategies?: string[];
+  suspiciousTests?: Array<{
+    file: string;
+    testName: string;
+    issue: string;
+    suggestion: string;
+  }>;
+  recommendations?: string[];
 }
 
 @Component({
@@ -39,58 +63,71 @@ export interface DebugWorkflowState {
   imports: [CommonModule, FormsModule, CopilotDiagnosticsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="bg-vscode-editor-background p-4 rounded-lg border border-vscode-panel-border">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-vscode-foreground text-lg font-semibold flex items-center gap-2">
-          <span class="text-2xl">🤖</span>
-          AI Test Debug
-        </h3>
-        <div class="text-vscode-descriptionForeground text-sm">
-          {{ getStatusSummary() }}
+    <div class="bg-gray-900 rounded-lg border border-gray-700 font-mono text-sm h-full" style="background: #1a1a1a; border-color: #333; padding: 3px;">
+      <!-- Terminal Header -->
+      <div class="border-b border-gray-700 pb-6 mb-8">
+        <div class="flex items-center gap-2 mb-2">
+          <span style="color: #A8A8FF;">$</span>
+          <span style="color: #4ECDC4;" class="font-bold">ai-debug</span>
+          <span style="color: #FFD93D;">--mode</span>
+          <span style="color: #6BCF7F;">interactive</span>
+          <span style="color: #FF8C42;">{{ getStatusSummary() }}</span>
+        </div>
+        <div style="color: #666;" class="text-xs">
+          GitHub Copilot AI Test Debug Session | Status: {{ workflowState().phase }}
         </div>
       </div>
 
-      <!-- Enhanced Copilot Status Section -->
-      <div class="mb-6 space-y-3">
-        <h4 class="text-vscode-foreground font-medium">Prerequisites</h4>
-        <div class="grid gap-2">
-          <div class="flex items-center gap-2 text-sm">
-            <span [class]="fileSelection ? 'text-green-500' : 'text-red-500'">
-              {{ fileSelection ? '✅' : '❌' }}
+      <!-- Terminal Prerequisites Check -->
+      <div class="mb-8">
+        <div class="mb-4 flex items-center gap-2">
+          <span style="color: #A8A8FF;">></span>
+          <span style="color: #4ECDC4;">🔍 Checking prerequisites...</span>
+        </div>
+        <div class="space-y-6 pl-6">
+          <div class="flex items-center gap-3 py-1">
+            <span [ngStyle]="{'color': fileSelection ? '#6BCF7F' : '#FF4B6D'}">
+              {{ fileSelection ? '[✓]' : '[✗]' }}
             </span>
-            <span class="text-vscode-foreground">File selection configured</span>
+            <span style="color: #e5e5e5;">file_selection</span>
             @if (fileSelection) {
-              <span class="text-vscode-descriptionForeground text-xs">
-                ({{ fileSelection.mode }}: {{ getFileSelectionSummary() }})
-              </span>
+              <span style="color: #666;">→</span>
+              <span style="color: #FFD93D;">{{ fileSelection.mode }}</span>
+              <span style="color: #4ECDC4;">{{ getFileSelectionSummary() }}</span>
+            } @else {
+              <span style="color: #FF8C42;">REQUIRED</span>
             }
           </div>
           
-          <div class="flex items-center gap-2 text-sm">
-            <span [class]="testConfiguration ? 'text-green-500' : 'text-red-500'">
-              {{ testConfiguration ? '✅' : '❌' }}
+          <div class="flex items-center gap-3 py-1">
+            <span [ngStyle]="{'color': testConfiguration ? '#6BCF7F' : '#FF4B6D'}">
+              {{ testConfiguration ? '[✓]' : '[✗]' }}
             </span>
-            <span class="text-vscode-foreground">Test configuration set</span>
+            <span style="color: #e5e5e5;">test_config</span>
             @if (testConfiguration) {
-              <span class="text-vscode-descriptionForeground text-xs">
-                ({{ testConfiguration.mode }}: {{ getTestConfigSummary() }})
-              </span>
+              <span style="color: #666;">→</span>
+              <span style="color: #FFD93D;">{{ testConfiguration.mode }}</span>
+              <span style="color: #4ECDC4;">{{ getTestConfigSummary() }}</span>
+            } @else {
+              <span style="color: #FF8C42;">REQUIRED</span>
             }
           </div>
           
-          <div class="flex items-center gap-2 text-sm">
-            <span [class]="copilotAvailable() ? 'text-green-500' : 'text-yellow-500'">
-              {{ copilotAvailable() ? '✅' : '⚠️' }}
+          <div class="flex items-center gap-3 py-1">
+            <span [ngStyle]="{'color': copilotAvailable() ? '#6BCF7F' : '#FFD93D'}">
+              {{ copilotAvailable() ? '[✓]' : '[!]' }}
             </span>
-            <span class="text-vscode-foreground">GitHub Copilot</span>
-            <span class="text-vscode-descriptionForeground text-xs">
-              {{ copilotAvailable() ? 'Available' : 'Not available - will use fallback analysis' }}
+            <span style="color: #e5e5e5;">github_copilot</span>
+            <span style="color: #666;">→</span>
+            <span [ngStyle]="{'color': copilotAvailable() ? '#6BCF7F' : '#FF8C42'}">
+              {{ copilotAvailable() ? 'AVAILABLE' : 'FALLBACK_MODE' }}
             </span>
             @if (!copilotAvailable()) {
               <button 
                 (click)="showDiagnostics = !showDiagnostics"
-                class="ml-2 px-2 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
-                {{ showDiagnostics ? 'Hide' : 'Diagnose' }}
+                class="ml-2 px-2 py-1 text-xs rounded hover:opacity-80"
+                style="background: #333; color: #FFD93D; border: 1px solid #666;">
+                {{ showDiagnostics ? 'hide' : 'diagnose' }}
               </button>
             }
           </div>
@@ -99,103 +136,177 @@ export interface DebugWorkflowState {
 
       <!-- Copilot Diagnostics Section -->
       @if (showDiagnostics && !copilotAvailable()) {
-        <div class="mb-6">
+        <div class="mb-8">
           <app-copilot-diagnostics></app-copilot-diagnostics>
         </div>
       }
 
-      <!-- Main Action Button -->
+      <!-- Terminal Execute Command -->
       @if (workflowState().phase === 'idle') {
-        <div class="mb-6 text-center">
-          <button 
-            (click)="startAIDebugWorkflow()"
-            [disabled]="!canStartWorkflow()"
-            class="px-8 py-4 bg-vscode-button-background text-vscode-button-foreground rounded-lg font-medium text-lg hover:bg-vscode-button-hoverBackground disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-            <span class="flex items-center gap-3">
-              <span class="text-2xl">🚀</span>
-              <span>Run AI Test Debug</span>
-            </span>
-          </button>
-          
-          @if (!canStartWorkflow()) {
-            <p class="text-vscode-descriptionForeground text-sm mt-2">
-              Complete file selection and test configuration to continue
-            </p>
-          }
-        </div>
-      }
-
-      <!-- Workflow Progress -->
-      @if (workflowState().phase !== 'idle') {
-        <div class="mb-6">
-          <!-- Progress Bar -->
-          <div class="mb-4">
-            <div class="flex justify-between items-center mb-2">
-              <span class="text-vscode-foreground text-sm font-medium">
-                {{ getPhaseDisplayName() }}
-              </span>
-              <span class="text-vscode-descriptionForeground text-xs">
-                {{ workflowState().progress }}%
-              </span>
-            </div>
-            <div class="w-full bg-vscode-progressBar-background rounded-full h-2">
-              <div 
-                class="bg-vscode-progressBar-foreground h-2 rounded-full transition-all duration-300"
-                [style.width.%]="workflowState().progress">
-              </div>
-            </div>
-            <p class="text-vscode-descriptionForeground text-xs mt-2">
-              {{ workflowState().message }}
-            </p>
+        <div class="mb-8">
+          <div class="mb-4 p-3 flex items-center gap-3">
+            <span style="color: #A8A8FF;">></span>
+            <span style="color: #4ECDC4;">⚡ Ready to execute workflow</span>
           </div>
-
-          <!-- Phase Indicators -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-            @for (phase of workflowPhases; track phase.key) {
-              <div class="flex items-center gap-2 p-2 rounded" [class]="getPhaseIndicatorClass(phase.key)">
-                <span>{{ phase.icon }}</span>
-                <span>{{ phase.label }}</span>
+          <div class="pl-6">
+            <button 
+              (click)="startAIDebugWorkflow()"
+              [disabled]="!canStartWorkflow()"
+              class="px-6 py-3 rounded font-mono font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              [ngStyle]="canStartWorkflow() ? 
+                {'background': '#6BCF7F', 'color': '#000', 'border': '2px solid #6BCF7F'} : 
+                {'background': '#333', 'color': '#666', 'border': '2px solid #555'}">
+              <span class="flex items-center gap-3">
+                <span class="text-lg">🚀</span>
+                <span>EXECUTE ai-debug --full-workflow</span>
+              </span>
+            </button>
+            
+            @if (!canStartWorkflow()) {
+              <div class="mt-4 pl-8" style="color: #FF8C42;">
+                <span>ERROR: Missing required parameters</span>
+                <div style="color: #666;" class="text-xs mt-1">
+                  Configure file selection and test settings above
+                </div>
               </div>
             }
           </div>
         </div>
       }
 
+      <!-- Terminal Workflow Output -->
+      @if (workflowState().phase !== 'idle') {
+        <div class="mb-8">
+          <!-- Terminal Progress Header -->
+          <div class="mb-5 py-1 flex items-center gap-3">
+            <span style="color: #A8A8FF;">></span>
+            <span style="color: #4ECDC4;">{{ getPhaseDisplayName() }}</span>
+            <span style="color: #666;">|</span>
+            <span style="color: #FFD93D;">{{ workflowState().progress }}%</span>
+            @if (workflowState().phase === 'complete') {
+              <span style="color: #6BCF7F;">DONE</span>
+            } @else if (workflowState().phase === 'error') {
+              <span style="color: #FF4B6D;">ERROR</span>
+            } @else {
+              <span style="color: #FF8C42;">RUNNING</span>
+            }
+          </div>
+
+          <!-- Terminal Progress Bar -->
+          <div class="mb-5 pl-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span style="color: #666;">[</span>
+              @for (i of getProgressBars().filled; track $index) {
+                <span style="color: #6BCF7F;">█</span>
+              }
+              @for (i of getProgressBars().empty; track $index) {
+                <span style="color: #333;">█</span>
+              }
+              <span style="color: #666;">]</span>
+              <span style="color: #4ECDC4;" class="text-xs ml-2">{{ workflowState().message }}</span>
+            </div>
+          </div>
+
+          <!-- Terminal Pipeline Status -->
+          <div class="pl-6 space-y-5">
+            @for (phase of workflowPhases; track phase.key) {
+              <div class="flex items-center gap-3 py-1" [ngStyle]="getTerminalPhaseStyle(phase.key)">
+                <span>{{ getTerminalPhaseStatus(phase.key) }}</span>
+                <span>{{ phase.label }}_pipeline</span>
+                <span style="color: #666;">→</span>
+                <span>{{ getTerminalPhaseLabel(phase.key) }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- Terminal File Access -->
+          @if (workflowState().gitDiffFilePath || workflowState().testResultsFilePath) {
+            <div class="mt-8 border-t border-gray-700 pt-6">
+              <div class="mb-4 py-1 flex items-center gap-3">
+                <span style="color: #A8A8FF;">></span>
+                <span style="color: #4ECDC4;">📁 Generated artifacts available</span>
+              </div>
+              <div class="pl-6 space-y-6">
+                @if (workflowState().gitDiffFilePath) {
+                  <div class="flex items-center gap-3 py-1">
+                    <span style="color: #6BCF7F;">📄 [FILE]</span>
+                    <button 
+                      (click)="openGitDiffFile()"
+                      class="font-mono hover:opacity-80"
+                      style="background: #333; color: #FFD93D; text-decoration: underline;">
+                      git_diff.txt
+                    </button>
+                    <button 
+                      (click)="copyGitDiffFilePath()"
+                      class="px-2 py-1 rounded text-xs hover:opacity-80"
+                      style="background: #333; color: #4ECDC4; border: 1px solid #666;"
+                      title="Copy file path">
+                      📋 cp
+                    </button>
+                  </div>
+                }
+                @if (workflowState().testResultsFilePath) {
+                  <div class="flex items-center gap-3 py-1">
+                    <span style="color: #6BCF7F;">📄 [FILE]</span>
+                    <button 
+                      (click)="openTestResultsFile()"
+                      class="font-mono hover:opacity-80"
+                      style="background: #333; color: #FFD93D; text-decoration: underline;">
+                      test_results.txt
+                    </button>
+                    <button 
+                      (click)="copyTestResultsFilePath()"
+                      class="px-2 py-1 rounded text-xs hover:opacity-80"
+                      style="background: #333; color: #4ECDC4; border: 1px solid #666;"
+                      title="Copy file path">
+                      📋 cp
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+
       <!-- Test Results -->
       @if (workflowState().testResults && workflowState().testResults!.length > 0) {
-        <div class="mb-6">
-          <h4 class="text-vscode-foreground font-medium mb-3">Test Results</h4>
+        <div class="mb-8">
+          <div class="mb-4 py-1 flex items-center gap-3">
+            <span style="color: #A8A8FF;">></span>
+            <span style="color: #4ECDC4;">Test execution results</span>
+          </div>
           
           <!-- Test Summary -->
-          <div class="grid grid-cols-3 gap-4 mb-4">
-            <div class="bg-green-50 border border-green-200 rounded p-3 text-center">
-              <div class="text-green-600 text-xl font-bold">{{ getPassedTestsCount() }}</div>
-              <div class="text-green-700 text-sm">Passed</div>
+          <div class="grid grid-cols-3 gap-6 mb-6 pl-6">
+            <div class="rounded p-4 text-center" style="background: #2a2a2a; border: 1px solid #4a4a4a;">
+              <div class="text-xl font-bold" style="color: #6BCF7F;">{{ getPassedTestsCount() }}</div>
+              <div class="text-sm" style="color: #4ECDC4;">Passed</div>
             </div>
-            <div class="bg-red-50 border border-red-200 rounded p-3 text-center">
-              <div class="text-red-600 text-xl font-bold">{{ getFailedTestsCount() }}</div>
-              <div class="text-red-700 text-sm">Failed</div>
+            <div class="rounded p-4 text-center" style="background: #2a2a2a; border: 1px solid #4a4a4a;">
+              <div class="text-xl font-bold" style="color: #FF4B6D;">{{ getFailedTestsCount() }}</div>
+              <div class="text-sm" style="color: #4ECDC4;">Failed</div>
             </div>
-            <div class="bg-yellow-50 border border-yellow-200 rounded p-3 text-center">
-              <div class="text-yellow-600 text-xl font-bold">{{ getSkippedTestsCount() }}</div>
-              <div class="text-yellow-700 text-sm">Skipped</div>
+            <div class="rounded p-4 text-center" style="background: #2a2a2a; border: 1px solid #4a4a4a;">
+              <div class="text-xl font-bold" style="color: #FFD93D;">{{ getSkippedTestsCount() }}</div>
+              <div class="text-sm" style="color: #4ECDC4;">Skipped</div>
             </div>
           </div>
 
           <!-- Failed Tests Details -->
           @if (getFailedTests().length > 0) {
-            <div class="space-y-2 max-h-64 overflow-y-auto border border-vscode-panel-border rounded p-2">
+            <div class="space-y-5 max-h-64 overflow-y-auto rounded p-4 pl-6" style="border: 1px solid #4a4a4a; background: #1f1f1f;">
               @for (test of getFailedTests(); track test.name) {
-                <div class="bg-red-50 border border-red-200 rounded p-3">
+                <div class="rounded p-4" style="background: #2a1a1a; border: 1px solid #4a2a2a;">
                   <div class="flex items-start justify-between">
                     <div class="flex-1">
-                      <div class="font-medium text-red-800">{{ test.name }}</div>
-                      <div class="text-red-600 text-sm font-mono">{{ test.file }}</div>
+                      <div class="font-medium" style="color: #FF4B6D;">{{ test.name }}</div>
+                      <div class="text-sm font-mono" style="color: #FF8C42;">{{ test.file }}</div>
                       @if (test.error) {
-                        <div class="text-red-700 text-sm mt-2">{{ test.error }}</div>
+                        <div class="text-sm mt-2" style="color: #FFD93D;">{{ test.error }}</div>
                       }
                     </div>
-                    <div class="text-red-500 text-xs">{{ test.duration }}ms</div>
+                    <div class="text-xs" style="color: #A8A8FF;">{{ test.duration }}ms</div>
                   </div>
                 </div>
               }
@@ -211,7 +322,7 @@ export interface DebugWorkflowState {
           
           @if (workflowState().aiAnalysis!.type === 'failure-analysis') {
             <!-- Failure Analysis -->
-            <div class="space-y-4">
+            <div class="space-y-6">
               @if (workflowState().aiAnalysis!.rootCause) {
                 <div class="bg-vscode-textBlockQuote-background border-l-4 border-red-400 p-4 rounded">
                   <h5 class="text-vscode-foreground font-medium mb-2">🔍 Root Cause Analysis</h5>
@@ -224,7 +335,7 @@ export interface DebugWorkflowState {
               @if (workflowState().aiAnalysis!.suggestedFixes && workflowState().aiAnalysis!.suggestedFixes!.length > 0) {
                 <div class="bg-vscode-textBlockQuote-background border-l-4 border-blue-400 p-4 rounded">
                   <h5 class="text-vscode-foreground font-medium mb-2">🔧 Suggested Fixes</h5>
-                  <ul class="space-y-2">
+                  <ul class="space-y-4">
                     @for (fix of workflowState().aiAnalysis!.suggestedFixes!; track fix) {
                       <li class="text-vscode-textBlockQuote-foreground text-sm flex items-start gap-2">
                         <span class="text-blue-500 mt-1">•</span>
@@ -237,11 +348,11 @@ export interface DebugWorkflowState {
             </div>
           } @else {
             <!-- Success Analysis -->
-            <div class="space-y-4">
+            <div class="space-y-6">
               @if (workflowState().aiAnalysis!.falsePositiveWarnings && workflowState().aiAnalysis!.falsePositiveWarnings!.length > 0) {
                 <div class="bg-vscode-textBlockQuote-background border-l-4 border-yellow-400 p-4 rounded">
                   <h5 class="text-vscode-foreground font-medium mb-2">⚠️ Potential False Positives</h5>
-                  <ul class="space-y-2">
+                  <ul class="space-y-4">
                     @for (warning of workflowState().aiAnalysis!.falsePositiveWarnings!; track warning) {
                       <li class="text-vscode-textBlockQuote-foreground text-sm flex items-start gap-2">
                         <span class="text-yellow-500 mt-1">•</span>
@@ -255,7 +366,7 @@ export interface DebugWorkflowState {
               @if (workflowState().aiAnalysis!.codeImprovements && workflowState().aiAnalysis!.codeImprovements!.length > 0) {
                 <div class="bg-vscode-textBlockQuote-background border-l-4 border-green-400 p-4 rounded">
                   <h5 class="text-vscode-foreground font-medium mb-2">💡 Code Improvements</h5>
-                  <ul class="space-y-2">
+                  <ul class="space-y-4">
                     @for (improvement of workflowState().aiAnalysis!.codeImprovements!; track improvement) {
                       <li class="text-vscode-textBlockQuote-foreground text-sm flex items-start gap-2">
                         <span class="text-green-500 mt-1">•</span>
@@ -272,7 +383,7 @@ export interface DebugWorkflowState {
           @if (workflowState().aiAnalysis!.newTestSuggestions && workflowState().aiAnalysis!.newTestSuggestions!.length > 0) {
             <div class="bg-vscode-textBlockQuote-background border-l-4 border-purple-400 p-4 rounded">
               <h5 class="text-vscode-foreground font-medium mb-2">🧪 New Test Suggestions</h5>
-              <ul class="space-y-2">
+              <ul class="space-y-4">
                 @for (suggestion of workflowState().aiAnalysis!.newTestSuggestions!; track suggestion) {
                   <li class="text-vscode-textBlockQuote-foreground text-sm flex items-start gap-2">
                     <span class="text-purple-500 mt-1">•</span>
@@ -280,6 +391,102 @@ export interface DebugWorkflowState {
                   </li>
                 }
               </ul>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Copilot Analysis Results -->
+      @if (workflowState().copilotAnalysis) {
+        <div class="mb-6">
+          <h4 class="text-vscode-foreground font-medium mb-3">🤖 GitHub Copilot Analysis</h4>
+          
+          @if (workflowState().copilotAnalysis!.type === 'failure-analysis') {
+            <!-- Test Failure Analysis -->
+            <div class="space-y-6">
+              @if (workflowState().copilotAnalysis!.rootCause) {
+                <div class="bg-vscode-textBlockQuote-background border-l-4 border-red-400 p-4 rounded">
+                  <h5 class="text-vscode-foreground font-medium mb-2">🔍 Root Cause</h5>
+                  <p class="text-vscode-textBlockQuote-foreground text-sm">
+                    {{ workflowState().copilotAnalysis!.rootCause }}
+                  </p>
+                </div>
+              }
+
+              @if (workflowState().copilotAnalysis!.specificFixes && workflowState().copilotAnalysis!.specificFixes!.length > 0) {
+                <div class="bg-vscode-textBlockQuote-background border-l-4 border-blue-400 p-4 rounded">
+                  <h5 class="text-vscode-foreground font-medium mb-2">🛠️ Specific Fixes</h5>
+                  <div class="space-y-5">
+                    @for (fix of workflowState().copilotAnalysis!.specificFixes!; track fix.file + fix.lineNumber) {
+                      <div class="border-l-2 border-blue-300 pl-3">
+                        <div class="text-vscode-foreground text-sm font-medium">{{ fix.file }}:{{ fix.lineNumber }}</div>
+                        <div class="text-vscode-textBlockQuote-foreground text-xs mt-1">{{ fix.explanation }}</div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+
+              @if (workflowState().copilotAnalysis!.preventionStrategies && workflowState().copilotAnalysis!.preventionStrategies!.length > 0) {
+                <div class="bg-vscode-textBlockQuote-background border-l-4 border-yellow-400 p-4 rounded">
+                  <h5 class="text-vscode-foreground font-medium mb-2">🚀 Prevention Strategies</h5>
+                  <ul class="space-y-4">
+                    @for (strategy of workflowState().copilotAnalysis!.preventionStrategies!; track strategy) {
+                      <li class="text-vscode-textBlockQuote-foreground text-sm flex items-start gap-2">
+                        <span class="text-yellow-500 mt-1">•</span>
+                        <span>{{ strategy }}</span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+            </div>
+          } @else {
+            <!-- Success Analysis -->
+            <div class="space-y-6">
+              @if (workflowState().copilotAnalysis!.suspiciousTests && workflowState().copilotAnalysis!.suspiciousTests!.length > 0) {
+                <div class="bg-vscode-textBlockQuote-background border-l-4 border-yellow-400 p-4 rounded">
+                  <h5 class="text-vscode-foreground font-medium mb-2">⚠️ Suspicious Tests</h5>
+                  <div class="space-y-5">
+                    @for (test of workflowState().copilotAnalysis!.suspiciousTests!; track test.file + test.testName) {
+                      <div class="border-l-2 border-yellow-300 pl-3">
+                        <div class="text-vscode-foreground text-sm font-medium">{{ test.file }}</div>
+                        <div class="text-vscode-textBlockQuote-foreground text-xs">{{ test.testName }}</div>
+                        <div class="text-vscode-textBlockQuote-foreground text-xs mt-1">
+                          <span class="font-medium">Issue:</span> {{ test.issue }}
+                        </div>
+                        <div class="text-vscode-textBlockQuote-foreground text-xs">
+                          <span class="font-medium">Suggestion:</span> {{ test.suggestion }}
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          @if (workflowState().copilotAnalysis!.recommendations && workflowState().copilotAnalysis!.recommendations!.length > 0) {
+            <div class="bg-vscode-textBlockQuote-background border-l-4 border-purple-400 p-4 rounded mt-4">
+              <h5 class="text-vscode-foreground font-medium mb-2">📋 Recommendations</h5>
+              <ul class="space-y-2">
+                @for (rec of workflowState().copilotAnalysis!.recommendations!; track rec) {
+                  <li class="text-vscode-textBlockQuote-foreground text-sm flex items-start gap-2">
+                    <span class="text-purple-500 mt-1">•</span>
+                    <span>{{ rec }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
+          @if (workflowState().copilotAnalysis!.analysisFilePath) {
+            <div class="mt-4 text-center">
+              <button 
+                (click)="openCopilotAnalysisFile()"
+                class="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                📄 View Full Analysis Report
+              </button>
             </div>
           }
         </div>
@@ -302,26 +509,71 @@ export interface DebugWorkflowState {
         </div>
       }
 
-      <!-- Complete State -->
+      <!-- Terminal Success State -->
       @if (workflowState().phase === 'complete') {
-        <div class="mb-6">
-          <div class="bg-green-50 border border-green-200 rounded p-4 text-center">
-            <h4 class="text-green-800 font-medium mb-2">✅ Analysis Complete</h4>
-            <p class="text-green-700 text-sm mb-4">
-              AI debug workflow completed successfully. Review the analysis above.
-            </p>
-            <div class="flex gap-3 justify-center">
-              <button 
-                (click)="exportResults()"
-                class="px-4 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700">
-                📄 Export Results
-              </button>
-              <button 
-                (click)="resetWorkflow()"
-                class="px-4 py-2 bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded text-sm hover:bg-vscode-button-secondaryHoverBackground">
-                🔄 New Analysis
-              </button>
+        <div class="mb-6 border-t border-gray-700 pt-6">
+          <div class="mb-4 items-center gap-2">
+            <span style="color: #A8A8FF;">></span>
+            <span style="color: #6BCF7F;">✅ Workflow completed successfully</span>
+            <span style="color: #666;">|</span>
+            <span style="color: #FFD93D;">exit_code=0</span>
+          </div>
+          <div class="pl-4 mb-6">
+            <div style="color: #4ECDC4; padding-top: 12px;" class="mb-[12px]">Generated outputs ready for analysis:</div>
+            <div class="space-y-5">
+              <!-- Terminal File Listing -->
+              <div class="space-y-5">
+                <div class="flex items-center gap-3 py-1">
+                  <span style="color: #6BCF7F;">📄 [MAIN]</span>
+                  <button 
+                    (click)="openContextFile()"
+                    class="font-mono hover:opacity-80"
+                    style="background: #333;color: #FFD93D; text-decoration: underline;">
+                    ai_debug_context.txt
+                  </button>
+                  <button 
+                    (click)="copyContextFilePath()"
+                    class="px-2 py-1 rounded text-xs hover:opacity-80"
+                    style="background: #333; color: #4ECDC4; border: 1px solid #666;"
+                    title="Copy path">
+                    📋 cp
+                  </button>
+                </div>
+                
+                @if (workflowState().copilotAnalysis) {
+                  <div class="flex items-center gap-3 py-1">
+                    <span style="color: #A8A8FF;">🤖 [AI]</span>
+                    <button 
+                      (click)="openCopilotAnalysisFile()"
+                      class="font-mono hover:opacity-80"
+                      style="background: #333;color: #FFD93D; text-decoration: underline;">
+                      copilot_analysis.md
+                    </button>
+                    <button 
+                      (click)="copyCopilotAnalysisFilePath()"
+                      class="px-2 py-1 rounded text-xs hover:opacity-80"
+                      style="background: #333; color: #4ECDC4; border: 1px solid #666;"
+                      title="Copy path">
+                      📋 cp
+                    </button>
+                  </div>
+                }
+              </div>
+              
+              <!-- Terminal Restart Command -->
+              <div class="pt-4 border-t" style="border-color: #333;">
+                <button 
+                  (click)="resetWorkflow()"
+                  class="px-4 py-2 font-mono font-bold rounded hover:opacity-90"
+                  style="background: #333; color: #FF8C42; border: 2px solid #666;">
+                  <span class="flex items-center gap-2">
+                    <span>🔄</span>
+                    <span>RESTART --new-session</span>
+                  </span>
+                </button>
+              </div>
             </div>
+            
           </div>
         </div>
       }
@@ -391,6 +643,28 @@ export class AIDebugComponent implements OnInit {
         case 'workflowError':
           // Handle errors
           console.error('Workflow error:', message.data?.error);
+          this.updateWorkflowState({
+            phase: 'error',
+            progress: 0,
+            message: 'Error occurred during workflow',
+            error: message.data?.error || 'Unknown error'
+          });
+          break;
+        case 'workflowComplete':
+          // Handle completion of AI debug workflow
+          this.handleAIDebugComplete(message.data);
+          break;
+        case 'aiAnalysisComplete':
+          // Handle Copilot analysis results
+          this.handleCopilotAnalysisComplete(message.data);
+          break;
+        case 'gitDiffComplete':
+          // Handle git diff completion
+          this.handleGitDiffComplete(message.data);
+          break;
+        case 'testResultsComplete':
+          // Handle test results completion
+          this.handleTestResultsComplete(message.data);
           break;
       }
     });
@@ -407,15 +681,61 @@ export class AIDebugComponent implements OnInit {
     }
   }
 
+  private handleAIDebugComplete(data: any) {
+    // Update workflow state to complete
+    this.updateWorkflowState({
+      phase: 'complete',
+      progress: 100,
+      message: 'AI debug workflow completed successfully'
+    });
+    
+    // If we have analysis results, emit workflow complete event
+    if (data?.analysis) {
+      const aiAnalysis: AIAnalysis = {
+        type: data.analysis.type || 'failure-analysis',
+        rootCause: data.analysis.rootCause,
+        suggestedFixes: data.analysis.suggestedFixes,
+        newTestSuggestions: data.analysis.newTestSuggestions,
+        falsePositiveWarnings: data.analysis.falsePositiveWarnings,
+        codeImprovements: data.analysis.codeImprovements
+      };
+      
+      this.workflowComplete.emit({ 
+        testResults: data.testResults || [], 
+        aiAnalysis 
+      });
+    }
+  }
+
+  private handleCopilotAnalysisComplete(data: any) {
+    // Extract Copilot analysis from the data
+    const copilotAnalysis: CopilotAnalysisResult = {
+      type: data.type,
+      analysisFilePath: data.analysisFilePath,
+      rootCause: data.analysis?.rootCause,
+      specificFixes: data.analysis?.specificFixes,
+      preventionStrategies: data.analysis?.preventionStrategies,
+      suspiciousTests: data.falsePositives?.suspiciousTests,
+      recommendations: data.falsePositives?.recommendations || data.analysis?.preventionStrategies
+    };
+
+    // Update workflow state with Copilot analysis
+    this.updateWorkflowState({
+      copilotAnalysis
+    });
+  }
+
   private mapBackendStepToPhase(step: string): DebugWorkflowState['phase'] {
     switch (step) {
       case 'collecting-context':
+      case 'generating-context':
         return 'collecting-context';
       case 'running-tests':
         return 'running-tests';
       case 'analyzing-with-ai':
         return 'analyzing-results';
       case 'generating-pr':
+      case 'saving-context':
         return 'generating-report';
       case 'complete':
         return 'complete';
@@ -508,6 +828,62 @@ export class AIDebugComponent implements OnInit {
     }
   }
 
+  getTerminalPhaseStatus(phaseKey: string): string {
+    const currentPhase = this.workflowState().phase;
+    const phases = ['collecting-context', 'running-tests', 'analyzing-results', 'generating-report'];
+    const currentIndex = phases.indexOf(currentPhase);
+    const phaseIndex = phases.indexOf(phaseKey);
+
+    if (phaseIndex < currentIndex) {
+      return '[✓]';
+    } else if (phaseIndex === currentIndex) {
+      return '[▶]';
+    } else {
+      return '[·]';
+    }
+  }
+
+  getTerminalPhaseStyle(phaseKey: string): any {
+    const currentPhase = this.workflowState().phase;
+    const phases = ['collecting-context', 'running-tests', 'analyzing-results', 'generating-report'];
+    const currentIndex = phases.indexOf(currentPhase);
+    const phaseIndex = phases.indexOf(phaseKey);
+
+    if (phaseIndex < currentIndex) {
+      return { color: '#6BCF7F' }; // Green for completed
+    } else if (phaseIndex === currentIndex) {
+      return { color: '#FFD93D' }; // Yellow for current
+    } else {
+      return { color: '#666' }; // Gray for pending
+    }
+  }
+
+  getTerminalPhaseLabel(phaseKey: string): string {
+    const currentPhase = this.workflowState().phase;
+    const phases = ['collecting-context', 'running-tests', 'analyzing-results', 'generating-report'];
+    const currentIndex = phases.indexOf(currentPhase);
+    const phaseIndex = phases.indexOf(phaseKey);
+
+    if (phaseIndex < currentIndex) {
+      return 'COMPLETE';
+    } else if (phaseIndex === currentIndex) {
+      return 'ACTIVE';
+    } else {
+      return 'PENDING';
+    }
+  }
+
+  getProgressBars(): { filled: number[]; empty: number[] } {
+    const progress = this.workflowState().progress;
+    const filledBars = Math.floor(progress / 5);
+    const emptyBars = 20 - filledBars;
+    
+    return {
+      filled: Array.from({ length: filledBars }, (_, i) => i),
+      empty: Array.from({ length: emptyBars }, (_, i) => i)
+    };
+  }
+
   getPassedTestsCount(): number {
     return this.workflowState().testResults?.filter(t => t.status === 'passed').length || 0;
   }
@@ -528,55 +904,18 @@ export class AIDebugComponent implements OnInit {
     if (!this.canStartWorkflow()) return;
 
     try {
-      // Phase 1: Collecting Context
+      // Initialize workflow state
       this.updateWorkflowState({
         phase: 'collecting-context',
         progress: 10,
-        message: 'Collecting file changes and test configuration...'
+        message: 'Starting AI Test Debug workflow...'
       });
 
-      await this.simulateDelay(1000);
-
-      // Phase 2: Running Tests
-      this.updateWorkflowState({
-        phase: 'running-tests',
-        progress: 30,
-        message: 'Executing test suite...'
+      // Send request to backend to run the real AI Test Debug workflow
+      this.vscode.postMessage('runFullWorkflow', {
+        fileSelection: this.fileSelection,
+        testConfiguration: this.testConfiguration
       });
-
-      const testResults = await this.runTests();
-      
-      // Phase 3: Analyzing Results
-      this.updateWorkflowState({
-        phase: 'analyzing-results',
-        progress: 70,
-        message: 'Analyzing test results with AI...',
-        testResults
-      });
-
-      const aiAnalysis = await this.performAIAnalysis(testResults);
-
-      // Phase 4: Generating Report
-      this.updateWorkflowState({
-        phase: 'generating-report',
-        progress: 90,
-        message: 'Generating final report...',
-        testResults,
-        aiAnalysis
-      });
-
-      await this.simulateDelay(1000);
-
-      // Complete
-      this.updateWorkflowState({
-        phase: 'complete',
-        progress: 100,
-        message: 'AI debug workflow completed successfully',
-        testResults,
-        aiAnalysis
-      });
-
-      this.workflowComplete.emit({ testResults, aiAnalysis });
 
     } catch (error) {
       this.updateWorkflowState({
@@ -596,12 +935,58 @@ export class AIDebugComponent implements OnInit {
     });
   }
 
-  exportResults() {
-    const state = this.workflowState();
-    if (state.testResults && state.aiAnalysis) {
-      // This would trigger a download or save the results
-      console.log('Exporting results:', { testResults: state.testResults, aiAnalysis: state.aiAnalysis });
-    }
+  openContextFile() {
+    // Send message to backend to open the context file in VSCode editor
+    this.vscode.postMessage('openContextFile', {});
+  }
+
+  openCopilotAnalysisFile() {
+    // Send message to backend to open the Copilot analysis file in VSCode editor
+    this.vscode.postMessage('openCopilotAnalysisFile', {});
+  }
+
+  openGitDiffFile() {
+    // Send message to backend to open the git diff file in VSCode editor
+    this.vscode.postMessage('openGitDiffFile', {});
+  }
+
+  openTestResultsFile() {
+    // Send message to backend to open the test results file in VSCode editor
+    this.vscode.postMessage('openTestResultsFile', {});
+  }
+
+  copyContextFilePath() {
+    // Send message to backend to copy the context file path to clipboard
+    this.vscode.postMessage('copyContextFilePath', {});
+  }
+
+  copyGitDiffFilePath() {
+    // Send message to backend to copy the git diff file path to clipboard
+    this.vscode.postMessage('copyGitDiffFilePath', {});
+  }
+
+  copyTestResultsFilePath() {
+    // Send message to backend to copy the test results file path to clipboard
+    this.vscode.postMessage('copyTestResultsFilePath', {});
+  }
+
+  copyCopilotAnalysisFilePath() {
+    // Send message to backend to copy the Copilot analysis file path to clipboard
+    this.vscode.postMessage('copyCopilotAnalysisFilePath', {});
+  }
+
+  private handleGitDiffComplete(data: any) {
+    // Update workflow state with git diff file path
+    this.updateWorkflowState({
+      gitDiffFilePath: data.filePath
+    });
+  }
+
+  private handleTestResultsComplete(data: any) {
+    // Update workflow state with test results file path
+    this.updateWorkflowState({
+      testResultsFilePath: data.filePath
+    });
   }
 
   private updateWorkflowState(updates: Partial<DebugWorkflowState>) {
@@ -626,120 +1011,4 @@ export class AIDebugComponent implements OnInit {
     }
   }
 
-  private async runTests(): Promise<TestResult[]> {
-    // Request real test execution from backend
-    return new Promise((resolve, reject) => {
-      // Set up message listener for test results
-      const subscription = this.vscode.onMessage().subscribe(message => {
-        if (message?.command === 'testResults') {
-          subscription.unsubscribe();
-          
-          // Convert backend test results to component format
-          const testResults: TestResult[] = message.data.results.map((result: any) => ({
-            name: result.name || 'Unknown test',
-            status: result.status || 'failed',
-            duration: result.duration || 0,
-            file: result.file || 'Unknown file',
-            error: result.error,
-            stackTrace: result.stackTrace
-          }));
-          
-          resolve(testResults);
-        } else if (message?.command === 'workflowError') {
-          subscription.unsubscribe();
-          reject(new Error(message.data?.error || 'Test execution failed'));
-        }
-      });
-
-      // Request test execution based on configuration
-      if (this.testConfiguration?.mode === 'affected') {
-        this.vscode.postMessage('runAffectedTests', { baseBranch: 'main' });
-      } else if (this.testConfiguration?.project) {
-        // Run tests for single project  
-        this.vscode.postMessage('runProjectTests', { 
-          projectName: this.testConfiguration.project 
-        });
-      } else {
-        subscription.unsubscribe();
-        reject(new Error('No valid test configuration found'));
-      }
-
-      // Set timeout to prevent hanging
-      setTimeout(() => {
-        subscription.unsubscribe();
-        reject(new Error('Test execution timeout'));
-      }, 300000); // 5 minute timeout
-    });
-  }
-
-  private async performAIAnalysis(testResults: TestResult[]): Promise<AIAnalysis> {
-    // Request real AI analysis from backend
-    return new Promise((resolve, reject) => {
-      // Set up message listener for AI analysis results
-      const subscription = this.vscode.onMessage().subscribe(message => {
-        if (message?.command === 'aiAnalysisComplete') {
-          subscription.unsubscribe();
-          
-          const { type, analysis, falsePositives, suggestions } = message.data;
-          
-          // Convert backend analysis to component format
-          const aiAnalysis: AIAnalysis = {
-            type: type === 'failure-analysis' ? 'failure-analysis' : 'success-analysis'
-          };
-
-          if (type === 'failure-analysis' && analysis) {
-            aiAnalysis.rootCause = analysis.rootCause;
-            aiAnalysis.suggestedFixes = analysis.specificFixes?.map((fix: any) => 
-              `${fix.file}:${fix.lineNumber} - ${fix.explanation}`
-            ) || analysis.preventionStrategies || [];
-          } else if (type === 'success-analysis') {
-            aiAnalysis.falsePositiveWarnings = falsePositives?.recommendations || [];
-            aiAnalysis.codeImprovements = falsePositives?.suspiciousTests?.map((test: any) => 
-              `${test.file}: ${test.suggestion}`
-            ) || [];
-          }
-
-          // Add test suggestions
-          aiAnalysis.newTestSuggestions = suggestions?.newTests?.map((test: any) => 
-            `${test.testName}: ${test.reasoning}`
-          ) || suggestions?.improvements || [];
-          
-          resolve(aiAnalysis);
-        } else if (message?.command === 'workflowError') {
-          subscription.unsubscribe();
-          reject(new Error(message.data?.error || 'AI analysis failed'));
-        }
-      });
-
-      // Get git diff for analysis
-      let gitDiff = '';
-      
-      // Prepare git diff based on file selection
-      if (this.fileSelection?.mode === 'uncommitted') {
-        this.vscode.postMessage('getGitDiff'); // This will be used in the analysis
-        gitDiff = 'uncommitted-changes'; // Placeholder
-      } else if (this.fileSelection?.mode === 'commit' && this.fileSelection.commits) {
-        gitDiff = `commit-${this.fileSelection.commits[0]?.hash || 'unknown'}`;
-      } else if (this.fileSelection?.mode === 'branch-diff') {
-        gitDiff = 'branch-diff';
-      }
-
-      // Request AI analysis with context
-      this.vscode.postMessage('runAIAnalysis', {
-        gitDiff,
-        testResults,
-        analysisType: testResults.some(test => test.status === 'failed') ? 'failure' : 'success'
-      });
-
-      // Set timeout to prevent hanging
-      setTimeout(() => {
-        subscription.unsubscribe();
-        reject(new Error('AI analysis timeout'));
-      }, 120000); // 2 minute timeout
-    });
-  }
-
-  private simulateDelay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 }

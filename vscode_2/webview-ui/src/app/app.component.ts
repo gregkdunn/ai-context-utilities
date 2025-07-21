@@ -6,6 +6,7 @@ import { FileSelectorComponent, FileSelection } from './modules/file-selection/f
 import { TestSelectorComponent, TestConfiguration } from './modules/test-selection/test-selector.component';
 import { AIDebugComponent, TestResult, AIAnalysis } from './modules/ai-debug/ai-debug.component';
 import { PRGeneratorComponent } from './modules/pr-generator/pr-generator.component';
+import { PrepareToPushComponent, PrepareToPushResult } from './modules/prepare-to-push/prepare-to-push.component';
 
 export interface WorkflowState {
   step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error';
@@ -16,101 +17,194 @@ export interface WorkflowState {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FileSelectorComponent, TestSelectorComponent, AIDebugComponent, PRGeneratorComponent],
+  imports: [CommonModule, FileSelectorComponent, TestSelectorComponent, AIDebugComponent, PRGeneratorComponent, PrepareToPushComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="min-h-screen bg-vscode-background text-vscode-foreground p-4">
-      <!-- Header -->
-      <header class="flex items-center justify-between mb-6 pb-4 border-b border-vscode-panel-border">
-        <h1 class="flex items-center gap-3 text-2xl font-bold">
-          <span class="text-3xl">🤖</span>
-          AI Debug Context
-        </h1>
+    <div class="min-h-screen font-mono text-sm p-3" style="background: #1a1a1a; color: #e5e5e5; padding: 16px;">
+      <!-- Terminal Header -->
+      <header class="items-center justify-between mb-8 pb-6 border-b" style="border-color: #333;padding: 3px;">
+        <div class="items-center gap-3">
+          <span style="color: #A8A8FF;">$</span>
+          <span class="font-bold" style="color: #4ECDC4;">ai-debug-context</span>
+          <span style="color: #FFD93D;">--module</span>
+          <span style="color: #6BCF7F;">{{ activeModule() }}</span>
+        </div>
         @if (activeModule() !== 'overview') {
           <button
             (click)="showOverview()"
-            class="px-4 py-2 bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
-            ← Back to Overview
+            class="px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
+            <span class="flex items-center gap-2">
+              <span>←</span>
+              <span>BACK --overview</span>
+            </span>
           </button>
         }
       </header>
 
-      <!-- Module Overview -->
+      <!-- Terminal Module Overview -->
       @if (activeModule() === 'overview') {
-        <main class="max-w-4xl mx-auto">
-          <!-- Status Summary -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div class="bg-vscode-editor-background border border-vscode-panel-border rounded-lg p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-xl">📁</span>
-                <h3 class="font-semibold">File Selection</h3>
-              </div>
-              <p class="text-sm text-vscode-descriptionForeground mb-3">{{ getFileSelectionStatus() }}</p>
-              <button
-                (click)="showModule('file-selection')"
-                class="w-full px-3 py-2 bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground">
-                Configure
-              </button>
+        <main class="max-w-5xl mx-auto">
+          <!-- Terminal Config Section -->
+          <div class="mb-12">
+            <div class="flex items-center gap-4 mb-6">
+              <span style="color: #A8A8FF;">$</span>
+              <span class="text-2xl">⚙️</span>
+              <h2 class="text-xl font-bold" style="color: #4ECDC4;">config</h2>
+              <span style="color: #FFD93D;">--workspace-setup</span>
             </div>
-
-            <div class="bg-vscode-editor-background border border-vscode-panel-border rounded-lg p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-xl">🧪</span>
-                <h3 class="font-semibold">Test Selection</h3>
+            
+            <!-- Config Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="rounded-lg p-4" style="background: #1a1a1a; border: 1px solid #333;">
+                <div class="flex items-center gap-3 mb-3">
+                  <span style="color: #A8A8FF;">></span>
+                  <span class="text-lg">📁</span>
+                  <h3 class="font-semibold" style="color: #4ECDC4;">file_selector</h3>
+                </div>
+                <p class="text-sm mb-4" style="color: #666;">{{ getFileSelectionStatus() }}</p>
+                <button
+                  (click)="showModule('file-selection')"
+                  class="w-full px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
+                  config --files
+                </button>
               </div>
-              <p class="text-sm text-vscode-descriptionForeground mb-3">{{ getTestConfigStatus() }}</p>
-              <button
-                (click)="showModule('test-selection')"
-                class="w-full px-3 py-2 bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground">
-                Configure
-              </button>
-            </div>
 
-            <div class="bg-vscode-editor-background border border-vscode-panel-border rounded-lg p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-xl">📋</span>
-                <h3 class="font-semibold">PR Generator</h3>
+              <div class="rounded-lg p-4" style="background: #1a1a1a; border: 1px solid #333;">
+                <div class="flex items-center gap-3 mb-3">
+                  <span style="color: #A8A8FF;">></span>
+                  <span class="text-lg">📂</span>
+                  <h3 class="font-semibold" style="color: #4ECDC4;">project_selector</h3>
+                </div>
+                <p class="text-sm mb-4" style="color: #666;">{{ getProjectConfigStatus() }}</p>
+                <button
+                  (click)="showModule('test-selection')"
+                  class="w-full px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
+                  config --projects
+                </button>
               </div>
-              <p class="text-sm text-vscode-descriptionForeground mb-3">{{ getPRGeneratorStatus() }}</p>
-              <button
-                (click)="showModule('pr-generator')"
-                [disabled]="!fileSelection()"
-                class="w-full px-3 py-2 bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground disabled:opacity-50">
-                Configure
-              </button>
             </div>
           </div>
 
-          <!-- Main AI Debug Action -->
-          <div class="bg-vscode-editor-background border border-vscode-panel-border rounded-lg p-6 text-center">
-            <div class="flex items-center justify-center gap-3 mb-4">
-              <span class="text-4xl">🚀</span>
-              <h2 class="text-xl font-bold">AI Test Debug</h2>
+          <!-- Terminal Actions Section -->
+          <div class="mb-12">
+            <div class="flex items-center gap-4 mb-6">
+              <span style="color: #A8A8FF;">$</span>
+              <span class="text-2xl">⚡</span>
+              <h2 class="text-xl font-bold" style="color: #4ECDC4;">actions</h2>
+              <span style="color: #FFD93D;">--workflow-execution</span>
             </div>
-            <p class="text-vscode-descriptionForeground mb-6 max-w-md mx-auto">
-              Run the complete AI-powered test debugging workflow with your configured settings.
-            </p>
-            <button
-              (click)="showModule('ai-debug')"
-              [disabled]="!canRunAIDebug()"
-              class="px-8 py-4 bg-vscode-button-background text-vscode-button-foreground rounded-lg font-semibold text-lg hover:bg-vscode-button-hoverBackground disabled:opacity-50 disabled:cursor-not-allowed">
-              @if (!canRunAIDebug()) {
-                <span class="flex items-center gap-2">
-                  <span>⚠️</span>
-                  Configure Prerequisites First
-                </span>
-              } @else {
-                <span class="flex items-center gap-2">
-                  <span>🤖</span>
-                  Run AI Test Debug
-                </span>
-              }
-            </button>
-            @if (!canRunAIDebug()) {
-              <p class="text-vscode-descriptionForeground text-sm mt-3">
-                Complete file selection and test selection to continue
+            
+            <!-- AI Debug Action -->
+            <div class="rounded-lg p-8 text-center mb-6" style="background: #1a1a1a; border: 1px solid #333;">
+              <div class="flex items-center justify-center gap-4 mb-6">
+                <span style="color: #A8A8FF;">$</span>
+                <span class="text-4xl">🚀</span>
+                <h3 class="text-xl font-bold" style="color: #4ECDC4;">ai_debug_workflow</h3>
+                <span style="color: #FFD93D;">--full</span>
+              </div>
+              <p class="mb-8 max-w-md mx-auto" style="color: #666;">
+                Build a context file so AI can analyze your code changes for testing recommendations.
               </p>
-            }
+              <div class="text-xs mb-4" style="color: #666;">
+                Status: {{ getAIDebugStatus() }}
+              </div>
+              <button
+                (click)="showModule('ai-debug')"
+                [disabled]="!canRunAIDebug()"
+                class="px-8 py-4 rounded-lg font-mono font-bold text-lg border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                [ngStyle]="canRunAIDebug() ? 
+                  {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
+                  {'background': '#333', 'color': '#666', 'border-color': '#555'}">
+                @if (!canRunAIDebug()) {
+                  <span class="flex items-center gap-3">
+                    <span>[✗]</span>
+                    <span>CONFIG --missing-prerequisites</span>
+                  </span>
+                } @else {
+                  <span class="flex items-center gap-3">
+                    <span>🤖</span>
+                    <span>EXECUTE --ai-debug-workflow</span>
+                  </span>
+                }
+              </button>
+              @if (!canRunAIDebug()) {
+                <div class="mt-4 p-3 rounded" style="background: #2a1a1a; border: 1px solid #FF4B6D;">
+                  <p class="text-sm" style="color: #FF8C42;">
+                    <span style="color: #FF4B6D;">ERROR:</span> Complete file selection and project selection to continue
+                  </p>
+                </div>
+              }
+            </div>
+            
+            <!-- Prepare to Push Action -->
+            <div class="rounded-lg p-6 text-center mb-6" style="background: #1a1a1a; border: 1px solid #333;">
+              <div class="flex items-center justify-center gap-4 mb-4">
+                <span style="color: #A8A8FF;">$</span>
+                <span class="text-2xl">🚀</span>
+                <h3 class="text-lg font-bold" style="color: #4ECDC4;">prepare_to_push</h3>
+                <span style="color: #FFD93D;">--validate</span>
+              </div>
+              <p class="mb-6 max-w-lg mx-auto text-sm" style="color: #666;">
+                Run linting and formatting on your selected projects to ensure code quality before pushing.
+              </p>
+              <div class="text-xs mb-4" style="color: #666;">
+                Status: {{ getPrepareToPushStatus() }}
+              </div>
+              <button
+                (click)="showModule('prepare-to-push')"
+                [disabled]="!testConfiguration()"
+                class="px-6 py-3 font-mono font-bold text-sm rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                [ngStyle]="testConfiguration() ? 
+                  {'background': '#333', 'color': '#FFD93D', 'border-color': '#666'} : 
+                  {'background': '#333', 'color': '#555', 'border-color': '#444'}">
+                @if (!testConfiguration()) {
+                  <span class="flex items-center gap-2">
+                    <span>[✗]</span>
+                    <span>REQUIRES --project-selection</span>
+                  </span>
+                } @else {
+                  <span class="flex items-center gap-2">
+                    <span>✨</span>
+                    <span>VALIDATE --code-quality</span>
+                  </span>
+                }
+              </button>
+            </div>
+            
+            <!-- PR Generator Action -->
+            <div class="rounded-lg p-6 text-center" style="background: #1a1a1a; border: 1px solid #333;">
+              <div class="flex items-center justify-center gap-4 mb-4">
+                <span style="color: #A8A8FF;">$</span>
+                <span class="text-2xl">📋</span>
+                <h3 class="text-lg font-bold" style="color: #4ECDC4;">pr_generator</h3>
+                <span style="color: #FFD93D;">--description</span>
+              </div>
+              <p class="mb-6 max-w-lg mx-auto text-sm" style="color: #666;">
+                Generate professional GitHub PR descriptions using AI analysis of your code changes and test results.
+              </p>
+              <div class="text-xs mb-4" style="color: #666;">
+                Status: {{ getPRGeneratorStatus() }}
+              </div>
+              <button
+                (click)="showModule('pr-generator')"
+                [disabled]="!fileSelection()"
+                class="px-6 py-3 font-mono font-bold text-sm rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                [ngStyle]="fileSelection() ? 
+                  {'background': '#333', 'color': '#FFD93D', 'border-color': '#666'} : 
+                  {'background': '#333', 'color': '#555', 'border-color': '#444'}">
+                @if (!fileSelection()) {
+                  <span class="flex items-center gap-2">
+                    <span>[✗]</span>
+                    <span>REQUIRES --file-selection</span>
+                  </span>
+                } @else {
+                  <span class="flex items-center gap-2">
+                    <span>📝</span>
+                    <span>GENERATE --pr-description</span>
+                  </span>
+                }
+              </button>
+            </div>
           </div>
         </main>
       }
@@ -118,15 +212,17 @@ export interface WorkflowState {
       <!-- File Selection Module -->
       @if (activeModule() === 'file-selection') {
         <app-file-selector
-          (selectionChanged)="onFileSelectionChanged($event)">
+          (selectionChanged)="onFileSelectionChanged($event)"
+          (navigationRequested)="showOverview()">
         </app-file-selector>
       }
 
-      <!-- Test Selection Module -->
+      <!-- Project Selection Module -->
       @if (activeModule() === 'test-selection') {
         <app-test-selector
           #testSelector
-          (configurationChanged)="onTestConfigurationChanged($event)">
+          (configurationChanged)="onTestConfigurationChanged($event)"
+          (navigationRequested)="showOverview()">
         </app-test-selector>
       }
 
@@ -137,6 +233,14 @@ export interface WorkflowState {
           [testConfiguration]="testConfiguration()"
           (workflowComplete)="onAIDebugComplete($event)">
         </app-ai-debug>
+      }
+
+      <!-- Prepare To Push Module -->
+      @if (activeModule() === 'prepare-to-push') {
+        <app-prepare-to-push
+          [testConfiguration]="testConfiguration()"
+          (prepareToPushComplete)="onPrepareToPushComplete($event)">
+        </app-prepare-to-push>
       }
 
       <!-- PR Generator Module -->
@@ -173,7 +277,7 @@ export class AppComponent implements OnInit, OnDestroy {
   @ViewChild('testSelector') testSelector?: TestSelectorComponent;
   
   // Module navigation
-  activeModule = signal<'overview' | 'file-selection' | 'test-selection' | 'ai-debug' | 'pr-generator'>('overview');
+  activeModule = signal<'overview' | 'file-selection' | 'test-selection' | 'ai-debug' | 'prepare-to-push' | 'pr-generator'>('overview');
   
   // Module data
   fileSelection = signal<FileSelection | null>(null);
@@ -181,6 +285,7 @@ export class AppComponent implements OnInit, OnDestroy {
   testResults = signal<TestResult[] | null>(null);
   aiAnalysis = signal<AIAnalysis | null>(null);
   prDescription = signal<string | null>(null);
+  prepareToPushResult = signal<PrepareToPushResult | null>(null);
 
   constructor(private vscode: VscodeService) {}
 
@@ -210,7 +315,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.saveState();
   }
 
-  showModule(module: 'file-selection' | 'test-selection' | 'ai-debug' | 'pr-generator') {
+  showModule(module: 'file-selection' | 'test-selection' | 'ai-debug' | 'prepare-to-push' | 'pr-generator') {
     this.activeModule.set(module);
     this.saveState();
   }
@@ -240,7 +345,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  getTestConfigStatus(): string {
+  getProjectConfigStatus(): string {
     const config = this.testConfiguration();
     if (!config) return 'Not configured';
     
@@ -251,10 +356,27 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  getAIDebugStatus(): string {
+    if (!this.canRunAIDebug()) return 'Requires configuration';
+    if (this.aiAnalysis()) return 'Analysis complete';
+    if (this.testResults()) return 'Tests complete, ready for analysis';
+    return 'Ready to run';
+  }
+
   getPRGeneratorStatus(): string {
     if (!this.fileSelection()) return 'Requires file selection';
     if (this.prDescription()) return 'Description generated';
+    if (this.testResults() && this.aiAnalysis()) return 'Ready with analysis data';
     return 'Ready to generate';
+  }
+
+  getPrepareToPushStatus(): string {
+    if (!this.testConfiguration()) return 'Requires test configuration';
+    if (this.prepareToPushResult()) {
+      const result = this.prepareToPushResult()!;
+      return result.success ? 'Code quality validated' : 'Validation failed';
+    }
+    return 'Ready to validate';
   }
 
   canRunAIDebug(): boolean {
@@ -286,12 +408,35 @@ export class AppComponent implements OnInit, OnDestroy {
     this.aiAnalysis.set(result.aiAnalysis);
     this.saveState();
     this.vscode.postMessage('aiDebugComplete', result);
+    
+    // Automatically generate PR template if we have file selection
+    if (this.fileSelection()) {
+      this.generatePRTemplate();
+    }
+  }
+
+  private generatePRTemplate() {
+    // Generate PR template file with current context
+    this.vscode.postMessage('generatePRTemplate', {
+      fileSelection: this.fileSelection(),
+      testResults: this.testResults(),
+      aiAnalysis: this.aiAnalysis(),
+      template: 'standard', // default template
+      jiraTickets: [],
+      featureFlags: []
+    });
   }
 
   onPRDescriptionGenerated(description: string) {
     this.prDescription.set(description);
     this.saveState();
     this.vscode.postMessage('prDescriptionGenerated', description);
+  }
+
+  onPrepareToPushComplete(result: PrepareToPushResult) {
+    this.prepareToPushResult.set(result);
+    this.saveState();
+    this.vscode.postMessage('prepareToPushComplete', result);
   }
 
   private internalHandleVscodeMessage(message: any): void {
@@ -309,9 +454,18 @@ export class AppComponent implements OnInit, OnDestroy {
           this.showModule(message.data.module);
         }
         break;
+      case 'prTemplateGenerated':
+        this.handlePRTemplateGenerated(message.data);
+        break;
       // Note: gitDiffGenerated is now handled within file-selection module
       // No need to navigate to separate git-diff module
     }
+  }
+
+  private handlePRTemplateGenerated(data: { templateFile: string; filePath: string }) {
+    console.log('PR template generated:', data.filePath);
+    // Show a notification or update UI to indicate template is ready
+    // Could potentially navigate to PR generator module to show the generated template
   }
 
   // Public method for testing
@@ -326,7 +480,8 @@ export class AppComponent implements OnInit, OnDestroy {
       testConfiguration: this.testConfiguration(),
       testResults: this.testResults(),
       aiAnalysis: this.aiAnalysis(),
-      prDescription: this.prDescription()
+      prDescription: this.prDescription(),
+      prepareToPushResult: this.prepareToPushResult()
     };
     this.vscode.setState(state);
   }
@@ -338,6 +493,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (state.testResults) this.testResults.set(state.testResults);
     if (state.aiAnalysis) this.aiAnalysis.set(state.aiAnalysis);
     if (state.prDescription) this.prDescription.set(state.prDescription);
+    if (state.prepareToPushResult) this.prepareToPushResult.set(state.prepareToPushResult);
   }
 
   private resetAllState() {
@@ -347,6 +503,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.testResults.set(null);
     this.aiAnalysis.set(null);
     this.prDescription.set(null);
+    this.prepareToPushResult.set(null);
     this.saveState();
   }
 }

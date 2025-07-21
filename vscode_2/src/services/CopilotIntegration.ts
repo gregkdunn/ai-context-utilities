@@ -172,20 +172,20 @@ ${context.gitDiff}
 \`\`\`
 
 ### Test Results Summary
-- Total Tests: ${context.testResults.length}
-- Passed: ${context.testResults.filter(t => t.status === 'passed').length}
-- Failed: ${context.testResults.filter(t => t.status === 'failed').length}
-- Skipped: ${context.testResults.filter(t => t.status === 'skipped').length}
+- Total Tests: ${context.testResults?.length || 0}
+- Passed: ${context.testResults?.filter(t => t.status === 'passed').length || 0}
+- Failed: ${context.testResults?.filter(t => t.status === 'failed').length || 0}
+- Skipped: ${context.testResults?.filter(t => t.status === 'skipped').length || 0}
 
 ### Failed Tests Details
 ${context.testResults
-  .filter(t => t.status === 'failed')
-  .map(t => `
+  ?.filter(t => t.status === 'failed')
+  ?.map(t => `
 **${t.name}**
 - File: ${t.file}
 - Error: ${t.error || 'No error message available'}
 - Stack: ${t.stackTrace || 'No stack trace available'}
-`).join('\n')}
+`)?.join('\n') || 'No failed tests'}
 
 Please analyze these test failures and provide solutions in the exact JSON format specified.`;
 
@@ -240,7 +240,7 @@ ${context.gitDiff}
 \`\`\`
 
 ### Existing Test Results
-${context.testResults.map(t => `- ${t.name} (${t.status})`).join('\n')}
+${context.testResults?.map(t => `- ${t.name} (${t.status})`).join('\n') || 'No test results available'}
 
 Based on the code changes, suggest new tests that should be added to ensure comprehensive coverage.`;
 
@@ -303,9 +303,9 @@ ${context.gitDiff}
 
 ### Passing Tests
 ${context.testResults
-  .filter(t => t.status === 'passed')
+  ?.filter(t => t.status === 'passed')
   .map(t => `- ${t.name} (${t.file})`)
-  .join('\n')}
+  .join('\n') || 'No passing tests available'}
 
 Analyze the passing tests for potential false positives, especially focusing on:
 1. Over-mocked dependencies that might hide real issues
@@ -407,5 +407,110 @@ Analyze the passing tests for potential false positives, especially focusing on:
       mockingIssues: [],
       recommendations: [response]
     };
+  }
+
+  async generatePRDescription(context: { gitDiff: string; testResults: any[]; template: string; jiraTickets: string[]; featureFlags: string[] }): Promise<string> {
+    if (!await this.isAvailable()) {
+      console.warn('GitHub Copilot not available, using fallback PR description');
+      return this.generateFallbackPRDescription(context);
+    }
+
+    const prompt = this.createPRDescriptionPrompt(context);
+    const response = await this.sendRequest(prompt);
+    return this.parsePRDescription(response);
+  }
+
+  private createPRDescriptionPrompt(context: { gitDiff: string; testResults: any[]; template: string; jiraTickets: string[]; featureFlags: string[] }): vscode.LanguageModelChatMessage[] {
+    const systemPrompt = `You are an expert at writing professional GitHub PR descriptions. Generate a comprehensive PR description based on code changes and test results.
+    
+    Use this exact format:
+    **Problem**
+    What is the problem you're solving or feature you're implementing? Please include a link to any related discussion or tasks in Jira if applicable.
+    [Jira Link if applicable]
+    
+    **Solution**
+    Describe the feature or bug fix -- what's changing?
+    
+    **Details**
+    Include a brief overview of the technical process you took (or are going to take!) to get from the problem to the solution.
+    
+    **QA**
+    Provide any technical details needed to test this change and/or parts that you wish to have tested.`;
+
+    const testResultsSummary = context.testResults.length > 0 ? 
+      `### Test Results:\n${context.testResults.map(t => `- ${t.name}: ${t.status}`).join('\n')}` :
+      'No test results available';
+
+    const jiraSection = context.jiraTickets.length > 0 ? 
+      `### Related Jira Tickets:\n${context.jiraTickets.map(ticket => `- ${ticket}`).join('\n')}` :
+      '';
+
+    const featureFlagSection = context.featureFlags.length > 0 ? 
+      `### Feature Flags:\n${context.featureFlags.map(flag => `- ${flag}`).join('\n')}` :
+      '';
+
+    const userPrompt = `Generate a professional PR description for these changes:
+
+    ### Code Changes:
+    \`\`\`diff
+    ${context.gitDiff}
+    \`\`\`
+    
+    ${testResultsSummary}
+    
+    ${jiraSection}
+    
+    ${featureFlagSection}
+    
+    Template type: ${context.template}
+    
+    Please provide a clear, professional PR description that follows the exact format specified above.`;
+
+    return [
+      vscode.LanguageModelChatMessage.User(systemPrompt),
+      vscode.LanguageModelChatMessage.User(userPrompt)
+    ];
+  }
+
+  private parsePRDescription(response: string): string {
+    // Clean up the response and return it
+    return response.trim();
+  }
+
+  private generateFallbackPRDescription(context: { gitDiff: string; testResults: any[]; template: string; jiraTickets: string[]; featureFlags: string[] }): string {
+    const jiraSection = context.jiraTickets.length > 0 ? 
+      `\n${context.jiraTickets.map(ticket => `[${ticket}](https://your-domain.atlassian.net/browse/${ticket})`).join(' ')}` : '';
+    
+    const featureSection = context.featureFlags.length > 0 ? 
+      `\n\n**Feature Flags**\n${context.featureFlags.map(f => `- \`${f}\``).join('\n')}` : '';
+
+    const testStatus = context.testResults.length > 0 ? 
+      `Tests: ${context.testResults.filter(t => t.status === 'passed').length} passed, ${context.testResults.filter(t => t.status === 'failed').length} failed` : 
+      'No test results available';
+
+    return `**Problem**
+Implementing code improvements and enhancements to improve application functionality and reliability.${jiraSection}
+
+**Solution**
+Updated code components with enhanced functionality, improved error handling, and comprehensive test coverage.
+
+**Details**
+• Analyzed existing code patterns and architecture
+• Implemented changes following project conventions  
+• Updated test cases to match new behavior
+• Verified all code quality standards
+
+**QA**
+**Technical Testing:**
+• Run automated test suite
+• Verify linting and formatting standards
+• Check code coverage metrics
+
+**Functional Testing:**
+• Test the specific functionality changes
+• Verify no regressions in related features
+• Check for any UI/UX impacts
+
+**Test Status:** ${testStatus}${featureSection}`;
   }
 }

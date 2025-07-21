@@ -33,7 +33,7 @@
         {
           "id": "ai-debug-context",
           "title": "AI Debug Context",
-          "icon": "$(debug-alt)"
+          "icon": "./icon/logomark.svg"
         }
       ]
     },
@@ -55,7 +55,7 @@
       {
         "command": "ai-debug-context.openMainView",
         "title": "Open AI Debug Context",
-        "icon": "$(debug-alt)"
+        "icon": "./icon/logomark.svg"
       }
     ],
     "configuration": {
@@ -91,7 +91,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "npm run build:webview && tsc -p ./",
+    "compile": "npm run build:webview && tsc -p ./ && cp -r icon out/",
     "compile:ts-only": "tsc -p ./",
     "watch": "concurrently \"npm run watch:webview\" \"npm run watch:ts\"",
     "watch:ts": "tsc -watch -p ./",

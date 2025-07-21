@@ -4,13 +4,27 @@ import * as path from 'path';
 import { existsSync } from 'fs';
 import { NXProject, TestResult } from '../types';
 
+interface ProjectCache {
+  projects: NXProject[];
+  lastUpdated: number;
+  affectedProjects: string[];
+  affectedLastUpdated: number;
+}
+
 export class NXWorkspaceManager {
   private workspacePath: string;
   private projects: Map<string, NXProject> = new Map();
+  private projectCache: ProjectCache | null = null;
+  private cacheTimeout = 5 * 60 * 1000; // 5 minutes
+  private isInitializing = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(private context: vscode.ExtensionContext) {
     this.workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
     this.detectNXWorkspace();
+    
+    // Initialize project cache on startup
+    this.initializeProjectCache();
   }
 
   private async detectNXWorkspace(): Promise<boolean> {
@@ -24,7 +38,119 @@ export class NXWorkspaceManager {
     return await this.detectNXWorkspace();
   }
 
+  /**
+   * Initialize project cache on extension startup
+   */
+  private async initializeProjectCache(): Promise<void> {
+    if (this.isInitializing || this.initializationPromise) {
+      return this.initializationPromise || Promise.resolve();
+    }
+
+    this.isInitializing = true;
+    
+    this.initializationPromise = (async () => {
+      try {
+        console.log('🚀 Initializing NX project cache...');
+        
+        // Check if this is an NX workspace first
+        const isNX = await this.detectNXWorkspace();
+        if (!isNX) {
+          console.log('📝 Not an NX workspace, skipping project cache initialization');
+          return;
+        }
+
+        // Load projects in the background
+        const startTime = Date.now();
+        const projects = await this.loadProjectsFromNX();
+        
+        this.projectCache = {
+          projects,
+          lastUpdated: Date.now(),
+          affectedProjects: [],
+          affectedLastUpdated: 0
+        };
+        
+        // Update the projects map for backward compatibility
+        this.projects.clear();
+        projects.forEach(project => {
+          this.projects.set(project.name, project);
+        });
+        
+        const duration = Date.now() - startTime;
+        console.log(`✅ NX project cache initialized with ${projects.length} projects in ${duration}ms`);
+        
+        // Load affected projects in background
+        this.updateAffectedProjectsCache();
+        
+      } catch (error) {
+        console.error('❌ Failed to initialize NX project cache:', error);
+        // Don't throw - extension should still work without cache
+      } finally {
+        this.isInitializing = false;
+      }
+    })();
+
+    return this.initializationPromise;
+  }
+
+  /**
+   * Wait for cache initialization to complete
+   */
+  async waitForInitialization(): Promise<void> {
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+    }
+  }
+
+  /**
+   * Check if cache is valid and not expired
+   */
+  private isCacheValid(): boolean {
+    if (!this.projectCache) {
+      return false;
+    }
+    
+    const now = Date.now();
+    return (now - this.projectCache.lastUpdated) < this.cacheTimeout;
+  }
+
+  /**
+   * Check if affected projects cache is valid
+   */
+  private isAffectedCacheValid(): boolean {
+    if (!this.projectCache || !this.projectCache.affectedProjects.length) {
+      return false;
+    }
+    
+    const now = Date.now();
+    return (now - this.projectCache.affectedLastUpdated) < this.cacheTimeout;
+  }
+
   async listProjects(): Promise<NXProject[]> {
+    // Try to use cache first
+    if (this.isCacheValid()) {
+      console.log('📋 Using cached NX projects');
+      return this.projectCache!.projects;
+    }
+
+    // Wait for initialization if it's still in progress
+    await this.waitForInitialization();
+    
+    // Check cache again after waiting for initialization
+    if (this.isCacheValid()) {
+      console.log('📋 Using cached NX projects (after initialization)');
+      return this.projectCache!.projects;
+    }
+
+    // Fall back to loading projects fresh
+    console.log('🔄 Cache expired or invalid, refreshing NX projects...');
+    return await this.refreshProjectCache();
+  }
+
+  /**
+   * Load projects directly from NX (used internally)
+   */
+  private async loadProjectsFromNX(): Promise<NXProject[]> {
     return new Promise((resolve, reject) => {
       const process = spawn('npx', ['nx', 'show', 'projects', '--json'], {
         cwd: this.workspacePath,
@@ -57,6 +183,35 @@ export class NXWorkspaceManager {
         reject(new Error(`Failed to execute NX command: ${error.message}`));
       });
     });
+  }
+
+  /**
+   * Refresh the project cache with fresh data from NX
+   */
+  async refreshProjectCache(): Promise<NXProject[]> {
+    try {
+      const projects = await this.loadProjectsFromNX();
+      
+      this.projectCache = {
+        projects,
+        lastUpdated: Date.now(),
+        affectedProjects: this.projectCache?.affectedProjects || [],
+        affectedLastUpdated: this.projectCache?.affectedLastUpdated || 0
+      };
+      
+      // Update the projects map for backward compatibility
+      this.projects.clear();
+      projects.forEach(project => {
+        this.projects.set(project.name, project);
+      });
+      
+      console.log(`✅ NX project cache refreshed with ${projects.length} projects`);
+      return projects;
+    } catch (error) {
+      console.error('❌ Failed to refresh NX project cache:', error);
+      // Return cached projects if available, otherwise empty array
+      return this.projectCache?.projects || [];
+    }
   }
 
   private async getProjectConfig(projectName: string): Promise<NXProject | null> {
@@ -221,7 +376,22 @@ export class NXWorkspaceManager {
   }
 
   async getAffectedProjects(base: string = 'main'): Promise<string[]> {
-    return new Promise((resolve, reject) => {
+    // Try to use cache first
+    if (this.isAffectedCacheValid()) {
+      console.log('📋 Using cached affected projects');
+      return this.projectCache!.affectedProjects;
+    }
+
+    // Load affected projects fresh
+    console.log('🔄 Refreshing affected projects...');
+    return await this.updateAffectedProjectsCache(base);
+  }
+
+  /**
+   * Update the affected projects cache
+   */
+  private async updateAffectedProjectsCache(base: string = 'main'): Promise<string[]> {
+    return new Promise((resolve) => {
       const baseBranch = vscode.workspace.getConfiguration('aiDebugContext').get<string>('nxBaseBranch') || base;
       
       const process = spawn('npx', ['nx', 'show', 'projects', '--affected', `--base=${baseBranch}`], {
@@ -233,23 +403,80 @@ export class NXWorkspaceManager {
       process.stdout.on('data', (data) => output += data.toString());
 
       process.on('close', (code) => {
+        let affectedProjects: string[] = [];
+        
         if (code === 0) {
           try {
-            const projects = output.trim().split('\n').filter(p => p.trim().length > 0);
-            resolve(projects);
+            affectedProjects = output.trim().split('\n').filter(p => p.trim().length > 0);
           } catch (error) {
-            resolve([]);
+            console.error('Failed to parse affected projects:', error);
           }
-        } else {
-          resolve([]);
         }
+
+        // Update cache
+        if (this.projectCache) {
+          this.projectCache.affectedProjects = affectedProjects;
+          this.projectCache.affectedLastUpdated = Date.now();
+        }
+
+        console.log(`✅ Affected projects cache updated with ${affectedProjects.length} projects`);
+        resolve(affectedProjects);
       });
 
-      process.on('error', () => resolve([]));
+      process.on('error', (error) => {
+        console.error('Failed to get affected projects:', error);
+        resolve([]);
+      });
     });
   }
 
   getWorkspacePath(): string {
     return this.workspacePath;
+  }
+
+  /**
+   * Check if projects are cached and ready
+   */
+  isProjectsCached(): boolean {
+    return this.isCacheValid();
+  }
+
+  /**
+   * Get cache status for debugging
+   */
+  getCacheStatus(): {
+    isValid: boolean;
+    projectCount: number;
+    lastUpdated: number | null;
+    affectedCount: number;
+    affectedLastUpdated: number | null;
+    isInitializing: boolean;
+  } {
+    return {
+      isValid: this.isCacheValid(),
+      projectCount: this.projectCache?.projects.length || 0,
+      lastUpdated: this.projectCache?.lastUpdated || null,
+      affectedCount: this.projectCache?.affectedProjects.length || 0,
+      affectedLastUpdated: this.projectCache?.affectedLastUpdated || null,
+      isInitializing: this.isInitializing
+    };
+  }
+
+  /**
+   * Force refresh of all cached data
+   */
+  async refreshCache(): Promise<void> {
+    console.log('🔄 Force refreshing NX project cache...');
+    await this.refreshProjectCache();
+    await this.updateAffectedProjectsCache();
+  }
+
+  /**
+   * Clear the cache
+   */
+  clearCache(): void {
+    console.log('🗑️  Clearing NX project cache...');
+    this.projectCache = null;
+    this.projects.clear();
   }
 }

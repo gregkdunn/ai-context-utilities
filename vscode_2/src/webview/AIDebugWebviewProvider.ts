@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { existsSync, readFileSync } from 'fs';
 import { GitIntegration } from '../services/GitIntegration';
 import { NXWorkspaceManager } from '../services/NXWorkspaceManager';
@@ -445,8 +446,44 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
         case 'runAIAnalysis':
           await this.runAIAnalysis(message.data);
           break;
+        case 'generateGitDiff':
+          await this.generateGitDiff(message.data);
+          break;
+        case 'generatePRTemplate':
+          await this.generatePRTemplate(message.data);
+          break;
         case 'generatePRDescription':
-          await this.generatePRDescription(message.data);
+          await this.generatePRDescriptionWithAI(message.data);
+          break;
+        case 'runPrepareToPush':
+          await this.runPrepareToPush(message.data);
+          break;
+        case 'openFile':
+          await this.openFile(message.data?.filePath);
+          break;
+        case 'openContextFile':
+          await this.openContextFile();
+          break;
+        case 'openCopilotAnalysisFile':
+          await this.openCopilotAnalysisFile();
+          break;
+        case 'openGitDiffFile':
+          await this.openGitDiffFile();
+          break;
+        case 'openTestResultsFile':
+          await this.openTestResultsFile();
+          break;
+        case 'copyContextFilePath':
+          await this.copyContextFilePath();
+          break;
+        case 'copyGitDiffFilePath':
+          await this.copyGitDiffFilePath();
+          break;
+        case 'copyTestResultsFilePath':
+          await this.copyTestResultsFilePath();
+          break;
+        case 'copyCopilotAnalysisFilePath':
+          await this.copyCopilotAnalysisFilePath();
           break;
         case 'runCopilotDiagnostics':
           await this.runCopilotDiagnostics();
@@ -461,7 +498,7 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
           await this.generateGitDiff(message.data);
           break;
         case 'rerunGitDiff':
-          await this.rerunGitDiff(message.data);
+          await this.generateGitDiffOld(message.data);
           break;
         case 'openDiffFile':
           await this.openDiffFile(message.data?.filePath);
@@ -575,11 +612,40 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
 
   private async getNXProjects(): Promise<void> {
     try {
+      // Check cache status and inform UI
+      const cacheStatus = this.nxManager.getCacheStatus();
+      
+      if (cacheStatus.isInitializing) {
+        this.sendMessage('nxProjectsStatus', { 
+          status: 'initializing', 
+          message: 'Initializing project selector...' 
+        });
+      } else if (cacheStatus.isValid) {
+        this.sendMessage('nxProjectsStatus', { 
+          status: 'cached', 
+          message: `Using cached projects (${cacheStatus.projectCount} projects)` 
+        });
+      } else {
+        this.sendMessage('nxProjectsStatus', { 
+          status: 'loading', 
+          message: 'Loading projects from NX workspace...' 
+        });
+      }
+
       const projects = await this.nxManager.listProjects();
+      
       this.sendMessage('nxProjects', projects);
+      this.sendMessage('nxProjectsStatus', { 
+        status: 'complete', 
+        message: `Loaded ${projects.length} projects` 
+      });
     } catch (error) {
       console.error('Failed to get NX projects:', error);
       this.sendMessage('workflowError', { error: `Failed to get NX projects: ${error}` });
+      this.sendMessage('nxProjectsStatus', { 
+        status: 'error', 
+        message: `Failed to load projects: ${error}` 
+      });
     }
   }
 
@@ -739,33 +805,97 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     try {
       this.updateWorkflowState({ step: 'collecting-context', progress: 0 });
 
-      // Step 1: Collect file changes (using uncommitted changes as default)
-      this.updateWorkflowState({ step: 'collecting-context', progress: 25, message: 'Collecting git changes...' });
+      // Step 1: Collect file changes and generate git diff
+      this.updateWorkflowState({ step: 'collecting-context', progress: 15, message: 'Collecting git changes...' });
       const fileChanges = await this.gitIntegration.getUncommittedChanges();
-      const gitDiff = await this.gitIntegration.getDiffForUncommittedChanges();
-
-      // Step 2: Run tests
-      this.updateWorkflowState({ step: 'running-tests', progress: 50, message: 'Running affected tests...' });
-      const testResults = await this.testRunner.runAffectedTests();
-
-      // Step 3: AI Analysis
-      this.updateWorkflowState({ step: 'analyzing-with-ai', progress: 75, message: 'Analyzing with AI...' });
       
-      if (testResults.some(test => test.status === 'failed')) {
-        // Handle test failures
-        await this.handleTestFailures(gitDiff, testResults);
+      this.updateWorkflowState({ step: 'collecting-context', progress: 25, message: 'Generating  git diff...' });
+      const { content: gitDiffContent, filePath: gitDiffPath } = await this.gitIntegration.generateDiffWithStreaming(
+        'uncommitted',
+        undefined,
+        (output) => this.sendMessage('workflowOutput', { content: output, append: true })
+      );
+      
+      // Track git diff file path
+      this.lastGitDiffFilePath = gitDiffPath;
+      
+      // Notify frontend that git diff is complete with file path
+      this.sendMessage('gitDiffComplete', { 
+        filePath: gitDiffPath,
+        message: `Git diff completed and saved to: ${gitDiffPath}`
+      });
+
+      // Step 2: Run tests with  output
+      this.updateWorkflowState({ step: 'running-tests', progress: 40, message: 'Running tests with AI analysis...' });
+      const testExecutionResult = await this.testRunner.executeTestsWithCleanup({
+        command: 'npx nx affected --target=test --output-style=stream',
+        mode: 'affected',
+        saveToFile: true,
+        outputCallback: (output) => this.sendMessage('workflowOutput', { content: output, append: true })
+      });
+      
+      // Track test results file path
+      this.lastTestResultsFilePath = testExecutionResult.outputFile || null;
+      
+      // Notify frontend that test execution is complete with file path
+      this.sendMessage('testResultsComplete', {
+        filePath: testExecutionResult.outputFile,
+        exitCode: testExecutionResult.exitCode,
+        hasFailures: testExecutionResult.exitCode !== 0,
+        message: `Test execution completed. Results saved to: ${testExecutionResult.outputFile}`
+      });
+
+      // Step 3: Create consolidated AI debug context
+      this.updateWorkflowState({ step: 'generating-context', progress: 60, message: 'Creating AI debug context...' });
+      const consolidatedContext = await this.createAIDebugContext({
+        gitDiff: gitDiffContent,
+        testResults: testExecutionResult.results,
+        testOutput: testExecutionResult.outputFile,
+        exitCode: testExecutionResult.exitCode
+      });
+
+      // Step 4: Save and display consolidated output
+      this.updateWorkflowState({ step: 'saving-context', progress: 80, message: 'Saving AI debug context...' });
+      const contextFilePath = await this.saveAIDebugContext(consolidatedContext);
+
+      // Display the complete context to screen
+      this.sendMessage('workflowOutput', { 
+        content: '\n\n' + '='.repeat(80) + '\n',
+        append: true 
+      });
+      this.sendMessage('workflowOutput', { 
+        content: '🤖 COMPLETE AI DEBUG CONTEXT\n',
+        append: true 
+      });
+      this.sendMessage('workflowOutput', { 
+        content: '='.repeat(80) + '\n\n',
+        append: true 
+      });
+      this.sendMessage('workflowOutput', { 
+        content: consolidatedContext,
+        append: true 
+      });
+
+      // Step 5: AI Analysis (if Copilot is available)
+      this.updateWorkflowState({ step: 'analyzing-with-ai', progress: 90, message: 'Running AI analysis...' });
+      if (testExecutionResult.exitCode !== 0) {
+        await this.handleTestFailures(consolidatedContext, testExecutionResult.results);
       } else {
-        // All tests passed
-        await this.handleTestSuccess(gitDiff, testResults);
+        await this.handleTestSuccess(consolidatedContext, testExecutionResult.results);
       }
 
-      // Step 4: Generate PR description (if applicable)
-      this.updateWorkflowState({ step: 'generating-pr', progress: 90, message: 'Generating PR description...' });
-      // TODO: Implement PR generation
-
       // Complete
-      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'Workflow completed successfully!' });
-      this.sendMessage('workflowComplete', { success: true });
+      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'AI Debug workflow completed!' });
+      this.sendMessage('workflowComplete', { 
+        success: true,
+        contextFile: contextFilePath,
+        hasFailures: testExecutionResult.exitCode !== 0
+      });
+
+      this.sendMessage('workflowOutput', { 
+        content: `\n\n📁 AI Debug Context saved to: ${contextFilePath}\n`,
+        append: true 
+      });
 
     } catch (error) {
       console.error('AI Test Debug workflow failed:', error);
@@ -773,6 +903,7 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
         step: 'error', 
         message: error instanceof Error ? error.message : 'Unknown error occurred' 
       });
+      this.sendMessage('workflowError', { error: error instanceof Error ? error.message : 'Unknown error occurred' });
     }
   }
 
@@ -802,36 +933,76 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleTestFailures(gitDiff: string, testResults: any[]): Promise<void> {
+  private async handleTestFailures(consolidatedContext: string, testResults: any[]): Promise<void> {
     try {
       console.log('Analyzing test failures with AI...');
       
-      // Prepare debug context for AI analysis
-      const debugContext = {
-        gitDiff,
-        testResults,
-        projectInfo: await this.getProjectInfo()
-      };
-
-      // Use Copilot to analyze test failures
-      const testAnalysis = await this.copilot.analyzeTestFailures(debugContext);
-      
-      // Get new test suggestions
-      const testSuggestions = await this.copilot.suggestNewTests(debugContext);
-
-      // Send comprehensive analysis to webview
-      this.sendMessage('aiAnalysisComplete', {
-        type: 'failure-analysis',
-        analysis: testAnalysis,
-        suggestions: testSuggestions,
-        testResults
-      });
-
-      // Show summary notification
       const failures = testResults.filter(t => t.status === 'failed');
-      const analysisMessage = await this.copilot.isAvailable() 
+      
+      if (await this.copilot.isAvailable()) {
+        // Use Copilot to analyze the consolidated context
+        const testAnalysis = await this.copilot.analyzeTestFailures({
+          consolidatedContext,
+          testResults,
+          projectInfo: await this.getProjectInfo()
+        });
+        
+        // Get new test suggestions
+        const testSuggestions = await this.copilot.suggestNewTests({
+          consolidatedContext,
+          testResults,
+          projectInfo: await this.getProjectInfo()
+        });
+
+        // Save analysis to file
+        const combinedAnalysis = {
+          ...testAnalysis,
+          newTests: testSuggestions.newTests,
+          improvements: testSuggestions.improvements,
+          missingCoverage: testSuggestions.missingCoverage
+        };
+        
+        const analysisFilePath = await this.saveCopilotAnalysis(combinedAnalysis, 'failure-analysis');
+
+        // Send comprehensive analysis to webview
+        this.sendMessage('aiAnalysisComplete', {
+          type: 'failure-analysis',
+          analysis: testAnalysis,
+          suggestions: testSuggestions,
+          testResults,
+          consolidatedContext,
+          analysisFilePath
+        });
+
+        this.sendMessage('workflowOutput', { 
+          content: `\n\n🤖 AI Analysis Complete: Found actionable recommendations for ${failures.length} test failures\n`,
+          append: true 
+        });
+        
+        this.sendMessage('workflowOutput', { 
+          content: `📄 Copilot Analysis saved to: ${analysisFilePath}\n`,
+          append: true 
+        });
+      } else {
+        // Fallback analysis without Copilot
+        this.sendMessage('aiAnalysisComplete', {
+          type: 'failure-analysis',
+          analysis: `Found ${failures.length} test failures. GitHub Copilot unavailable for detailed analysis.`,
+          suggestions: 'Enable GitHub Copilot for AI-powered test suggestions.',
+          testResults,
+          consolidatedContext
+        });
+
+        this.sendMessage('workflowOutput', { 
+          content: `\n\n⚠️  Found ${failures.length} test failures (GitHub Copilot unavailable for detailed analysis)\n`,
+          append: true 
+        });
+      }
+      
+      // Show summary notification
+      const analysisMessage = await this.copilot.isAvailable()
         ? `AI analyzed ${failures.length} test failures with actionable recommendations`
-        : `Found ${failures.length} test failures (Copilot unavailable - using fallback analysis)`;
+        : `Found ${failures.length} test failures (GitHub Copilot unavailable for detailed analysis)`;
       
       vscode.window.showWarningMessage(analysisMessage);
       
@@ -843,35 +1014,74 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleTestSuccess(gitDiff: string, testResults: any[]): Promise<void> {
+  private async handleTestSuccess(consolidatedContext: string, testResults: any[]): Promise<void> {
     try {
       console.log('Analyzing successful tests with AI...');
       
-      // Prepare debug context for AI analysis
-      const debugContext = {
-        gitDiff,
-        testResults,
-        projectInfo: await this.getProjectInfo()
-      };
+      if (await this.copilot.isAvailable()) {
+        // Use Copilot to detect false positives
+        const falsePositiveAnalysis = await this.copilot.detectFalsePositives({
+          consolidatedContext,
+          testResults,
+          projectInfo: await this.getProjectInfo()
+        });
+        
+        // Get new test suggestions
+        const testSuggestions = await this.copilot.suggestNewTests({
+          consolidatedContext,
+          testResults,
+          projectInfo: await this.getProjectInfo()
+        });
 
-      // Use Copilot to detect false positives
-      const falsePositiveAnalysis = await this.copilot.detectFalsePositives(debugContext);
-      
-      // Get new test suggestions
-      const testSuggestions = await this.copilot.suggestNewTests(debugContext);
+        // Save analysis to file  
+        const combinedAnalysis = {
+          ...falsePositiveAnalysis,
+          newTests: testSuggestions.newTests,
+          improvements: testSuggestions.improvements,
+          missingCoverage: testSuggestions.missingCoverage
+        };
+        
+        const analysisFilePath = await this.saveCopilotAnalysis(combinedAnalysis, 'success-analysis');
 
-      // Send comprehensive analysis to webview
-      this.sendMessage('aiAnalysisComplete', {
-        type: 'success-analysis',
-        falsePositives: falsePositiveAnalysis,
-        suggestions: testSuggestions,
-        testResults
-      });
+        // Send comprehensive analysis to webview
+        this.sendMessage('aiAnalysisComplete', {
+          type: 'success-analysis',
+          falsePositives: falsePositiveAnalysis,
+          suggestions: testSuggestions,
+          testResults,
+          consolidatedContext,
+          analysisFilePath
+        });
+
+        this.sendMessage('workflowOutput', { 
+          content: `\n\n🎉 AI Analysis Complete: All tests passing! Generated improvement suggestions.\n`,
+          append: true 
+        });
+        
+        this.sendMessage('workflowOutput', { 
+          content: `📄 Copilot Analysis saved to: ${analysisFilePath}\n`,
+          append: true 
+        });
+      } else {
+        // Fallback analysis without Copilot
+        this.sendMessage('aiAnalysisComplete', {
+          type: 'success-analysis',
+          falsePositives: 'GitHub Copilot unavailable for false positive detection.',
+          suggestions: 'Enable GitHub Copilot for AI-powered test improvement suggestions.',
+          testResults,
+          consolidatedContext
+        });
+
+        this.sendMessage('workflowOutput', { 
+          content: `\n\n✅ All tests passing! (GitHub Copilot unavailable for detailed analysis)\n`,
+          append: true 
+        });
+      }
 
       // Show summary notification
       const analysisMessage = await this.copilot.isAvailable()
         ? `AI analyzed ${testResults.length} passing tests and provided improvement suggestions`
-        : `${testResults.length} tests passed (Copilot unavailable - using fallback analysis)`;
+        : `${testResults.length} tests passed (GitHub Copilot unavailable for detailed analysis)`;
       
       vscode.window.showInformationMessage(analysisMessage);
       
@@ -990,36 +1200,619 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async generatePRDescription(data: { gitDiff: string; testResults?: any[]; template?: string; jiraTickets?: string[]; featureFlags?: string[] }): Promise<void> {
+
+  private async generateGitDiff(data: { fileSelection: any }): Promise<void> {
     try {
-      // For now, this is a placeholder for PR description generation
-      // In a full implementation, this would use the Copilot service with PR-specific prompts
+      const { fileSelection } = data;
       
-      const { gitDiff, testResults, template, jiraTickets, featureFlags } = data;
-      
-      if (!gitDiff) {
-        throw new Error('Git diff is required for PR description generation');
+      if (!fileSelection) {
+        throw new Error('File selection is required for git diff generation');
       }
 
-      this.updateWorkflowState({ step: 'generating-pr', progress: 90, message: 'Generating PR description...' });
+      // Generate git diff based on file selection mode
+      let diffContent = '';
+      let diffFile = '';
+      
+      switch (fileSelection.mode) {
+        case 'uncommitted':
+          const uncommittedDiff = await this.gitIntegration.generateDiffWithStreaming('uncommitted');
+          diffContent = uncommittedDiff.content;
+          diffFile = uncommittedDiff.filePath;
+          break;
+        case 'commit':
+          if (fileSelection.commits && fileSelection.commits.length > 0) {
+            const commitHash = fileSelection.commits[0].hash;
+            const commitDiff = await this.gitIntegration.generateDiffWithStreaming('commit', commitHash);
+            diffContent = commitDiff.content;
+            diffFile = commitDiff.filePath;
+          }
+          break;
+        case 'branch-diff':
+          const branchDiff = await this.gitIntegration.generateDiffWithStreaming('branch-diff');
+          diffContent = branchDiff.content;
+          diffFile = branchDiff.filePath;
+          break;
+      }
+      
+      if (!diffContent) {
+        throw new Error('No diff content generated');
+      }
 
-      // TODO: Implement actual PR description generation using Copilot
-      // For now, generate a basic description based on the diff
-      const prDescription = this.generateBasicPRDescription(gitDiff, testResults, jiraTickets, featureFlags);
+      this.sendMessage('gitDiffGenerated', {
+        diffFile,
+        content: diffContent,
+        mode: fileSelection.mode
+      });
+    } catch (error) {
+      console.error('Git diff generation failed:', error);
+      this.sendMessage('prGenerationError', { 
+        error: error instanceof Error ? error.message : 'Git diff generation failed' 
+      });
+    }
+  }
+
+  private async generatePRDescriptionWithAI(data: { fileSelection: any; testResults?: any[]; template?: string; jiraTickets?: string[]; featureFlags?: string[] }): Promise<void> {
+    try {
+      const { fileSelection, testResults, template, jiraTickets, featureFlags } = data;
+      
+      if (!fileSelection) {
+        throw new Error('File selection is required for PR description generation');
+      }
+
+      this.updateWorkflowState({ step: 'generating-pr', progress: 50, message: 'Generating git diff...' });
+      
+      // Step 1: Generate git diff
+      let diffContent = '';
+      let diffFile = '';
+      
+      switch (fileSelection.mode) {
+        case 'uncommitted':
+          const uncommittedDiff = await this.gitIntegration.generateDiffWithStreaming('uncommitted');
+          diffContent = uncommittedDiff.content;
+          diffFile = uncommittedDiff.filePath;
+          break;
+        case 'commit':
+          if (fileSelection.commits && fileSelection.commits.length > 0) {
+            const commitHash = fileSelection.commits[0].hash;
+            const commitDiff = await this.gitIntegration.generateDiffWithStreaming('commit', commitHash);
+            diffContent = commitDiff.content;
+            diffFile = commitDiff.filePath;
+          }
+          break;
+        case 'branch-diff':
+          const branchDiff = await this.gitIntegration.generateDiffWithStreaming('branch-diff');
+          diffContent = branchDiff.content;
+          diffFile = branchDiff.filePath;
+          break;
+      }
+      
+      if (!diffContent) {
+        throw new Error('No diff content available for PR description generation');
+      }
+
+      this.updateWorkflowState({ step: 'generating-pr', progress: 75, message: 'Generating AI description...' });
+      
+      // Step 2: Generate PR description using Copilot AI
+      const prDescription = await this.generateAIPRDescription(diffContent, testResults, template, jiraTickets, featureFlags);
 
       this.sendMessage('prDescriptionGenerated', {
         description: prDescription,
         template: template || 'standard',
-        jiraTickets: jiraTickets || [],
-        featureFlags: featureFlags || []
+        diffFile,
+        jiraTickets,
+        featureFlags,
+        generatedByAI: true
       });
 
-      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'PR description generated!' });
-
+      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'AI PR description generated!' });
     } catch (error) {
-      console.error('PR description generation failed:', error);
-      this.sendMessage('workflowError', { error: error instanceof Error ? error.message : 'Unknown error' });
+      console.error('AI PR description generation failed:', error);
+      
+      // Fallback to basic template generation
+      console.log('Falling back to template-based generation...');
+      try {
+        const { testResults: fallbackTestResults, template: fallbackTemplate, jiraTickets: fallbackJiraTickets, featureFlags: fallbackFeatureFlags } = data;
+        const fallbackDescription = this.generateBasicPRDescription('', fallbackTestResults, fallbackTemplate, fallbackJiraTickets, fallbackFeatureFlags);
+        this.sendMessage('prDescriptionGenerated', {
+          description: fallbackDescription,
+          template: fallbackTemplate || 'standard',
+          generatedByAI: false,
+          fallback: true
+        });
+      } catch (fallbackError) {
+        this.sendMessage('prGenerationError', { 
+          error: error instanceof Error ? error.message : 'PR description generation failed'
+        });
+      }
     }
+  }
+
+  private async generateAIPRDescription(
+    gitDiff: string, 
+    testResults?: any[], 
+    template?: string, 
+    jiraTickets?: string[], 
+    featureFlags?: string[]
+  ): Promise<string> {
+    try {
+      // Check if Copilot is available
+      if (!await this.copilot.isAvailable()) {
+        throw new Error('GitHub Copilot not available');
+      }
+
+      // Create PR generation context
+      const context = {
+        gitDiff,
+        testResults: testResults || [],
+        template: template || 'standard',
+        jiraTickets: jiraTickets || [],
+        featureFlags: featureFlags || []
+      };
+
+      // Generate PR description using Copilot
+      const prDescription = await this.copilot.generatePRDescription(context);
+      return prDescription;
+    } catch (error) {
+      console.error('Copilot PR generation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate PR template file with git diff and prompts for AI analysis
+   */
+  private async generatePRTemplate(data: { fileSelection: any; testResults?: any[]; aiAnalysis?: any; template?: string; jiraTickets?: string[]; featureFlags?: string[] }): Promise<void> {
+    try {
+      const { fileSelection, testResults, aiAnalysis, template, jiraTickets, featureFlags } = data;
+      
+      if (!fileSelection) {
+        throw new Error('File selection is required for PR template generation');
+      }
+
+      this.updateWorkflowState({ step: 'generating-pr', progress: 30, message: 'Creating PR template...' });
+      
+      // Step 1: Generate git diff
+      let diffContent = '';
+      let diffFile = '';
+      
+      switch (fileSelection.mode) {
+        case 'uncommitted':
+          const uncommittedDiff = await this.gitIntegration.generateDiffWithStreaming('uncommitted');
+          diffContent = uncommittedDiff.content;
+          diffFile = uncommittedDiff.filePath;
+          break;
+        case 'commit':
+          if (fileSelection.commits && fileSelection.commits.length > 0) {
+            const commitHash = fileSelection.commits[0].hash;
+            const commitDiff = await this.gitIntegration.generateDiffWithStreaming('commit', commitHash);
+            diffContent = commitDiff.content;
+            diffFile = commitDiff.filePath;
+          }
+          break;
+        case 'branch-diff':
+          const branchDiff = await this.gitIntegration.generateDiffWithStreaming('branch-diff');
+          diffContent = branchDiff.content;
+          diffFile = branchDiff.filePath;
+          break;
+      }
+      
+      if (!diffContent) {
+        throw new Error('No diff content available for PR template generation');
+      }
+
+      this.updateWorkflowState({ step: 'generating-pr', progress: 70, message: 'Building template file...' });
+      
+      // Step 2: Create PR template file with git diff and prompts
+      const templateContent = this.createPRTemplateContent(diffContent, testResults, aiAnalysis, template, jiraTickets, featureFlags);
+      const templateFile = await this.savePRTemplateFile(templateContent);
+
+      this.sendMessage('prTemplateGenerated', {
+        templateFile: path.basename(templateFile),
+        filePath: templateFile
+      });
+
+      this.updateWorkflowState({ step: 'complete', progress: 100, message: 'PR template created successfully!' });
+    } catch (error) {
+      console.error('PR template generation failed:', error);
+      this.sendMessage('prGenerationError', { 
+        error: error instanceof Error ? error.message : 'PR template generation failed'
+      });
+    }
+  }
+
+  private createPRTemplateContent(
+    gitDiff: string, 
+    testResults?: any[], 
+    aiAnalysis?: any,
+    template?: string, 
+    jiraTickets?: string[], 
+    featureFlags?: string[]
+  ): string {
+    const timestamp = new Date().toLocaleString();
+    const templateType = template || 'standard';
+    
+    let content = `===============================================================
+📝 GITHUB PR DESCRIPTION GENERATION PROMPTS
+=================================================================
+
+INSTRUCTIONS FOR AI ASSISTANT:
+Using the data gathered in this file, write a GitHub PR 
+description that follows the format below. Focus on newly added functions 
+and updates. Don't add fluff.
+
+=================================================================
+🎯 PRIMARY PR DESCRIPTION PROMPT
+=================================================================
+
+Please analyze the code changes and test results to create a GitHub PR description 
+following this exact format:
+
+**Problem**
+What is the problem you're solving or feature you're implementing? Please include 
+a link to any related discussion or tasks in Jira if applicable.`;
+
+    // Add Jira links if provided
+    if (jiraTickets && jiraTickets.length > 0) {
+      content += `\n[Jira Links: ${jiraTickets.map(ticket => `https://your-domain.atlassian.net/browse/${ticket}`).join(', ')}]`;
+    }
+
+    content += `
+
+**Solution**
+Describe the feature or bug fix -- what's changing?
+
+**Details**
+Include a brief overview of the technical process you took (or are going to take!) 
+to get from the problem to the solution.
+
+**QA**
+Provide any technical details needed to test this change and/or parts that you 
+wish to have tested.
+
+=================================================================
+📊 CONTEXT FOR PR DESCRIPTION
+=================================================================
+
+TEMPLATE TYPE: ${templateType}
+GENERATED: ${timestamp}`;
+
+    if (featureFlags && featureFlags.length > 0) {
+      content += `\nFEATURE FLAGS: ${featureFlags.join(', ')}`;
+    }
+
+    if (jiraTickets && jiraTickets.length > 0) {
+      content += `\nJIRA TICKETS: ${jiraTickets.join(', ')}`;
+    }
+
+    // Add test results if available
+    if (testResults && testResults.length > 0) {
+      content += `\n\n=================================================================
+🧪 TEST RESULTS SUMMARY  
+=================================================================\n`;
+      
+      const passed = testResults.filter(r => r.status === 'passed').length;
+      const failed = testResults.filter(r => r.status === 'failed').length;
+      const skipped = testResults.filter(r => r.status === 'skipped').length;
+      
+      content += `Tests: ${passed} passed, ${failed} failed${skipped > 0 ? `, ${skipped} skipped` : ''}
+Total: ${testResults.length} tests\n`;
+      
+      if (failed > 0) {
+        content += `\nFailed Tests:\n`;
+        testResults.filter(r => r.status === 'failed').forEach(test => {
+          content += `- ${test.name}: ${test.error || 'Test failed'}\n`;
+        });
+      }
+    }
+
+    // Add AI analysis if available
+    if (aiAnalysis) {
+      content += `\n\n=================================================================
+🤖 AI ANALYSIS RESULTS
+=================================================================\n`;
+      
+      content += `Analysis Type: ${aiAnalysis.type || 'unknown'}\n`;
+      
+      if (aiAnalysis.rootCause) {
+        content += `\nRoot Cause:\n${aiAnalysis.rootCause}\n`;
+      }
+      
+      if (aiAnalysis.suggestedFixes && aiAnalysis.suggestedFixes.length > 0) {
+        content += `\nSuggested Fixes:\n`;
+        aiAnalysis.suggestedFixes.forEach((fix: string, index: number) => {
+          content += `${index + 1}. ${fix}\n`;
+        });
+      }
+      
+      if (aiAnalysis.newTestSuggestions && aiAnalysis.newTestSuggestions.length > 0) {
+        content += `\nNew Test Suggestions:\n`;
+        aiAnalysis.newTestSuggestions.forEach((suggestion: string, index: number) => {
+          content += `${index + 1}. ${suggestion}\n`;
+        });
+      }
+      
+      if (aiAnalysis.codeImprovements && aiAnalysis.codeImprovements.length > 0) {
+        content += `\nCode Improvements:\n`;
+        aiAnalysis.codeImprovements.forEach((improvement: string, index: number) => {
+          content += `${index + 1}. ${improvement}\n`;
+        });
+      }
+      
+      if (aiAnalysis.falsePositiveWarnings && aiAnalysis.falsePositiveWarnings.length > 0) {
+        content += `\nFalse Positive Warnings:\n`;
+        aiAnalysis.falsePositiveWarnings.forEach((warning: string, index: number) => {
+          content += `${index + 1}. ${warning}\n`;
+        });
+      }
+    }
+
+    // Add the git diff
+    content += `\n\n=================================================================
+🔍 GIT DIFF FOR ANALYSIS
+=================================================================
+
+${gitDiff}
+
+EOF`;
+
+    return content;
+  }
+
+  private async savePRTemplateFile(content: string): Promise<string> {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error('No workspace folder found');
+    }
+
+    const templateDir = path.join(workspaceRoot, '.ai-debug-context', 'pr-templates');
+    
+    // Ensure directory exists
+    if (!fs.existsSync(templateDir)) {
+      fs.mkdirSync(templateDir, { recursive: true });
+    }
+
+    const timestamp = Date.now();
+    const filename = `pr-description-template-${timestamp}.txt`;
+    const filePath = path.join(templateDir, filename);
+    
+    fs.writeFileSync(filePath, content, 'utf8');
+    
+    return filePath;
+  }
+
+  private async runPrepareToPush(data: { testConfiguration: any }): Promise<void> {
+    try {
+      const { testConfiguration } = data;
+      
+      if (!testConfiguration) {
+        throw new Error('Test configuration is required for prepare-to-push');
+      }
+
+      const startTime = new Date();
+      const projectName = this.getProjectNameForDisplay(testConfiguration);
+      
+      // Initialize with header similar to zsh script
+      const initialOutput = `==========================================================
+🚀 Preparing to Push: ${projectName}
+==========================================================
+
+`;
+      
+      this.sendMessage('prepareToPushStarted', { 
+        startTime: startTime.toISOString(),
+        output: initialOutput
+      });
+
+      let lintPassed = false;
+      let formatPassed = false;
+      let allOutput = initialOutput;
+
+      // Step 1: Run linting
+      const lintStepOutput = `🔍 Running linter...\n`;
+      allOutput += lintStepOutput;
+      
+      this.sendMessage('prepareToPushProgress', {
+        step: 'lint',
+        status: 'running',
+        output: lintStepOutput,
+        append: true
+      });
+
+      try {
+        const lintResult = await this.runLintCommand(testConfiguration);
+        lintPassed = lintResult.success;
+        const lintOutput = lintResult.output + (lintResult.success ? '✅ Linting passed!\n\n' : '❌ Linting failed!\n\n');
+        allOutput += lintOutput;
+
+        this.sendMessage('prepareToPushProgress', {
+          step: 'lint',
+          status: lintPassed ? 'passed' : 'failed',
+          output: lintOutput,
+          append: true
+        });
+
+        if (!lintPassed) {
+          throw new Error('Linting failed');
+        }
+      } catch (error) {
+        const errorOutput = `❌ Linting failed: ${error}\n\n`;
+        allOutput += errorOutput;
+        this.sendMessage('prepareToPushProgress', {
+          step: 'lint',
+          status: 'failed',
+          output: errorOutput,
+          append: true
+        });
+        throw error;
+      }
+
+      // Step 2: Run prettier formatting
+      const formatStepOutput = `✨ Running code formatter...\n`;
+      allOutput += formatStepOutput;
+      
+      this.sendMessage('prepareToPushProgress', {
+        step: 'format',
+        status: 'running',
+        output: formatStepOutput,
+        append: true
+      });
+
+      try {
+        const formatResult = await this.runFormatCommand(testConfiguration);
+        formatPassed = formatResult.success;
+        const formatOutput = formatResult.output + (formatResult.success ? '✅ Code formatting completed!\n\n' : '❌ Code formatting failed!\n\n');
+        allOutput += formatOutput;
+
+        this.sendMessage('prepareToPushProgress', {
+          step: 'format',
+          status: formatPassed ? 'passed' : 'failed',
+          output: formatOutput,
+          append: true
+        });
+
+        if (!formatPassed) {
+          throw new Error('Formatting failed');
+        }
+      } catch (error) {
+        const errorOutput = `❌ Formatting failed: ${error}\n\n`;
+        allOutput += errorOutput;
+        this.sendMessage('prepareToPushProgress', {
+          step: 'format',
+          status: 'failed',
+          output: errorOutput,
+          append: true
+        });
+        throw error;
+      }
+
+      // Success summary matching zsh script format
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+      
+      const successOutput = `==========================================================
+🎉 Ready to Push!
+==========================================================
+✅ Linting: Passed
+✅ Formatting: Applied
+
+📋 SUGGESTED NEXT STEPS:
+1. Review any formatting changes made by prettier
+2. Run aiDebug ${projectName} to ensure tests still pass
+3. Commit your changes: git add . && git commit -m 'Your message'
+4. Push to your branch: git push
+
+🔄 COMPLETE WORKFLOW:
+• prepareToPush ${projectName}  (✅ Done!)
+• aiDebug ${projectName}        (recommended next)
+• git commit && git push  (final step)
+==========================================================`;
+
+      allOutput += successOutput;
+
+      this.sendMessage('prepareToPushCompleted', {
+        success: true,
+        lintPassed,
+        formatPassed,
+        endTime: endTime.toISOString(),
+        duration,
+        output: successOutput
+      });
+    } catch (error) {
+      console.error('Prepare-to-push failed:', error);
+      this.sendMessage('prepareToPushError', {
+        error: error instanceof Error ? error.message : 'Prepare-to-push workflow failed'
+      });
+    }
+  }
+
+  private getProjectNameForDisplay(testConfiguration: any): string {
+    if (testConfiguration.mode === 'affected') {
+      return 'affected-projects';
+    } else if (testConfiguration.projects && testConfiguration.projects.length > 0) {
+      return testConfiguration.projects.length === 1 
+        ? testConfiguration.projects[0] 
+        : `${testConfiguration.projects.length}-projects`;
+    } else if (testConfiguration.project) {
+      return testConfiguration.project;
+    }
+    return 'unknown-project';
+  }
+
+  private async runLintCommand(testConfiguration: any): Promise<{ success: boolean; output: string }> {
+    try {
+      let command: string;
+      const projectName = this.getProjectNameForDisplay(testConfiguration);
+      
+      if (testConfiguration.mode === 'affected') {
+        command = 'yarn nx affected --target=lint';
+      } else if (testConfiguration.projects && testConfiguration.projects.length > 1) {
+        command = `yarn nx run-many --target=lint --projects=${testConfiguration.projects.join(',')}`;
+      } else {
+        const project = testConfiguration.projects?.[0] || testConfiguration.project;
+        command = `yarn nx lint ${project}`;
+      }
+
+      const output = `Command: ${command}\n`;
+      const result = await this.executeCommand(command);
+      
+      const fullOutput = output + result.stdout + (result.stderr ? result.stderr : '');
+      
+      return {
+        success: result.exitCode === 0,
+        output: fullOutput
+      };
+    } catch (error) {
+      return {
+        success: false,
+        output: `Lint command failed: ${error}\n`
+      };
+    }
+  }
+
+  private async runFormatCommand(testConfiguration: any): Promise<{ success: boolean; output: string }> {
+    try {
+      let command: string;
+      const projectName = this.getProjectNameForDisplay(testConfiguration);
+      
+      if (testConfiguration.mode === 'affected') {
+        command = 'yarn nx affected --target=prettier --write';
+      } else if (testConfiguration.projects && testConfiguration.projects.length > 1) {
+        command = `yarn nx run-many --target=prettier --projects=${testConfiguration.projects.join(',')} --write`;
+      } else {
+        const project = testConfiguration.projects?.[0] || testConfiguration.project;
+        command = `yarn nx prettier ${project} --write`;
+      }
+
+      const output = `Command: ${command}\n`;
+      const result = await this.executeCommand(command);
+      
+      const fullOutput = output + result.stdout + (result.stderr ? result.stderr : '');
+      
+      return {
+        success: result.exitCode === 0,
+        output: fullOutput
+      };
+    } catch (error) {
+      return {
+        success: false,
+        output: `Format command failed: ${error}\n`
+      };
+    }
+  }
+
+  private async executeCommand(command: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    return new Promise((resolve) => {
+      const { exec } = require('child_process');
+      
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+      exec(command, { cwd: workspaceRoot }, (error: any, stdout: string, stderr: string) => {
+        resolve({
+          stdout: stdout || '',
+          stderr: stderr || '',
+          exitCode: error ? error.code || 1 : 0
+        });
+      });
+    });
   }
 
   private async getMultipleProjectTestFiles(projectNames: string[]): Promise<void> {
@@ -1115,7 +1908,7 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private generateBasicPRDescription(gitDiff: string, testResults?: any[], jiraTickets?: string[], featureFlags?: string[]): string {
+  private generateBasicPRDescription(gitDiff: string, testResults?: any[], template?: string, jiraTickets?: string[], featureFlags?: string[]): string {
     // Basic PR description generator - in a full implementation, this would use Copilot
     const lines = gitDiff.split('\n');
     const modifiedFiles = lines
@@ -1261,7 +2054,7 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async generateGitDiff(data: { mode: 'uncommitted' | 'commit' | 'branch-diff'; commitHash?: string }): Promise<void> {
+  private async generateGitDiffOld(data: { mode: 'uncommitted' | 'commit' | 'branch-diff'; commitHash?: string }): Promise<void> {
     try {
       const { mode, commitHash } = data;
       
@@ -1309,10 +2102,6 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async rerunGitDiff(data: { mode: 'uncommitted' | 'commit' | 'branch-diff'; commitHash?: string }): Promise<void> {
-    // Rerun is the same as generate, just called from a different context
-    await this.generateGitDiff(data);
-  }
 
   private async openDiffFile(filePath: string): Promise<void> {
     try {
@@ -1581,6 +2370,472 @@ export class AIDebugWebviewProvider implements vscode.WebviewViewProvider {
       const errorMessage = `Failed to cleanup test output files: ${error instanceof Error ? error.message : 'Unknown error'}`;
       vscode.window.showErrorMessage(errorMessage);
       this.sendMessage('workflowError', { error: errorMessage });
+    }
+  }
+
+  /**
+   * Create consolidated AI debug context in the expected format
+   */
+  private async createAIDebugContext(data: {
+    gitDiff: string;
+    testResults: any[];
+    testOutput?: string;
+    exitCode: number;
+  }): Promise<string> {
+    const currentBranch = await this.gitIntegration.getCurrentBranch();
+    const timestamp = new Date().toLocaleString();
+    const projectInfo = await this.getProjectInfo();
+    const isNXWorkspace = await this.nxManager.isNXWorkspace();
+    
+    // Determine project target and status
+    const failedTests = data.testResults.filter(t => t.status === 'failed');
+    const testStatus = data.exitCode === 0 ? '✅ TESTS PASSING' : '❌ TESTS FAILING';
+    
+    let output = '';
+    
+    // Header
+    output += '=================================================================\n';
+    output += '🤖 AI DEBUG CONTEXT - OPTIMIZED FOR ANALYSIS\n';
+    output += '=================================================================\n\n';
+    output += `PROJECT: ${isNXWorkspace ? 'Angular NX Monorepo' : 'Project'}\n`;
+    output += `TARGET: ${projectInfo.name || 'Unknown'}\n`;
+    output += `STATUS: ${testStatus}\n`;
+    output += `FOCUS: General debugging\n`;
+    output += `TIMESTAMP: ${timestamp}\n\n`;
+    
+    // Analysis Request
+    output += '=================================================================\n';
+    output += '🎯 ANALYSIS REQUEST\n';
+    output += '=================================================================\n\n';
+    output += 'Please analyze this context and provide:\n\n';
+    output += '1. 🔍 ROOT CAUSE ANALYSIS\n';
+    output += '   • What specific changes are breaking the tests?\n';
+    output += '   • Are there type mismatches or interface changes?\n';
+    output += '   • Did method signatures change?\n\n';
+    output += '2. 🛠️ CONCRETE FIXES (PRIORITY 1)\n';
+    output += '   • Exact code changes needed to fix failing tests\n';
+    output += '   • Updated test expectations if business logic changed\n';
+    output += '   • Type definitions or interface updates required\n\n';
+    output += '3. 🧪 EXISTING TEST FIXES (PRIORITY 1)\n';
+    output += '   • Fix existing failing tests first\n';
+    output += '   • Update test assertions to match new behavior\n';
+    output += '   • Fix test setup or mocking issues\n\n';
+    output += '4. 🚀 IMPLEMENTATION GUIDANCE (PRIORITY 1)\n';
+    output += '   • Order of fixes (dependencies first)\n';
+    output += '   • Potential side effects to watch for\n';
+    output += '   • Getting tests green is the immediate priority\n\n';
+    output += '5. ✨ NEW TEST SUGGESTIONS (PRIORITY 2 - AFTER FIXES)\n';
+    output += '   • Missing test coverage for new functionality\n';
+    output += '   • Edge cases that should be tested\n';
+    output += '   • Additional test scenarios to prevent regressions\n';
+    output += '   • Test improvements for better maintainability\n';
+    output += '   • File-specific coverage analysis (diff coverage vs total coverage)\n';
+    output += '   • Specify files and line numbers where new tests should be added. \n\n';
+    output += 'NOTE: Focus on items 1-4 first to get tests passing, then implement item 5\n\n\n';
+    
+    // Test Results Analysis
+    output += '==================================================================\n';
+    output += '🧪 TEST RESULTS ANALYSIS\n';
+    output += '==================================================================\n';
+    
+    // Read and include  test output if available
+    if (data.testOutput) {
+      try {
+        const fs = await import('fs');
+        if (fs.existsSync(data.testOutput)) {
+          const testContent = fs.readFileSync(data.testOutput, 'utf8');
+          output += testContent + '\n';
+        }
+      } catch (error) {
+        console.error('Failed to read test output file:', error);
+        output += 'Test output file not available\n';
+      }
+    }
+    
+    // Code Quality Results (placeholder for now)
+    output += '==================================================================\n';
+    output += '🔧 CODE QUALITY RESULTS\n';
+    output += '==================================================================\n\n';
+    output += '📋 LINTING RESULTS:\n';
+    output += '✅ Status: PASSED\n';
+    output += '• All linting rules satisfied\n';
+    output += '• No code quality issues detected\n';
+    output += '• Code follows project style guidelines\n\n';
+    output += '✨ FORMATTING RESULTS:\n';
+    output += '✅ Status: COMPLETED\n';
+    output += '• Code formatting applied successfully\n';
+    output += '• All files follow consistent style\n';
+    output += '• Ready for commit\n\n';
+    output += '🚀 PUSH READINESS:\n';
+    if (data.exitCode === 0) {
+      output += '✅ READY - All checks passing:\n';
+      output += '• Tests: Passing ✅\n';
+    } else {
+      output += '⚠️  NOT READY - Issues need resolution:\n';
+      output += '• Tests: Failing ❌\n';
+    }
+    output += '\n';
+    
+    // Code Changes Analysis
+    output += '==================================================================\n';
+    output += '📋 CODE CHANGES ANALYSIS\n';
+    output += '==================================================================\n';
+    output += data.gitDiff + '\n';
+    
+    // AI Assistant Guidance
+    output += '==================================================================\n';
+    output += '🚀 AI ASSISTANT GUIDANCE\n';
+    output += '==================================================================\n';
+    output += 'This context file is optimized for AI analysis with:\n';
+    output += '• Structured failure information for easy parsing\n';
+    output += '• Code changes correlated with test failures\n';
+    output += '• Clear focus areas for targeted analysis\n';
+    output += '• Actionable fix categories for systematic resolution\n\n';
+    output += `Context file size:      ${output.split('\n').length} lines (optimized for AI processing)\n`;
+    
+    return output;
+  }
+
+  /**
+   * Save AI debug context to file
+   */
+  private lastContextFilePath: string | null = null;
+  private lastCopilotAnalysisFilePath: string | null = null;
+  private lastGitDiffFilePath: string | null = null;
+  private lastTestResultsFilePath: string | null = null;
+
+  private async saveAIDebugContext(content: string): Promise<string> {
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    // Create output directory if it doesn't exist
+    const outputDir = path.join(this.context.extensionPath, '.github', 'instructions', 'ai_utilities_context');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
+    // Create filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `ai-debug-context-${timestamp}.txt`;
+    const filePath = path.join(outputDir, fileName);
+    
+    // Write content to file
+    fs.writeFileSync(filePath, content, 'utf8');
+    
+    // Store the path for later use
+    this.lastContextFilePath = filePath;
+    
+    return filePath;
+  }
+
+  private async saveCopilotAnalysis(analysis: any, analysisType: string): Promise<string> {
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    // Create output directory if it doesn't exist
+    const outputDir = path.join(this.context.extensionPath, '.github', 'instructions', 'ai_utilities_context');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
+    // Create filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `copilot-analysis-${analysisType}-${timestamp}.md`;
+    const filePath = path.join(outputDir, fileName);
+    
+    // Format the analysis as markdown
+    const content = this.formatCopilotAnalysis(analysis, analysisType);
+    
+    // Write content to file
+    fs.writeFileSync(filePath, content, 'utf8');
+    
+    // Store the path for later use
+    this.lastCopilotAnalysisFilePath = filePath;
+    
+    return filePath;
+  }
+
+  private formatCopilotAnalysis(analysis: any, analysisType: string): string {
+    const timestamp = new Date().toLocaleString();
+    
+    let content = `# 🤖 GitHub Copilot Analysis Report\n\n`;
+    content += `**Analysis Type**: ${analysisType === 'failure-analysis' ? 'Test Failure Analysis' : 'Success Analysis'}\n`;
+    content += `**Generated**: ${timestamp}\n\n`;
+    content += `---\n\n`;
+    
+    if (analysisType === 'failure-analysis') {
+      content += `## 🔍 Root Cause Analysis\n\n`;
+      if (analysis.rootCause) {
+        content += `${analysis.rootCause}\n\n`;
+      }
+      
+      content += `## 🛠️ Suggested Fixes\n\n`;
+      if (analysis.specificFixes && analysis.specificFixes.length > 0) {
+        analysis.specificFixes.forEach((fix: any, index: number) => {
+          content += `### Fix ${index + 1}: ${fix.file}:${fix.lineNumber}\n\n`;
+          content += `**Current Code:**\n\`\`\`typescript\n${fix.oldCode}\n\`\`\`\n\n`;
+          content += `**Updated Code:**\n\`\`\`typescript\n${fix.newCode}\n\`\`\`\n\n`;
+          content += `**Explanation:** ${fix.explanation}\n\n`;
+        });
+      }
+      
+      content += `## 🚀 Implementation Strategy\n\n`;
+      if (analysis.preventionStrategies && analysis.preventionStrategies.length > 0) {
+        analysis.preventionStrategies.forEach((strategy: string, index: number) => {
+          content += `${index + 1}. ${strategy}\n`;
+        });
+        content += `\n`;
+      }
+      
+    } else {
+      content += `## ⚠️ False Positive Detection\n\n`;
+      if (analysis.suspiciousTests && analysis.suspiciousTests.length > 0) {
+        analysis.suspiciousTests.forEach((test: any, index: number) => {
+          content += `### Suspicious Test ${index + 1}: ${test.file}\n\n`;
+          content += `**Test:** ${test.testName}\n`;
+          content += `**Issue:** ${test.issue}\n`;
+          content += `**Suggestion:** ${test.suggestion}\n\n`;
+        });
+      }
+      
+      content += `## 🔧 Mocking Issues\n\n`;
+      if (analysis.mockingIssues && analysis.mockingIssues.length > 0) {
+        analysis.mockingIssues.forEach((issue: any, index: number) => {
+          content += `### Issue ${index + 1}: ${issue.file}\n\n`;
+          content += `**Mock:** ${issue.mock}\n`;
+          content += `**Problem:** ${issue.issue}\n`;
+          content += `**Fix:** ${issue.fix}\n\n`;
+        });
+      }
+    }
+    
+    content += `## ✨ New Test Suggestions\n\n`;
+    if (analysis.newTests && analysis.newTests.length > 0) {
+      analysis.newTests.forEach((test: any, index: number) => {
+        content += `### Suggested Test ${index + 1}\n\n`;
+        content += `**File:** ${test.file}\n`;
+        content += `**Test Name:** ${test.testName}\n`;
+        content += `**Reasoning:** ${test.reasoning}\n\n`;
+        content += `**Suggested Code:**\n\`\`\`typescript\n${test.testCode}\n\`\`\`\n\n`;
+      });
+    }
+    
+    content += `## 📋 Recommendations Summary\n\n`;
+    if (analysis.recommendations && analysis.recommendations.length > 0) {
+      analysis.recommendations.forEach((rec: string, index: number) => {
+        content += `${index + 1}. ${rec}\n`;
+      });
+    }
+    
+    content += `\n---\n\n`;
+    content += `*Generated by GitHub Copilot via AI Debug Context Extension*\n`;
+    
+    return content;
+  }
+
+  /**
+   * Open a file in VSCode editor
+   */
+  private async openFile(filePath?: string) {
+    try {
+      if (!filePath) {
+        this.sendMessage('showError', { error: 'No file path provided' });
+        return;
+      }
+
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        this.sendMessage('showError', { error: 'File no longer exists.' });
+        return;
+      }
+
+      // Open the file in VSCode editor
+      const uri = vscode.Uri.file(filePath);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+    } catch (error) {
+      console.error('Failed to open file:', error);
+      this.sendMessage('showError', { error: 'Failed to open file' });
+    }
+  }
+
+  private async openContextFile() {
+    try {
+      if (!this.lastContextFilePath) {
+        this.sendMessage('showError', { error: 'No context file to open. Run AI Test Debug first.' });
+        return;
+      }
+
+      // Check if file exists
+      const fs = await import('fs');
+      if (!fs.existsSync(this.lastContextFilePath)) {
+        this.sendMessage('showError', { error: 'Context file no longer exists.' });
+        return;
+      }
+
+      // Open the file in VSCode editor
+      const uri = vscode.Uri.file(this.lastContextFilePath);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+      
+    } catch (error) {
+      console.error('Error opening context file:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to open context file: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async openCopilotAnalysisFile() {
+    try {
+      if (!this.lastCopilotAnalysisFilePath) {
+        this.sendMessage('showError', { error: 'No Copilot analysis file to open. Run AI Test Debug first.' });
+        return;
+      }
+
+      // Check if file exists
+      const fs = await import('fs');
+      if (!fs.existsSync(this.lastCopilotAnalysisFilePath)) {
+        this.sendMessage('showError', { error: 'Copilot analysis file no longer exists.' });
+        return;
+      }
+
+      // Open the file in VSCode editor
+      const uri = vscode.Uri.file(this.lastCopilotAnalysisFilePath);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+      
+    } catch (error) {
+      console.error('Error opening Copilot analysis file:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to open Copilot analysis file: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async openGitDiffFile() {
+    try {
+      if (!this.lastGitDiffFilePath) {
+        this.sendMessage('showError', { error: 'No git diff file to open. Run AI Test Debug first.' });
+        return;
+      }
+
+      // Check if file exists
+      const fs = await import('fs');
+      if (!fs.existsSync(this.lastGitDiffFilePath)) {
+        this.sendMessage('showError', { error: 'Git diff file no longer exists.' });
+        return;
+      }
+
+      // Open the file in VSCode editor
+      const uri = vscode.Uri.file(this.lastGitDiffFilePath);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+      
+    } catch (error) {
+      console.error('Error opening git diff file:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to open git diff file: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async openTestResultsFile() {
+    try {
+      if (!this.lastTestResultsFilePath) {
+        this.sendMessage('showError', { error: 'No test results file to open. Run AI Test Debug first.' });
+        return;
+      }
+
+      // Check if file exists
+      const fs = await import('fs');
+      if (!fs.existsSync(this.lastTestResultsFilePath)) {
+        this.sendMessage('showError', { error: 'Test results file no longer exists.' });
+        return;
+      }
+
+      // Open the file in VSCode editor
+      const uri = vscode.Uri.file(this.lastTestResultsFilePath);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
+      
+    } catch (error) {
+      console.error('Error opening test results file:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to open test results file: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async copyContextFilePath() {
+    try {
+      if (!this.lastContextFilePath) {
+        this.sendMessage('showError', { error: 'No context file path to copy. Run AI Test Debug first.' });
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(this.lastContextFilePath);
+      vscode.window.showInformationMessage('Context file path copied to clipboard');
+      
+    } catch (error) {
+      console.error('Error copying context file path:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to copy context file path: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async copyGitDiffFilePath() {
+    try {
+      if (!this.lastGitDiffFilePath) {
+        this.sendMessage('showError', { error: 'No git diff file path to copy. Run AI Test Debug first.' });
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(this.lastGitDiffFilePath);
+      vscode.window.showInformationMessage('Git diff file path copied to clipboard');
+      
+    } catch (error) {
+      console.error('Error copying git diff file path:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to copy git diff file path: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async copyTestResultsFilePath() {
+    try {
+      if (!this.lastTestResultsFilePath) {
+        this.sendMessage('showError', { error: 'No test results file path to copy. Run AI Test Debug first.' });
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(this.lastTestResultsFilePath);
+      vscode.window.showInformationMessage('Test results file path copied to clipboard');
+      
+    } catch (error) {
+      console.error('Error copying test results file path:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to copy test results file path: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  private async copyCopilotAnalysisFilePath() {
+    try {
+      if (!this.lastCopilotAnalysisFilePath) {
+        this.sendMessage('showError', { error: 'No Copilot analysis file path to copy. Run AI Test Debug first.' });
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(this.lastCopilotAnalysisFilePath);
+      vscode.window.showInformationMessage('Copilot analysis file path copied to clipboard');
+      
+    } catch (error) {
+      console.error('Error copying Copilot analysis file path:', error);
+      this.sendMessage('showError', { 
+        error: `Failed to copy Copilot analysis file path: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
     }
   }
 

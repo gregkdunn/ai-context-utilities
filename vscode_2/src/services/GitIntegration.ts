@@ -128,8 +128,9 @@ export class GitIntegration {
     outputCallback?: (output: string) => void
   ): Promise<{ content: string; filePath: string }> {
     try {
-      let diffContent: string;
+      let rawDiffContent: string;
       let filename: string;
+      let commandUsed: string;
 
       outputCallback?.('Starting git diff generation...\n');
       
@@ -141,33 +142,43 @@ export class GitIntegration {
       switch (mode) {
         case 'uncommitted':
           outputCallback?.('Generating diff for uncommitted changes...\n');
-          diffContent = await this.getDiffForUncommittedChanges();
+          rawDiffContent = await this.getDiffForUncommittedChanges();
           filename = `uncommitted-changes-${Date.now()}.diff`;
+          commandUsed = 'git diff';
           break;
         case 'commit':
           if (!commitHash) {
             throw new Error('Commit hash required for commit diff mode');
           }
           outputCallback?.(`Generating diff for commit ${commitHash}...\n`);
-          diffContent = await this.getDiffForCommit(commitHash);
+          rawDiffContent = await this.getDiffForCommit(commitHash);
           filename = `commit-${commitHash.substring(0, 7)}-${Date.now()}.diff`;
+          commandUsed = `git show ${commitHash}`;
           break;
         case 'branch-diff':
           outputCallback?.('Generating diff from current branch to main...\n');
-          diffContent = await this.getDiffFromMainBranch();
+          rawDiffContent = await this.getDiffFromMainBranch();
           filename = `branch-diff-${Date.now()}.diff`;
+          const currentBranch = await this.getCurrentBranch();
+          const baseBranch = vscode.workspace.getConfiguration('aiDebugContext').get<string>('nxBaseBranch') || 'main';
+          commandUsed = `git diff ${baseBranch}...${currentBranch}`;
           break;
         default:
           throw new Error(`Unsupported diff mode: ${mode}`);
       }
 
+      outputCallback?.('Formatting diff with AI optimization...\n');
+      
+      // Generate diff content
+      const formattedContent = await this.createAIOptimizedDiff(rawDiffContent, commandUsed);
+      
       outputCallback?.('Writing diff to file...\n');
-      const filePath = await this.saveDiffToFile(diffContent, filename);
+      const filePath = await this.saveDiffToFile(formattedContent, filename);
       
       outputCallback?.(`Diff saved successfully to ${filePath}\n`);
       outputCallback?.('Diff generation complete!\n');
 
-      return { content: diffContent, filePath };
+      return { content: formattedContent, filePath };
     } catch (error) {
       const errorMessage = `Failed to generate diff: ${error}`;
       outputCallback?.(errorMessage + '\n');
@@ -332,5 +343,281 @@ export class GitIntegration {
     }
 
     return result;
+  }
+
+  /**
+   * Create  diff with analysis and context
+   */
+  private async createAIOptimizedDiff(rawDiff: string, commandUsed: string): Promise<string> {
+    if (!rawDiff.trim()) {
+      return this.createNoChangesOutput(commandUsed);
+    }
+
+    const currentBranch = await this.getCurrentBranch();
+    const timestamp = new Date().toLocaleString();
+    
+    // Parse diff for file analysis
+    const fileAnalysis = this.analyzeDiffFiles(rawDiff);
+    const fileTypeStats = this.analyzeFileTypes(fileAnalysis.allFiles);
+    
+    let output = '';
+    
+    // Header
+    output += '=================================================================\n';
+    output += '🔍 GIT DIFF\n';
+    output += '=================================================================\n\n';
+    output += `COMMAND: ${commandUsed}\n`;
+    output += `TIMESTAMP: ${timestamp}\n`;
+    output += `BRANCH: ${currentBranch}\n\n`;
+    
+    // Change Summary
+    output += '==================================================================\n';
+    output += '📊 CHANGE SUMMARY\n';
+    output += '==================================================================\n';
+    output += `Total files changed: ${fileAnalysis.totalFiles}\n\n`;
+    
+    if (fileAnalysis.newFiles.length > 0) {
+      output += `🆕 NEW FILES (${fileAnalysis.newFiles.length}):\n`;
+      fileAnalysis.newFiles.forEach(file => {
+        output += `  • ${file}\n`;
+      });
+      output += '\n';
+    }
+    
+    if (fileAnalysis.modifiedFiles.length > 0) {
+      output += `📝 MODIFIED FILES (${fileAnalysis.modifiedFiles.length}):\n`;
+      fileAnalysis.modifiedFiles.forEach(file => {
+        output += `  • ${file}\n`;
+      });
+      output += '\n';
+    }
+    
+    if (fileAnalysis.deletedFiles.length > 0) {
+      output += `🗑️ DELETED FILES (${fileAnalysis.deletedFiles.length}):\n`;
+      fileAnalysis.deletedFiles.forEach(file => {
+        output += `  • ${file}\n`;
+      });
+      output += '\n';
+    }
+    
+    if (fileAnalysis.renamedFiles.length > 0) {
+      output += `📦 RENAMED/MOVED FILES (${fileAnalysis.renamedFiles.length}):\n`;
+      fileAnalysis.renamedFiles.forEach(file => {
+        output += `  • ${file}\n`;
+      });
+      output += '\n';
+    }
+    
+    // File Type Analysis
+    output += '==================================================================\n';
+    output += '🏷️ FILE TYPE ANALYSIS\n';
+    output += '==================================================================\n';
+    output += `TypeScript files: ${fileTypeStats.typescript}\n`;
+    output += `Test files: ${fileTypeStats.tests}\n`;
+    output += `Templates: ${fileTypeStats.templates}\n`;
+    output += `Styles: ${fileTypeStats.styles}\n`;
+    output += `Config/JSON: ${fileTypeStats.config}\n`;
+    output += `Other: ${fileTypeStats.other}\n\n`;
+    
+    // Detailed Changes
+    output += '==================================================================\n';
+    output += '📋 DETAILED CHANGES\n';
+    output += '==================================================================\n\n';
+    
+    // Process diff with file separators
+    output += this.formatDiffWithFileSeparators(rawDiff);
+    
+    // AI Analysis Context
+    output += '\n==================================================================\n';
+    output += '🤖 AI ANALYSIS CONTEXT\n';
+    output += '==================================================================\n';
+    output += 'Key areas for analysis:\n';
+    output += '• Focus on test-related files (.spec.ts, .test.ts)\n';
+    output += '• Look for type/interface changes that might break tests\n';
+    output += '• Check for new functionality that needs test coverage\n';
+    output += '• Identify breaking changes in method signatures\n';
+    output += '• Review dependency changes and imports\n\n';
+    output += 'Change impact areas:\n';
+    
+    if (fileAnalysis.newFiles.length > 0) {
+      output += '• New files may need comprehensive test coverage\n';
+    }
+    if (fileAnalysis.modifiedFiles.length > 0) {
+      output += '• Modified files may have broken existing tests\n';
+    }
+    if (fileAnalysis.deletedFiles.length > 0) {
+      output += '• Deleted files may have orphaned tests or dependencies\n';
+    }
+    
+    return output;
+  }
+
+  /**
+   * Analyze diff files and categorize them
+   */
+  private analyzeDiffFiles(diff: string): {
+    newFiles: string[];
+    modifiedFiles: string[];
+    deletedFiles: string[];
+    renamedFiles: string[];
+    allFiles: string[];
+    totalFiles: number;
+  } {
+    const newFiles: string[] = [];
+    const modifiedFiles: string[] = [];
+    const deletedFiles: string[] = [];
+    const renamedFiles: string[] = [];
+    const allFiles: string[] = [];
+    
+    const lines = diff.split('\n');
+    let currentFileA = '';
+    let currentFileB = '';
+    let isNewFile = false;
+    let isDeletedFile = false;
+    
+    for (const line of lines) {
+      // Match diff --git a/file b/file
+      const diffMatch = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+      if (diffMatch) {
+        currentFileA = diffMatch[1];
+        currentFileB = diffMatch[2];
+        isNewFile = false;
+        isDeletedFile = false;
+        
+        // Check for renames/moves
+        if (currentFileA !== currentFileB) {
+          renamedFiles.push(`${currentFileA} → ${currentFileB}`);
+          allFiles.push(currentFileB);
+        }
+        continue;
+      }
+      
+      // Check for new file mode
+      if (line.match(/^new file mode/)) {
+        isNewFile = true;
+        newFiles.push(currentFileB);
+        allFiles.push(currentFileB);
+        continue;
+      }
+      
+      // Check for deleted file mode
+      if (line.match(/^deleted file mode/)) {
+        isDeletedFile = true;
+        deletedFiles.push(currentFileA);
+        allFiles.push(currentFileA);
+        continue;
+      }
+      
+      // Check for index line (indicates modification)
+      if (line.match(/^index [0-9a-f]+\.\.[0-9a-f]+/) && !isNewFile && !isDeletedFile && currentFileA === currentFileB) {
+        modifiedFiles.push(currentFileA);
+        allFiles.push(currentFileA);
+      }
+    }
+    
+    return {
+      newFiles,
+      modifiedFiles,
+      deletedFiles,
+      renamedFiles,
+      allFiles,
+      totalFiles: newFiles.length + modifiedFiles.length + deletedFiles.length + renamedFiles.length
+    };
+  }
+
+  /**
+   * Analyze file types in the diff
+   */
+  private analyzeFileTypes(files: string[]): {
+    typescript: number;
+    tests: number;
+    templates: number;
+    styles: number;
+    config: number;
+    other: number;
+  } {
+    let typescript = 0;
+    let tests = 0;
+    let templates = 0;
+    let styles = 0;
+    let config = 0;
+    let other = 0;
+    
+    for (const file of files) {
+      if (file.endsWith('.spec.ts') || file.endsWith('.test.ts')) {
+        tests++;
+      } else if (file.endsWith('.ts')) {
+        typescript++;
+      } else if (file.endsWith('.html')) {
+        templates++;
+      } else if (file.endsWith('.css') || file.endsWith('.scss') || file.endsWith('.sass')) {
+        styles++;
+      } else if (file.endsWith('.json') || file.endsWith('.yml') || file.endsWith('.yaml')) {
+        config++;
+      } else {
+        other++;
+      }
+    }
+    
+    return { typescript, tests, templates, styles, config, other };
+  }
+
+  /**
+   * Format diff with file separators for better AI parsing
+   */
+  private formatDiffWithFileSeparators(diff: string): string {
+    const lines = diff.split('\n');
+    let output = '';
+    let currentFile = '';
+    
+    for (const line of lines) {
+      // Check for new file header
+      const diffMatch = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+      if (diffMatch) {
+        currentFile = diffMatch[2];
+        output += `📁 FILE: ${currentFile}\n`;
+        output += '─────────────────────────────────────────\n';
+      }
+      output += line + '\n';
+    }
+    
+    return output;
+  }
+
+  /**
+   * Create output when no changes are detected
+   */
+  private createNoChangesOutput(commandUsed: string): string {
+    const timestamp = new Date().toLocaleString();
+    
+    return `=================================================================
+🔍 GIT DIFF ANALYSIS
+=================================================================
+
+STATUS: No changes detected
+COMMAND: ${commandUsed}
+TIMESTAMP: ${timestamp}
+BRANCH: ${this.getCurrentBranch()}
+
+=================================================================
+📊 REPOSITORY STATUS
+=================================================================
+Working directory: Clean
+Staged changes: None
+
+=================================================================
+🤖 AI ANALYSIS CONTEXT
+=================================================================
+No code changes were found to analyze. This could mean:
+• Working directory is clean (all changes committed)
+• You're analyzing test failures without recent changes
+• Focus should be on existing code patterns or environment issues
+• Consider checking if tests were recently updated in previous commits
+
+Suggested actions:
+• Review recent commit history
+• Check if issue is environment-related rather than code-related
+• Examine test setup or configuration files
+`;
   }
 }

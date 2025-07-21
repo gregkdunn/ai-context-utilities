@@ -44,24 +44,49 @@ export class TestRunner {
       let output = '';
       let errorOutput = '';
       let outputFile: string | undefined;
+      let rawOutputFile: string | undefined;
+
+      // Show initial message
+      if (options.outputCallback) {
+        options.outputCallback('🚀 Starting test execution...\n');
+        options.outputCallback(`📋 Command: ${options.command}\n\n`);
+      }
 
       // Create output file if requested
       if (options.saveToFile) {
-        outputFile = this.createOutputFile(options);
+        rawOutputFile = this.createOutputFile(options);
+        outputFile = rawOutputFile.replace('.log', '-ai-optimized.txt');
       }
 
       this.currentProcess.stdout?.on('data', (data) => {
         const chunk = data.toString();
         output += chunk;
         
-        // Write to file if saving
-        if (outputFile) {
-          this.appendToFile(outputFile, chunk);
+        // Write to raw file if saving
+        if (rawOutputFile) {
+          this.appendToFile(rawOutputFile, chunk);
         }
         
-        // Call output callback for real-time streaming
+        // Show minimal progress indicators instead of full raw output
         if (options.outputCallback) {
-          options.outputCallback(chunk);
+          if (chunk.includes('PASS') || chunk.includes('FAIL')) {
+            // Extract and show test file results
+            const cleanChunk = this.cleanAnsiCodes(chunk);
+            const passMatch = cleanChunk.match(/PASS.*?([^\s]+\.spec\.ts)/);
+            const failMatch = cleanChunk.match(/FAIL.*?([^\s]+\.spec\.ts)/);
+            
+            if (passMatch) {
+              options.outputCallback(`✅ ${passMatch[1]}\n`);
+            } else if (failMatch) {
+              options.outputCallback(`❌ ${failMatch[1]}\n`);
+            }
+          } else if (chunk.includes('Test Suites:') || chunk.includes('Time:')) {
+            // Show final summary lines
+            const cleanChunk = this.cleanAnsiCodes(chunk);
+            if (cleanChunk.trim()) {
+              options.outputCallback(`📊 ${cleanChunk.trim()}\n`);
+            }
+          }
         }
         
         console.log('Test output:', chunk);
@@ -71,29 +96,65 @@ export class TestRunner {
         const chunk = data.toString();
         errorOutput += chunk;
         
-        // Write error to file if saving
-        if (outputFile) {
-          this.appendToFile(outputFile, `[ERROR] ${chunk}`);
+        // Write error to raw file if saving
+        if (rawOutputFile) {
+          this.appendToFile(rawOutputFile, `[ERROR] ${chunk}`);
         }
         
-        // Call output callback for errors too
-        if (options.outputCallback) {
-          options.outputCallback(`[ERROR] ${chunk}`);
+        // Only show critical errors in real-time, not deprecation warnings
+        if (options.outputCallback && !chunk.includes('DeprecationWarning')) {
+          const cleanChunk = this.cleanAnsiCodes(chunk);
+          if (cleanChunk.includes('FAIL') || cleanChunk.includes('Error') || cleanChunk.includes('Failed')) {
+            options.outputCallback(`🔥 ${cleanChunk.trim()}\n`);
+          }
         }
         
         console.error('Test error:', chunk);
       });
 
-      this.currentProcess.on('close', (code) => {
+      this.currentProcess.on('close', async (code) => {
         console.log('Test process finished with code:', code);
         this.currentProcess = null;
         
         const results = this.parseTestResults(output);
         
+        // Create  output and stream it to the callback
+        try {
+          const aiOptimizedContent = this.createAIOptimizedTestOutput(
+            output + errorOutput,
+            options.command,
+            code || 0
+          );
+          
+          // Stream the  output to the callback (for screen display)
+          if (options.outputCallback) {
+            options.outputCallback('\n\n' + '='.repeat(60) + '\n');
+            options.outputCallback('🤖 TEST ANALYSIS\n');
+            options.outputCallback('='.repeat(60) + '\n\n');
+            options.outputCallback(aiOptimizedContent);
+          }
+          
+          // Save  output to file if requested
+          if (outputFile && rawOutputFile) {
+            fs.writeFileSync(outputFile, aiOptimizedContent);
+            
+            if (options.outputCallback) {
+              options.outputCallback('\n' + '='.repeat(60) + '\n');
+              options.outputCallback(`📁 Report saved to: ${outputFile}\n`);
+              options.outputCallback('='.repeat(60) + '\n');
+            }
+          }
+        } catch (error) {
+          console.error('Failed to create  output:', error);
+          if (options.outputCallback) {
+            options.outputCallback(`\n❌ Error creating  output: ${error}\n`);
+          }
+        }
+        
         resolve({
           results,
           exitCode: code || 0,
-          outputFile
+          outputFile: outputFile || rawOutputFile
         });
       });
 
@@ -149,7 +210,7 @@ export class TestRunner {
 
       // Get all test output files with their stats
       const files = fs.readdirSync(testOutputDir)
-        .filter(file => file.startsWith('test-output-') && file.endsWith('.log'))
+        .filter(file => file.startsWith('jest-output-') && file.endsWith('.txt'))
         .map(file => {
           const filePath = path.join(testOutputDir, file);
           const stats = fs.statSync(filePath);
@@ -210,7 +271,7 @@ export class TestRunner {
 
     try {
       const files = fs.readdirSync(testOutputDir)
-        .filter(file => file.startsWith('test-output-') && file.endsWith('.log'))
+        .filter(file => file.startsWith('jest-output-') && file.endsWith('.txt'))
         .map(file => path.join(testOutputDir, file));
 
       for (const filePath of files) {
@@ -241,7 +302,7 @@ export class TestRunner {
 
     try {
       return fs.readdirSync(testOutputDir)
-        .filter(file => file.startsWith('test-output-') && file.endsWith('.log'))
+        .filter(file => file.startsWith('jest-output-') && file.endsWith('.txt'))
         .map(file => path.join(testOutputDir, file));
     } catch (error) {
       console.error('Failed to read test output directory:', error);
@@ -405,7 +466,8 @@ export class TestRunner {
     const mode = options.mode;
     const projectPart = options.projects ? options.projects.join('-') : 'affected';
     
-    const fileName = `test-output-${mode}-${projectPart}-${timestamp}.log`;
+    // Use jest-output.txt for  output (consistent with expected format)
+    const fileName = `jest-output-${timestamp}.txt`;
     const fullPath = path.join(this.workspacePath, this.outputDirectory, fileName);
     
     // Ensure directory exists
@@ -427,5 +489,246 @@ export class TestRunner {
     } catch (error) {
       console.error('Failed to append to output file:', error);
     }
+  }
+
+  /**
+   * Create  test output with analysis and context
+   */
+  private createAIOptimizedTestOutput(rawOutput: string, command: string, exitCode: number): string {
+    // Clean ANSI codes from the output
+    const cleanOutput = this.cleanAnsiCodes(rawOutput);
+    
+    // Extract key information from the raw output
+    const totalSuites = this.extractPattern(cleanOutput, /Test Suites:.*total/, 'Test Suites: unknown');
+    const totalTests = this.extractPattern(cleanOutput, /Tests:.*total/, 'Tests: unknown');
+    const testTime = this.extractPattern(cleanOutput, /Time:.*s/, 'Time: unknown');
+    const failedSuites = (cleanOutput.match(/FAIL.*\.spec\.ts/g) || []).length;
+    const passedSuites = (cleanOutput.match(/PASS.*\.spec\.ts/g) || []).length;
+    
+    let output = '';
+    
+    // Header
+    output += '=================================================================\n';
+    output += '🤖 TEST REPORT\n';
+    output += '=================================================================\n\n';
+    output += `COMMAND: ${command}\n`;
+    output += `EXIT CODE: ${exitCode}\n`;
+    output += `STATUS: ${exitCode === 0 ? '✅ PASSED' : '❌ FAILED'}\n\n`;
+    
+    // Executive Summary
+    output += '=================================================================\n';
+    output += '📊 EXECUTIVE SUMMARY\n';
+    output += '=================================================================\n';
+    output += `${totalSuites}\n`;
+    output += `${totalTests}\n`;
+    output += `${testTime}\n`;
+    output += `Test Suites: ${passedSuites} passed, ${failedSuites} failed\n\n`;
+    
+    // Failure Analysis
+    if (exitCode !== 0) {
+      output += '==================================================================\n';
+      output += '💥 FAILURE ANALYSIS\n';
+      output += '==================================================================\n\n';
+      
+      // Extract compilation errors
+      if (cleanOutput.includes('Test suite failed to run')) {
+        output += '🔥 COMPILATION/RUNTIME ERRORS:\n';
+        output += '--------------------------------\n';
+        
+        const errorLines = this.extractCompilationErrors(cleanOutput);
+        errorLines.forEach(line => {
+          output += `  • ${line}\n`;
+        });
+        output += '\n';
+      }
+      
+      // Extract test failures
+      const testFailures = this.extractTestFailures(cleanOutput);
+      if (testFailures.length > 0) {
+        output += '🧪 TEST FAILURES:\n';
+        output += '-----------------\n';
+        testFailures.forEach(failure => {
+          output += `  • ${failure.test}\n`;
+          if (failure.reason) {
+            output += `    ${failure.reason}\n`;
+          }
+          output += '\n';
+        });
+      }
+    }
+    
+    // Test Results Summary
+    output += '==================================================================\n';
+    output += '🧪 TEST RESULTS SUMMARY\n';
+    output += '==================================================================\n';
+    
+    const testSuiteResults = this.extractTestSuiteResults(cleanOutput);
+    testSuiteResults.forEach(result => {
+      output += `${result.passed ? '✅' : '❌'} ${result.file}\n`;
+    });
+    
+    // Performance Insights
+    if (testTime !== 'Time: unknown') {
+      output += '\n==================================================================\n';
+      output += '⚡ PERFORMANCE INSIGHTS\n';
+      output += '==================================================================\n';
+      output += `${testTime}\n`;
+      
+      const slowTests = this.extractSlowTests(cleanOutput);
+      slowTests.forEach(test => {
+        output += `🐌 SLOW: ${test}\n`;
+      });
+    }
+    
+    // AI Analysis Context
+    output += '\n==================================================================\n';
+    output += '🎯 AI ANALYSIS CONTEXT\n';
+    output += '==================================================================\n';
+    output += 'This report focuses on:\n';
+    output += '• Test failures and their root causes\n';
+    output += '• Compilation/TypeScript errors\n';
+    output += '• Performance issues (slow tests)\n';
+    output += '• Overall test health metrics\n\n';
+    output += 'Key areas for analysis:\n';
+    
+    if (exitCode !== 0) {
+      output += '• 🔍 Focus on failure analysis section above\n';
+      output += '• 🔗 Correlate failures with recent code changes\n';
+      output += '• 🛠️  Identify patterns in TypeScript errors\n';
+    } else {
+      output += '• ✅ All tests passing - check for performance optimizations\n';
+      output += '• 📈 Monitor test execution time trends\n';
+    }
+    
+    output += '\n';
+    const originalLines = cleanOutput.split('\n').length;
+    const optimizedLines = output.split('\n').length;
+    output += `Original output reduced from ${originalLines} lines to ${optimizedLines} lines for AI efficiency.\n`;
+    
+    return output;
+  }
+
+  /**
+   * Clean ANSI escape codes from output
+   */
+  private cleanAnsiCodes(text: string): string {
+    // Remove ANSI escape sequences
+    return text
+      .replace(/\x1b\[[0-9;]*[mGKHJA-Z]/g, '')
+      .replace(/\r/g, '');
+  }
+
+  /**
+   * Extract pattern from text with fallback
+   */
+  private extractPattern(text: string, pattern: RegExp, fallback: string): string {
+    const match = text.match(pattern);
+    return match ? match[0] : fallback;
+  }
+
+  /**
+   * Extract compilation/TypeScript errors
+   */
+  private extractCompilationErrors(text: string): string[] {
+    const errors: string[] = [];
+    const lines = text.split('\n');
+    
+    let inErrorSection = false;
+    for (const line of lines) {
+      if (line.includes('Test suite failed to run')) {
+        inErrorSection = true;
+        continue;
+      }
+      
+      if (inErrorSection && line.trim() === '') {
+        inErrorSection = false;
+        continue;
+      }
+      
+      if (inErrorSection) {
+        if (line.match(/error TS\d+/) || 
+            line.includes('Property') && line.includes('does not exist') ||
+            line.includes('Cannot find') ||
+            line.includes('Type') && line.includes('is not assignable')) {
+          errors.push(line.trim());
+        }
+      }
+    }
+    
+    return errors;
+  }
+
+  /**
+   * Extract test failures with context
+   */
+  private extractTestFailures(text: string): Array<{ test: string; reason?: string }> {
+    const failures: Array<{ test: string; reason?: string }> = [];
+    const lines = text.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Match test failure patterns
+      if (line.match(/● .*›.*/)) {
+        const test = line.trim();
+        let reason = '';
+        
+        // Look for the next line as the failure reason
+        if (i + 1 < lines.length && lines[i + 1].trim()) {
+          reason = lines[i + 1].trim();
+        }
+        
+        failures.push({ test, reason });
+      }
+    }
+    
+    return failures;
+  }
+
+  /**
+   * Extract test suite results
+   */
+  private extractTestSuiteResults(text: string): Array<{ file: string; passed: boolean }> {
+    const results: Array<{ file: string; passed: boolean }> = [];
+    const lines = text.split('\n');
+    
+    for (const line of lines) {
+      const passMatch = line.match(/PASS.*?([^\s]+\.spec\.ts)/);
+      if (passMatch) {
+        results.push({ file: passMatch[1], passed: true });
+        continue;
+      }
+      
+      const failMatch = line.match(/FAIL.*?([^\s]+\.spec\.ts)/);
+      if (failMatch) {
+        results.push({ file: failMatch[1], passed: false });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Extract slow tests (>10ms)
+   */
+  private extractSlowTests(text: string): string[] {
+    const slowTests: string[] = [];
+    const lines = text.split('\n');
+    
+    for (const line of lines) {
+      // Match test execution patterns with timing
+      const match = line.match(/✓\s+(.+?)\s+\((\d+)\s*ms\)/);
+      if (match) {
+        const [, testName, duration] = match;
+        const ms = parseInt(duration, 10);
+        
+        // Consider tests > 10ms as slow for reporting
+        if (ms > 10) {
+          slowTests.push(`${testName} (${ms} ms)`);
+        }
+      }
+    }
+    
+    return slowTests;
   }
 }

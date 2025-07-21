@@ -50,103 +50,116 @@ export interface TestExecutionState {
   imports: [CommonModule, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="bg-vscode-editor-background p-4 rounded-lg border border-vscode-panel-border">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-vscode-foreground text-lg font-semibold">Test Selection</h3>
-        <div class="text-vscode-descriptionForeground text-sm">
-          {{ getConfigurationSummary() }}
+    <div class="bg-gray-900 rounded-lg border border-gray-700 font-mono text-sm h-full p-3" style="background: #1a1a1a; border-color: #333;">
+      <!-- Terminal Header -->
+      <div class="border-b pb-6 mb-8" style="border-color: #333;">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="font-bold" style="color: #A8A8FF;">$</span>
+          <span class="font-bold" style="color: #4ECDC4;">project-selector</span>
+          <span style="color: #FFD93D;">--mode</span>
+          <span style="color: #6BCF7F;">{{ testMode() }}</span>
+        </div>
+        <div style="color: #666;" class="text-xs">
+          📂 Project Selection | {{ getConfigurationSummary() }}
         </div>
       </div>
 
-      <!-- Test Mode Selection -->
-      <div class="mb-6">
-        <label class="text-vscode-foreground text-sm font-medium mb-3 block">
-          Test Execution Mode:
-        </label>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Terminal Mode Selection -->
+      <div class="mb-8">
+        <div class="mb-4 flex items-center gap-3">
+          <span style="color: #A8A8FF;">></span>
+          <span style="color: #4ECDC4;">🎯 Select test execution mode</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
           <button
             (click)="selectTestMode('affected')"
-            [class]="getModeButtonClass('affected')"
-            class="p-4 rounded border transition-all duration-200 text-left">
+            class="p-4 font-mono font-bold border-1 hover:opacity-90 transition-opacity text-left w-full block"
+            [ngStyle]="testMode() === 'affected' ? 
+              {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
+              {'background': '#333', 'color': '#e5e5e5', 'border-color': '#666'}">
             <div class="flex items-center gap-3 mb-2">
               <span class="text-2xl">🎯</span>
-              <span class="font-medium">Affected Tests</span>
+              <span class="font-medium">AFFECTED --tests</span>
             </div>
-            <p class="text-xs opacity-75">
+            <p class="text-xs" [ngStyle]="testMode() === 'affected' ? {'color': '#000'} : {'color': '#666'}">
               Run tests for projects affected by your changes
             </p>
-            <div class="text-xs mt-2 opacity-60">
-              Recommended • Faster execution
+            <div class="text-xs mt-2" [ngStyle]="testMode() === 'affected' ? {'color': '#000'} : {'color': '#A8A8FF'}">
+              recommended | faster execution
             </div>
           </button>
           
           <button
             (click)="selectTestMode('project')"
-            [class]="getModeButtonClass('project')"
-            class="p-4 rounded border transition-all duration-200 text-left">
+            class="p-4 font-mono font-bold border-1 hover:opacity-90 transition-opacity text-left w-min-full block"
+            [ngStyle]="testMode() === 'project' ? 
+              {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
+              {'background': '#333', 'color': '#e5e5e5', 'border-color': '#666'}">
             <div class="flex items-center gap-3 mb-2">
               <span class="text-2xl">📁</span>
-              <span class="font-medium">Specific Project</span>
+              <span class="font-medium">SPECIFIC --project</span>
             </div>
-            <p class="text-xs opacity-75">
+            <p class="text-xs" [ngStyle]="testMode() === 'project' ? {'color': '#000'} : {'color': '#666'}">
               Run tests for a specific project
             </p>
-            <div class="text-xs mt-2 opacity-60">
-              Full control • Longer execution
+            <div class="text-xs mt-2" [ngStyle]="testMode() === 'project' ? {'color': '#000'} : {'color': '#A8A8FF'}">
+              longer execution
             </div>
           </button>
         </div>
       </div>
 
-      <!-- Affected Tests Configuration -->
+      <!-- Terminal Affected Tests Configuration -->
       @if (testMode() === 'affected') {
-        <div class="space-y-4">
-          <div class="bg-vscode-textBlockQuote-background border border-vscode-panel-border rounded p-4">
-            <div class="flex items-center gap-2 mb-3">
+        <div class="space-y-6 mb-8">
+          <div class="rounded p-4" style="background: #1f2a1f; border: 1px solid #4a6a4a;">
+            <div class="flex items-center gap-3 mb-4">
+              <span style="color: #A8A8FF;">></span>
               <span class="text-xl">⚡</span>
-              <h4 class="text-vscode-textBlockQuote-foreground font-medium">Affected Projects Detection</h4>
+              <span style="color: #4ECDC4;">Affected projects detection</span>
             </div>
-            <p class="text-vscode-textBlockQuote-foreground text-sm mb-3">
+            <p class="text-sm mb-4 pl-6" style="color: #e5e5e5;">
               NX will automatically detect and run tests for projects affected by your changes.
             </p>
             
             @if (isLoadingAffected()) {
-            <div class="text-vscode-descriptionForeground text-center py-4">
-            <div class="text-2xl mb-2 animate-spin">⏳</div>
-            <p class="text-sm">Loading affected projects...</p>
+            <div class="text-center py-6 pl-6">
+            <div class="text-2xl mb-2 animate-spin" style="color: #FFD93D;">⟳</div>
+            <p class="text-sm" style="color: #4ECDC4;">Loading affected projects...</p>
             </div>
             } @else if (affectedProjects().length > 0) {
-            <div>
-            <p class="text-vscode-foreground text-sm font-medium mb-2">
-            Affected Projects ({{ affectedProjects().length }}):
+            <div class="pl-6">
+            <p class="text-sm font-medium mb-3 flex items-center gap-2" style="color: #6BCF7F;">
+            <span>[✓]</span>
+            <span>Affected Projects ({{ affectedProjects().length }}):</span>
             </p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             @for (project of affectedProjects(); track project) {
-                <div class="flex items-center gap-2 p-2 bg-vscode-list-hoverBackground rounded">
-                    <span class="w-2 h-2 bg-vscode-gitDecoration-modifiedResourceForeground rounded-full"></span>
-                      <span class="text-vscode-foreground text-sm font-mono">{{ project }}</span>
+                <div class="items-center gap-3 p-2 rounded w-full block" style="background: #2a2a1a; border: 1px solid #4ECDC4;">
+                    <span class="w-2 h-2 rounded-full" style="background: #4ECDC4;"></span>
+                      <span class="text-sm font-mono" style="color: #e5e5e5;">{{ project }}</span>
                   </div>
               }
             </div>
             </div>
             } @else {
-            <div class="text-vscode-descriptionForeground text-center py-4">
+            <div class="text-center py-6 pl-6">
               <div class="text-2xl mb-2">🔍</div>
-              <p class="text-sm">No affected projects found</p>
+              <p class="text-sm" style="color: #666;">No affected projects found</p>
             </div>
           }
           </div>
 
-          <!-- Base Branch Configuration -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Terminal Base Branch Configuration -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
             <div>
-              <label class="text-vscode-foreground text-sm font-medium mb-2 block">
-                Base Branch:
+              <label class="text-sm font-medium mb-3 block" style="color: #FFD93D;">
+                🌿 Base branch:
               </label>
               <select
                 [(ngModel)]="baseBranch"
                 (change)="updateAffectedProjects()"
-                class="w-full px-3 py-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground border border-vscode-dropdown-border rounded focus:border-vscode-inputOption-activeBorder">
+                class="w-full px-3 py-2 rounded font-mono text-sm" style="background: #333; color: #e5e5e5; border: 1px solid #666;">
                 <option value="main">main</option>
                 <option value="master">master</option>
                 <option value="develop">develop</option>
@@ -155,99 +168,115 @@ export interface TestExecutionState {
             </div>
             
             <div>
-              <label class="text-vscode-foreground text-sm font-medium mb-2 block">
-                Include Dependencies:
+              <label class="text-sm font-medium mb-3 block" style="color: #FFD93D;">
+                🔗 Include dependencies:
               </label>
-              <label class="flex items-center gap-2 cursor-pointer">
+              <label class="flex items-center gap-3 cursor-pointer">
                 <input 
                   type="checkbox"
                   [(ngModel)]="includeDependencies"
                   (change)="onIncludeDependenciesChange()"
-                  class="w-4 h-4 rounded border-vscode-checkbox-border bg-vscode-checkbox-background">
-                <span class="text-vscode-foreground text-sm">Test dependent projects</span>
+                  class="w-4 h-4 rounded">
+                <span class="text-sm" style="color: #e5e5e5;">test --with-deps</span>
               </label>
             </div>
           </div>
         </div>
       }
 
-      <!-- Project-Specific Configuration -->
+      <!-- Terminal Project-Specific Configuration -->
       @if (testMode() === 'project') {
-        <div class="space-y-4">
-          <!-- Project Selection with Dropdowns -->
+        <div class="space-y-6 mb-8">
+          <!-- Terminal Project Selection -->
           <div>
-            <label class="text-vscode-foreground text-sm font-medium mb-3 block">
-              Select Projects:
-            </label>
+            <div class="mb-4 flex items-center gap-3">
+              <span style="color: #A8A8FF;">></span>
+              <span style="color: #4ECDC4;">📁 Select projects from workspace</span>
+            </div>
             
             @if (isLoadingProjects()) {
-              <div class="text-vscode-descriptionForeground text-center py-8 border border-vscode-panel-border rounded">
-                <div class="text-4xl mb-2 animate-spin">⏳</div>
-                <p>Loading projects...</p>
-                <p class="text-xs">Discovering NX workspace projects</p>
+              <div class="text-center py-8 rounded pl-6" style="border: 1px solid #333; background: #1a1a1a;">
+                <div class="text-4xl mb-2 animate-spin" style="color: #FFD93D;">⟳</div>
+                <p style="color: #4ECDC4;">{{ projectLoadingStatus().message || 'Loading projects...' }}</p>
+                @if (projectLoadingStatus().status === 'cached') {
+                  <p class="text-xs" style="color: #6BCF7F;">[✓] Using cached data</p>
+                } @else if (projectLoadingStatus().status === 'initializing') {
+                  <p class="text-xs" style="color: #FFD93D;">🚀 Setting up project cache for faster loading...</p>
+                } @else {
+                  <p class="text-xs" style="color: #666;">Discovering NX workspace projects</p>
+                }
               </div>
             } @else if (projectGroups().length === 0) {
-              <div class="text-vscode-descriptionForeground text-center py-8 border border-vscode-panel-border rounded">
+              <div class="text-center py-8 rounded pl-6" style="border: 1px solid #333; background: #1a1a1a;">
                 <div class="text-4xl mb-2">📁</div>
-                <p>No projects found</p>
-                <p class="text-xs">Make sure you're in an NX workspace</p>
+                <p style="color: #e5e5e5;">No projects found</p>
+                <p class="text-xs" style="color: #666;">Make sure you're in an NX workspace</p>
               </div>
             } @else {
-              <div class="space-y-4">
+              <div class="space-y-6 pl-6">
                 @for (group of projectGroups(); track group.title) {
-                  <div class="space-y-2">
-                    <!-- Group Header with Dropdown -->
-                    <div class="flex items-center gap-2">
+                  <div class="space-y-4">
+                    <!-- Terminal Group Header -->
+                    <div class="flex items-center gap-3">
+                      <span style="color: #A8A8FF;">></span>
                       <span class="text-lg">{{ group.icon }}</span>
                       <div class="flex-1">
-                        <h4 class="text-vscode-foreground font-medium text-sm">{{ group.title }}</h4>
-                        <p class="text-vscode-descriptionForeground text-xs">{{ group.description }}</p>
+                        <h4 class="font-medium text-sm" [ngStyle]="group.title === 'Updated Projects' ? {'color': '#6BCF7F'} : {'color': '#4ECDC4'}">
+                          {{ group.title }}
+                          @if (group.title === 'Updated Projects') {
+                            <span class="text-xs ml-2" style="color: #FFD93D;">[RECOMMENDED]</span>
+                          }
+                        </h4>
+                        <p class="text-xs" style="color: #666;">{{ group.description }}</p>
                       </div>
-                      <span class="text-vscode-badge-background bg-vscode-badge-background text-vscode-badge-foreground px-2 py-1 rounded text-xs">
+                      <span class="px-2 py-1 rounded text-xs font-mono" [ngStyle]="group.title === 'Updated Projects' ? 
+                        {'background': '#2a2a1a', 'color': '#6BCF7F', 'border': '1px solid #6BCF7F'} : 
+                        {'background': '#333', 'color': '#FFD93D', 'border': '1px solid #666'}">
                         {{ getSelectedProjectsInGroup(group).length }}/{{ group.projects.length }}
                       </span>
                     </div>
                     
-                    <!-- Dropdown for Applications and Libraries -->
+                    <!-- Terminal Dropdown for Applications and Libraries -->
                     @if (group.title === 'Applications' || group.title === 'Libraries') {
                       <div class="relative">
                         <select
                           multiple
                           [value]="getSelectedProjectsInGroup(group)"
                           (change)="onMultipleProjectSelectionChange($event, group)"
-                          class="w-full px-3 py-2 bg-vscode-dropdown-background text-vscode-dropdown-foreground border border-vscode-dropdown-border rounded focus:border-vscode-inputOption-activeBorder min-h-20 max-h-32"
+                          class="w-full px-3 py-2 rounded font-mono text-sm min-h-20 max-h-32"
+                          style="background: #333; color: #e5e5e5; border: 1px solid #666;"
                           [size]="getSelectSize(group.projects.length)">
                           @for (project of group.projects; track project.name) {
                             <option
                               [value]="project.name"
                               [selected]="isProjectSelected(project.name)"
-                              class="p-2 hover:bg-vscode-list-hoverBackground">
+                              class="p-2">
                               {{ project.name }} ({{ project.type }})
                             </option>
                           }
                         </select>
-                        <p class="text-vscode-descriptionForeground text-xs mt-1">
-                          Hold Ctrl/Cmd to select multiple projects
+                        <p class="text-xs mt-1" style="color: #666;">
+                          <span style="color: #FFD93D;">tip:</span> Hold Ctrl/Cmd to select multiple projects
                         </p>
                       </div>
                     }
                     
-                    <!-- Updated Projects (single click selection) -->
+                    <!-- Terminal Updated Projects (single click selection) -->
                     @if (group.title === 'Updated Projects') {
-                      <div class="grid grid-cols-1 gap-1 border border-vscode-panel-border rounded p-2 max-h-32 overflow-y-auto">
+                      <div class="grid grid-cols-1 gap-2 rounded p-3 max-h-48 overflow-y-auto" style="border: 2px solid #6BCF7F; background: #1a2a1a; box-shadow: 0 0 10px rgba(107, 207, 127, 0.2);">
                         @for (project of group.projects; track project.name) {
-                          <label class="flex items-center gap-3 p-2 hover:bg-vscode-list-hoverBackground rounded cursor-pointer">
+                          <label class="flex items-center gap-3 p-2 rounded cursor-pointer hover:opacity-80 transition-opacity" style="background: #2a2a1a; border: 1px solid #333;">
                             <input
                               type="checkbox"
                               [checked]="isProjectSelected(project.name)"
                               (change)="toggleProjectSelection(project.name)"
-                              class="w-4 h-4 rounded border-vscode-checkbox-border bg-vscode-checkbox-background">
+                              class="w-4 h-4 rounded">
                             <div class="flex items-center gap-2">
-                              <span class="w-2 h-2 bg-vscode-gitDecoration-modifiedResourceForeground rounded-full"></span>
-                              <span class="font-mono text-sm">{{ project.name }}</span>
+                              <span class="w-2 h-2 rounded-full" style="background: #6BCF7F;"></span>
+                              <span class="font-mono text-sm" style="color: #e5e5e5;">{{ project.name }}</span>
                             </div>
                             <div class="flex-1"></div>
-                            <span class="text-vscode-descriptionForeground text-xs capitalize">{{ project.type }}</span>
+                            <span class="text-xs capitalize" style="color: #666;">{{ project.type }}</span>
                           </label>
                         }
                       </div>
@@ -258,72 +287,78 @@ export interface TestExecutionState {
             }
           </div>
 
-          <!-- Selected Projects Summary -->
+          <!-- Terminal Selected Projects Summary -->
           @if (selectedProjects().length > 0) {
-            <div class="bg-vscode-textBlockQuote-background border border-vscode-panel-border rounded p-4">
-              <h4 class="text-vscode-foreground font-medium mb-2">Selected Projects ({{ selectedProjects().length }}):</h4>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div class="rounded p-4" style="background: #1f2a1f; border: 1px solid #4a6a4a;">
+              <div class="flex items-center gap-3 mb-3">
+                <span style="color: #A8A8FF;">></span>
+                <span class="font-medium" style="color: #6BCF7F;">Selected Projects ({{ selectedProjects().length }}):</span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6">
                 @for (projectName of selectedProjects(); track projectName) {
-                  <div class="flex items-center gap-2 p-2 bg-vscode-list-hoverBackground rounded">
-                    <span class="text-vscode-foreground text-sm font-mono">{{ projectName }}</span>
+                  <div class="flex items-center gap-3 p-2 rounded" style="background: #2a2a1a; border: 1px solid #333;">
+                    <span class="text-sm font-mono" style="color: #e5e5e5;">{{ projectName }}</span>
                     <div class="flex-1"></div>
                     <button
                       (click)="removeProjectSelection(projectName)"
-                      class="text-vscode-descriptionForeground hover:text-vscode-errorForeground text-xs">
+                      class="text-xs hover:opacity-80 transition-opacity" style="color: #FF4B6D;">
                       ×
                     </button>
                   </div>
                 }
               </div>
-              <div class="mt-3 flex gap-2">
+              <div class="mt-4 flex gap-3 pl-6">
                 <button
                   (click)="clearAllProjectSelections()"
-                  class="px-3 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
-                  Clear All
+                  class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #333; color: #FF8C42; border-color: #666;">
+                  clear --all
                 </button>
                 <button
                   (click)="loadTestFilesForSelectedProjects()"
-                  class="px-3 py-1 text-xs bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground">
-                  Load Test Files
+                  class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #333; color: #6BCF7F; border-color: #666;">
+                  load --test-files
                 </button>
               </div>
             </div>
           }
 
-            <!-- Test Files Selection -->
+            <!-- Terminal Test Files Selection -->
             @if (selectedProjects().length > 0) {
               <div>
-                <div class="flex items-center justify-between mb-3">
-                  <label class="text-vscode-foreground text-sm font-medium">
-                    Test Files ({{ getTotalTestFileCount() }} total):
-                  </label>
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-3">
+                    <span style="color: #A8A8FF;">></span>
+                    <span class="text-sm font-medium" style="color: #4ECDC4;">
+                      🧪 Test Files ({{ getTotalTestFileCount() }} total):
+                    </span>
+                  </div>
                   <button 
                     (click)="toggleSelectAllTestFiles()"
-                    class="text-vscode-button-background hover:text-vscode-button-hoverBackground text-sm">
-                    {{ areAllTestFilesSelected() ? 'Unselect All' : 'Select All' }}
+                    class="px-2 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
+                    {{ areAllTestFilesSelected() ? 'unselect --all' : 'select --all' }}
                   </button>
                 </div>
                 
                 @if (projectTestFiles().length === 0) {
-                  <div class="text-vscode-descriptionForeground text-center py-8 border border-vscode-panel-border rounded">
+                  <div class="text-center py-8 rounded pl-6" style="border: 1px solid #333; background: #1a1a1a;">
                     <div class="text-4xl mb-2">🧪</div>
-                    <p>No test files loaded</p>
-                    <p class="text-xs">Click "Load Test Files" to discover test files for selected projects</p>
+                    <p style="color: #e5e5e5;">No test files loaded</p>
+                    <p class="text-xs" style="color: #666;">Click "load --test-files" to discover test files for selected projects</p>
                   </div>
                 } @else {
-                  <div class="max-h-64 overflow-y-auto border border-vscode-panel-border rounded p-2 space-y-1">
+                  <div class="max-h-64 overflow-y-auto rounded p-3 space-y-2 pl-6" style="border: 1px solid #4a4a4a; background: #1f1f1f;">
                     @for (file of projectTestFiles(); track file.path) {
-                      <div class="flex items-center gap-3 p-2 hover:bg-vscode-list-hoverBackground rounded">
+                      <div class="flex items-center gap-3 p-2 rounded hover:opacity-80 transition-opacity" style="background: #2a2a2a; border: 1px solid #333;">
                         <input 
                           type="checkbox"
                           [checked]="file.selected"
                           (change)="toggleTestFile(file)"
-                          class="w-4 h-4 rounded border-vscode-checkbox-border bg-vscode-checkbox-background">
-                        <span class="flex-1 text-vscode-foreground text-sm font-mono truncate">
+                          class="w-4 h-4 rounded">
+                        <span class="flex-1 text-sm font-mono truncate" style="color: #e5e5e5;">
                           {{ file.path }}
                         </span>
                         @if (file.testCount) {
-                          <span class="text-vscode-descriptionForeground text-xs bg-vscode-badge-background px-2 py-1 rounded">
+                          <span class="text-xs px-2 py-1 rounded" style="color: #FFD93D; background: #333; border: 1px solid #666;">
                             {{ file.testCount }} tests
                           </span>
                         }
@@ -336,69 +371,86 @@ export interface TestExecutionState {
         </div>
       }
 
-      <!-- Command Preview -->
-      <div class="mt-6 p-4 bg-vscode-textCodeBlock-background border border-vscode-panel-border rounded">
-        <div class="flex items-center justify-between mb-2">
-          <label class="text-vscode-descriptionForeground text-xs font-medium">
-            Command Preview:
-          </label>
+      <!-- Terminal Command Preview -->
+      <div class="mt-8 p-4 rounded" style="background: #0a0a0a; border: 1px solid #333;">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <span style="color: #A8A8FF;">></span>
+            <span class="text-xs font-medium" style="color: #4ECDC4;">Command preview:</span>
+          </div>
           @if (getEstimatedDuration()) {
-            <span class="text-vscode-descriptionForeground text-xs">
-              Est. {{ getEstimatedDuration() }}
+            <span class="text-xs" style="color: #666;">
+              <span style="color: #FFD93D;">est:</span> {{ getEstimatedDuration() }}
             </span>
           }
         </div>
-        <code class="text-vscode-textPreformat-foreground text-sm font-mono block break-all">
-          {{ getTestCommand() }}
+        <code class="text-sm font-mono block break-all pl-6" style="color: #e5e5e5;">
+          $ {{ getTestCommand() }}
         </code>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="mt-6 flex gap-3 justify-end">
+      <!-- Terminal Action Buttons -->
+      <div class="mt-8 flex gap-3 justify-end">
         <button 
           (click)="refreshProjects()"
-          class="px-4 py-2 text-sm bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
-          🔄 Refresh
+          class="px-4 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #4ECDC4; border-color: #666;">
+          <span class="flex items-center gap-2">
+            <span>🔄</span>
+            <span>REFRESH --projects</span>
+          </span>
         </button>
         <button 
           (click)="runTests()"
           [disabled]="!hasValidConfiguration() || testExecution().isRunning"
-          class="px-4 py-2 text-sm bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground disabled:opacity-50 disabled:cursor-not-allowed">
+          class="px-4 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          [ngStyle]="hasValidConfiguration() && !testExecution().isRunning ? 
+            {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
+            {'background': '#333', 'color': '#666', 'border-color': '#555'}">
           @if (testExecution().isRunning) {
-            🔄 Running Tests...
+            <span class="flex items-center gap-2">
+              <span class="animate-spin">⟳</span>
+              <span>RUNNING --tests</span>
+            </span>
           } @else {
-            ▶️ Run Tests
+            <span class="flex items-center gap-2">
+              <span>▶</span>
+              <span>RUN --tests</span>
+            </span>
           }
         </button>
         <button 
           (click)="applyConfiguration()"
           [disabled]="!hasValidConfiguration()"
-          class="px-4 py-2 text-sm bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground disabled:opacity-50 disabled:cursor-not-allowed">
-          Apply Configuration
+          class="px-4 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
+          <span class="flex items-center gap-2">
+            <span>✓</span>
+            <span>APPLY --config</span>
+          </span>
         </button>
       </div>
 
-      <!-- Test Execution Output -->
+      <!-- Terminal Test Execution Output -->
       @if (testExecution().isRunning || testExecution().hasResults) {
-        <div class="mt-6 border border-vscode-panel-border rounded-lg">
-          <!-- Output Header -->
-          <div class="flex items-center justify-between p-4 border-b border-vscode-panel-border bg-vscode-editor-background">
+        <div class="mt-8 rounded-lg" style="border: 1px solid #333;">
+          <!-- Terminal Output Header -->
+          <div class="flex items-center justify-between p-4 border-b" style="border-color: #333; background: #1a1a1a;">
             <div class="flex items-center gap-3">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-3">
                 @if (testExecution().isRunning) {
-                  <div class="w-3 h-3 bg-vscode-progressBar-background rounded-full animate-pulse"></div>
+                  <span class="animate-pulse" style="color: #FFD93D;">[▶]</span>
                 } @else if (testExecution().exitCode === 0) {
-                  <div class="w-3 h-3 bg-vscode-gitDecoration-addedResourceForeground rounded-full"></div>
+                  <span style="color: #6BCF7F;">[✓]</span>
                 } @else {
-                  <div class="w-3 h-3 bg-vscode-gitDecoration-deletedResourceForeground rounded-full"></div>
+                  <span style="color: #FF4B6D;">[✗]</span>
                 }
-                <h4 class="text-vscode-foreground font-medium">Test Execution</h4>
+                <span class="font-medium" style="color: #4ECDC4;">test_execution</span>
               </div>
               
-              <div class="text-vscode-descriptionForeground text-sm">
-                {{ getExecutionStatus() }}
+              <div class="text-sm" style="color: #666;">
+                <span style="color: #FFD93D;">status:</span> {{ getExecutionStatus() }}
                 @if (getTestDuration()) {
-                  • {{ getTestDuration() }}
+                  <span style="color: #666;"> | </span>
+                  <span style="color: #FFD93D;">time:</span> {{ getTestDuration() }}
                 }
               </div>
             </div>
@@ -407,57 +459,57 @@ export interface TestExecutionState {
               @if (testExecution().isRunning) {
                 <button
                   (click)="cancelTestRun()"
-                  class="px-3 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
-                  Cancel
+                  class="px-2 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #2a1a1a; color: #FF8C42; border-color: #FF8C42;">
+                  cancel
                 </button>
               } @else {
                 @if (testExecution().outputFile) {
                   <button
                     (click)="openOutputFile()"
-                    class="px-3 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground"
+                    class="px-2 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;"
                     title="Open output file in editor">
-                    📄 Open File
+                    📄 open
                   </button>
                   <button
                     (click)="deleteOutputFile()"
-                    class="px-3 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground"
+                    class="px-2 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #2a1a1a; color: #FF4B6D; border-color: #FF4B6D;"
                     title="Delete output file">
-                    🗑️ Delete
+                    🗑️ delete
                   </button>
                 }
                 <button
                   (click)="copyTestOutput()"
-                  class="px-3 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground"
+                  class="px-2 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #333; color: #A8A8FF; border-color: #666;"
                   title="Copy output to clipboard">
-                  📋 Copy
+                  📋 copy
                 </button>
                 <button
                   (click)="runTests()"
                   [disabled]="!hasValidConfiguration()"
-                  class="px-3 py-1 text-xs bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground disabled:opacity-50"
+                  class="px-2 py-1 text-xs font-mono rounded border hover:opacity-80 disabled:opacity-50 transition-opacity" style="background: #333; color: #6BCF7F; border-color: #666;"
                   title="Rerun tests">
-                  🔄 Rerun
+                  🔄 rerun
                 </button>
                 <button
                   (click)="clearTestOutput()"
-                  class="px-3 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground"
+                  class="px-2 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity" style="background: #333; color: #FF8C42; border-color: #666;"
                   title="Clear output">
-                  ✖️ Clear
+                  ✖ clear
                 </button>
               }
             </div>
           </div>
           
-          <!-- Output Content -->
+          <!-- Terminal Output Content -->
           <div class="relative">
-            <div class="max-h-96 overflow-y-auto p-4 bg-vscode-textCodeBlock-background">
-              <pre class="text-vscode-textPreformat-foreground text-sm font-mono whitespace-pre-wrap break-words">{{ testExecution().output }}</pre>
+            <div class="max-h-96 overflow-y-auto p-4" style="background: #0a0a0a;">
+              <pre class="text-sm font-mono whitespace-pre-wrap break-words" style="color: #e5e5e5;">{{ testExecution().output }}</pre>
             </div>
             
             @if (testExecution().isRunning) {
               <div class="absolute bottom-2 right-2">
-                <div class="bg-vscode-editor-background border border-vscode-panel-border rounded px-2 py-1 text-xs text-vscode-descriptionForeground">
-                  Running...
+                <div class="rounded px-2 py-1 text-xs" style="background: #1a1a1a; border: 1px solid #333; color: #FFD93D;">
+                  <span class="animate-pulse">[▶]</span> Running...
                 </div>
               </div>
             }
@@ -470,6 +522,7 @@ export interface TestExecutionState {
 })
 export class TestSelectorComponent implements OnInit {
   @Output() configurationChanged = new EventEmitter<TestConfiguration>();
+  @Output() navigationRequested = new EventEmitter<void>();
 
   testMode = signal<'project' | 'affected'>('affected');
   projects = signal<NXProject[]>([]);
@@ -483,6 +536,7 @@ export class TestSelectorComponent implements OnInit {
   // Loading states
   isLoadingProjects = signal<boolean>(false);
   isLoadingAffected = signal<boolean>(false);
+  projectLoadingStatus = signal<{ status: string; message: string }>({ status: '', message: '' });
 
   // Test execution state
   testExecution = signal<TestExecutionState>({
@@ -555,7 +609,7 @@ export class TestSelectorComponent implements OnInit {
 
   // Reset method for when file selection changes
   resetConfiguration() {
-    this.testMode.set('affected'); // Default to affected
+    // Clear previous selections first
     this.selectedProject = '';
     this.selectedProjects.set([]);
     this.projectTestFiles.set([]);
@@ -565,6 +619,16 @@ export class TestSelectorComponent implements OnInit {
     
     // Clear test output when resetting configuration
     this.clearTestOutput();
+    
+    // Force select affected mode - this will handle mode setting and emit configuration
+    // Set it directly first to ensure immediate UI update
+    this.testMode.set('affected');
+    
+    // Log for debugging
+    console.log('Test selector reset: Setting mode to affected. Current mode:', this.testMode());
+    
+    // Then call selectTestMode to handle the rest of the logic
+    this.selectTestMode('affected');
     
     // Reload data
     this.loadProjects();
@@ -580,6 +644,9 @@ export class TestSelectorComponent implements OnInit {
       switch (message.command) {
         case 'nxProjects':
           this.handleNXProjectsResponse(message.data);
+          break;
+        case 'nxProjectsStatus':
+          this.handleNXProjectsStatus(message.data);
           break;
         case 'affectedProjects':
           this.handleAffectedProjectsResponse(message.data);
@@ -756,6 +823,7 @@ export class TestSelectorComponent implements OnInit {
 
   applyConfiguration() {
     this.emitConfiguration();
+    this.navigationRequested.emit();
   }
 
   // Test execution methods
@@ -976,6 +1044,23 @@ export class TestSelectorComponent implements OnInit {
   private handleNXProjectsResponse(projects: NXProject[]) {
     this.projects.set(projects);
     this.isLoadingProjects.set(false);
+  }
+
+  private handleNXProjectsStatus(data: { status: string; message: string }) {
+    this.projectLoadingStatus.set(data);
+    
+    // Update loading state based on status
+    switch (data.status) {
+      case 'initializing':
+      case 'loading':
+        this.isLoadingProjects.set(true);
+        break;
+      case 'cached':
+      case 'complete':
+      case 'error':
+        this.isLoadingProjects.set(false);
+        break;
+    }
   }
 
   private handleAffectedProjectsResponse(data: { projects: string[]; baseBranch: string }) {

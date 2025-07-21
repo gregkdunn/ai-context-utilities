@@ -1,6 +1,6 @@
 // Core workflow types
 export interface WorkflowState {
-  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error';
+  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error' | 'generating-context' | 'saving-context';
   progress?: number;
   message?: string;
 }
@@ -77,10 +77,11 @@ export interface NXProject {
 
 // AI Analysis types
 export interface DebugContext {
-  gitDiff: string;
-  testResults: TestResult[];
-  projectInfo: ProjectInfo;
+  gitDiff?: string;
+  testResults?: TestResult[];
+  projectInfo?: ProjectInfo;
   errorDetails?: ErrorDetails[];
+  consolidatedContext?: string;
 }
 
 export interface TestAnalysis {

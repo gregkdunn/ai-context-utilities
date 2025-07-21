@@ -32,147 +32,161 @@ export interface FileSelection {
   imports: [CommonModule, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="bg-vscode-editor-background p-4 rounded-lg border border-vscode-panel-border">
-      <div class="flex items-center justify-between mb-6">
-        <h3 class="text-vscode-foreground text-lg font-semibold">File Selection</h3>
-        <div class="text-vscode-descriptionForeground text-sm">
-          {{ getSelectionSummary() }}
+    <div class="bg-gray-900 rounded-lg border border-gray-700 font-mono text-sm h-full p-3" style="background: #1a1a1a; border-color: #333;">
+      <!-- Terminal Header -->
+      <div class="border-b pb-6 mb-8" style="border-color: #333;">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="font-bold" style="color: #A8A8FF;">$</span>
+          <span class="font-bold" style="color: #4ECDC4;">file-selector</span>
+          <span style="color: #FFD93D;">--mode</span>
+          <span style="color: #6BCF7F;">{{ currentMode() }}</span>
+        </div>
+        <div style="color: #666;" class="text-xs">
+          📁 File Selection | {{ getSelectionSummary() }}
         </div>
       </div>
 
-      <!-- Mode Selection -->
-      <div class="mb-6">
-        <label class="text-vscode-foreground text-sm font-medium mb-3 block">
-          Select Changes From:
-        </label>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <!-- Terminal Mode Selection -->
+      <div class="mb-8">
+        <div class="mb-4 flex items-center gap-3">
+          <span style="color: #A8A8FF;">></span>
+          <span style="color: #4ECDC4;">🔍 Select changes from source</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pl-6">
           @for (mode of selectionModes; track mode.type) {
-            <button 
+            <a 
               (click)="selectMode(mode.type)"
-              [class]="getModeButtonClass(mode.type)"
-              class="px-4 py-3 rounded text-sm font-medium transition-colors">
+              class="px-4 py-3 border-gray-100 font-mono font-bold border-2 hover:opacity-90 transition-opacity"
+              [ngStyle]="currentMode() === mode.type ? 
+                {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
+                {'background': '#333', 'color': '#e5e5e5', 'border-color': '#666'}">
               <div class="flex items-center gap-2">
                 <span>{{ mode.icon }}</span>
                 <span>{{ mode.label }}</span>
               </div>
-              <div class="text-xs opacity-75 mt-1">{{ mode.description }}</div>
-            </button>
+              <div class="text-xs mt-1" style="color: #666;">{{ mode.description }}</div>
+          </a>
           }
         </div>
       </div>
 
       <!-- Uncommitted Changes View -->
       @if (currentMode() === 'uncommitted') {
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h4 class="text-vscode-foreground font-medium">Uncommitted Changes</h4>
+        <div class="space-y-6 mb-8">
+          <div class="mb-4 flex items-center gap-3">
+            <span style="color: #A8A8FF;">></span>
+            <span style="color: #4ECDC4;">📝 Uncommitted changes detected</span>
             <button 
               (click)="toggleSelectAll()"
-              class="text-vscode-button-background hover:text-vscode-button-hoverBackground text-sm">
-              {{ areAllSelected() ? 'Unselect All' : 'Select All' }}
+              class="ml-auto px-3 py-1 rounded text-xs font-mono hover:opacity-80"
+              style="background: #333; color: #FFD93D; border: 1px solid #666;">
+              {{ areAllSelected() ? '✗ Unselect All' : '✓ Select All' }}
             </button>
           </div>
           
-          @if (isLoadingData()) {
-            <div class="text-vscode-descriptionForeground text-center py-8">
-              <div class="text-2xl mb-2 animate-spin">⏳</div>
-              <p>Loading uncommitted changes...</p>
-            </div>
-          } @else if (uncommittedFiles().length === 0) {
-            <div class="text-vscode-descriptionForeground text-center py-8">
-              <div class="text-4xl mb-2">📝</div>
-              <p>No uncommitted changes found</p>
-              <p class="text-xs">Make some changes to see them here</p>
-            </div>
-          } @else {
-            <div class="space-y-2 max-h-64 overflow-y-auto border border-vscode-panel-border rounded p-2">
-              @for (file of uncommittedFiles(); track file.path) {
-                <div class="flex items-center gap-3 p-2 rounded hover:bg-vscode-list-hoverBackground">
-                  <input 
-                    type="checkbox" 
-                    [checked]="file.selected"
-                    (change)="toggleFileSelection(file)"
-                    class="w-4 h-4 rounded border-vscode-checkbox-border bg-vscode-checkbox-background">
-                  <span class="flex-1 text-vscode-foreground text-sm font-mono truncate">
-                    {{ file.path }}
-                  </span>
-                  <span [class]="getStatusBadgeClass(file.status)" class="px-2 py-1 text-xs rounded font-medium">
-                    {{ file.status.toUpperCase() }}
-                  </span>
-                </div>
-              }
-            </div>
-          }
+          <div class="pl-6">
+            @if (isLoadingData()) {
+              <div class="text-center py-8">
+                <div class="text-2xl mb-2 animate-spin" style="color: #FFD93D;">⟳</div>
+                <p style="color: #4ECDC4;">Loading uncommitted changes...</p>
+              </div>
+            } @else if (uncommittedFiles().length === 0) {
+              <div class="text-center py-8">
+                <div class="text-4xl mb-2">📝</div>
+                <p style="color: #e5e5e5;">No uncommitted changes found</p>
+                <p class="text-xs" style="color: #666;">Make some changes to see them here</p>
+              </div>
+            } @else {
+              <div class="space-y-3 max-h-64 overflow-y-auto rounded p-4" style="border: 1px solid #4a4a4a; background: #1f1f1f;">
+                @for (file of uncommittedFiles(); track file.path) {
+                  <div class="flex items-center gap-3 p-2 rounded hover:opacity-80 py-1">
+                    <input 
+                      type="checkbox" 
+                      [checked]="file.selected"
+                      (change)="toggleFileSelection(file)"
+                      class="w-4 h-4 rounded">
+                    <span class="flex-1 text-sm font-mono truncate" style="color: #e5e5e5;">
+                      {{ file.path }}
+                    </span>
+                    <span class="px-2 py-1 text-xs rounded font-medium" [ngStyle]="getTerminalStatusBadgeStyle(file.status)">
+                      {{ getStatusIcon(file.status) }} {{ file.status.toUpperCase() }}
+                    </span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
         </div>
       }
 
       <!-- Commit Selection View -->
       @if (currentMode() === 'commit') {
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <h4 class="text-vscode-foreground font-medium">Select Commits</h4>
+        <div class="space-y-6 mb-8">
+          <div class="mb-4 flex items-center gap-3">
+            <span style="color: #A8A8FF;">></span>
+            <span style="color: #4ECDC4;">📚 Select commits from history</span>
             @if (selectedCommits().length > 0) {
               <button 
                 (click)="clearCommitSelection()"
-                class="text-vscode-button-background hover:text-vscode-button-hoverBackground text-sm">
-                Clear Selection ({{ selectedCommits().length }})
+                class="ml-auto px-3 py-1 rounded text-xs font-mono hover:opacity-80"
+                style="background: #333; color: #FF8C42; border: 1px solid #666;">
+                ✗ Clear ({{ selectedCommits().length }})
               </button>
             }
           </div>
           
-          <div class="bg-vscode-textBlockQuote-background border border-vscode-panel-border rounded p-3 text-xs">
-            <p class="text-vscode-textBlockQuote-foreground">
-              <span class="font-semibold">💡 Multi-commit selection:</span>
+          <div class="rounded p-4 text-xs pl-6" style="background: #2a2a1a; border: 1px solid #4a4a2a;">
+            <p style="color: #e5e5e5;">
+              <span class="font-semibold" style="color: #FFD93D;">💡 Multi-commit selection:</span>
               Click a commit to select all commits from that point to the latest.
               Click a selected commit to deselect it and all commits after it.
             </p>
           </div>
           
-          <div class="mb-3">
+          <div class="mb-4 pl-6">
             <input 
               type="text"
               [(ngModel)]="commitSearch"
               (input)="filterCommits()"
-              placeholder="Search commits by message or hash..."
-              class="w-full px-3 py-2 bg-vscode-input-background text-vscode-input-foreground border border-vscode-input-border rounded focus:border-vscode-inputOption-activeBorder">
+              placeholder="🔍 Search commits by message or hash..."
+              class="w-full px-3 py-2 rounded font-mono text-sm" style="background: #333; color: #e5e5e5; border: 1px solid #666;">
           </div>
           
           @if (isLoadingData()) {
-            <div class="text-vscode-descriptionForeground text-center py-8">
-              <div class="text-2xl mb-2 animate-spin">⏳</div>
-              <p>Loading commit history...</p>
+            <div class="text-center py-8 pl-6">
+              <div class="text-2xl mb-2 animate-spin" style="color: #FFD93D;">⟳</div>
+              <p style="color: #4ECDC4;">Loading commit history...</p>
             </div>
           } @else if (filteredCommits().length === 0) {
-            <div class="text-vscode-descriptionForeground text-center py-8">
+            <div class="text-center py-8 pl-6">
               <div class="text-4xl mb-2">🔍</div>
-              <p>No commits found</p>
+              <p style="color: #e5e5e5;">No commits found</p>
               @if (commitSearch) {
-                <p class="text-xs">Try a different search term</p>
+                <p class="text-xs" style="color: #666;">Try a different search term</p>
               }
             </div>
           } @else {
-            <div class="space-y-2 max-h-64 overflow-y-auto border border-vscode-panel-border rounded p-2">
+            <div class="space-y-3 max-h-64 overflow-y-auto rounded p-4 pl-6" style="border: 1px solid #4a4a4a; background: #1f1f1f;">
               @for (commit of filteredCommits(); track commit.hash) {
                 <div 
                   (click)="selectCommit(commit)"
-                  class="p-3 rounded hover:bg-vscode-list-hoverBackground cursor-pointer transition-colors border-l-4"
-                  [class.bg-vscode-list-activeSelectionBackground]="commit.selected"
-                  [class.border-l-vscode-button-background]="commit.selected"
-                  [class.border-l-transparent]="!commit.selected">
+                  class="p-3 rounded hover:opacity-80 cursor-pointer transition-opacity border-l-4"
+                  [ngStyle]="commit.selected ? {'background': '#2a2a1a', 'border-left-color': '#6BCF7F'} : {'background': '#1a1a1a', 'border-left-color': 'transparent'}"
+                  style="border: 1px solid #333;">
                   <div class="flex items-start gap-3">
-                    <span class="text-vscode-descriptionForeground text-xs font-mono mt-1">
+                    <span class="text-xs font-mono mt-1" style="color: #666;">
                       {{ commit.hash.substring(0, 7) }}
                     </span>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2">
                         @if (commit.selected) {
-                          <span class="text-vscode-button-background text-sm">✓</span>
+                          <span class="text-sm" style="color: #6BCF7F;">✓</span>
                         }
-                        <div class="text-vscode-foreground text-sm font-medium truncate">
+                        <div class="text-sm font-medium truncate" style="color: #e5e5e5;">
                           {{ commit.message }}
                         </div>
                       </div>
-                      <div class="text-vscode-descriptionForeground text-xs mt-1 flex items-center gap-4">
+                      <div class="text-xs mt-1 flex items-center gap-4" style="color: #666;">
                         <span>{{ commit.author }}</span>
                         <span>{{ formatDate(commit.date) }}</span>
                         @if (commit.files.length > 0) {
@@ -190,17 +204,20 @@ export interface FileSelection {
 
       <!-- Branch Diff View -->
       @if (currentMode() === 'branch-diff') {
-        <div class="space-y-3">
-          <h4 class="text-vscode-foreground font-medium">Branch to Main Diff</h4>
+        <div class="space-y-6 mb-8">
+          <div class="mb-4 flex items-center gap-3">
+            <span style="color: #A8A8FF;">></span>
+            <span style="color: #4ECDC4;">🌿 Branch to main comparison</span>
+          </div>
           
-          <div class="bg-vscode-textBlockQuote-background border border-vscode-panel-border rounded p-4">
-            <div class="flex items-center gap-2 mb-3">
+          <div class="rounded p-4 pl-6" style="background: #1f2a1f; border: 1px solid #4a6a4a;">
+            <div class="flex items-center gap-3 mb-4">
               <span class="text-2xl">🌿</span>
               <div>
-                <p class="text-vscode-textBlockQuote-foreground text-sm font-medium">
+                <p class="text-sm font-medium" style="color: #6BCF7F;">
                   Comparing current branch to main
                 </p>
-                <p class="text-vscode-descriptionForeground text-xs">
+                <p class="text-xs" style="color: #666;">
                   All changes from your branch will be included
                 </p>
               </div>
@@ -208,105 +225,125 @@ export interface FileSelection {
             
             @if (isLoadingData()) {
               <div class="text-center py-4">
-                <div class="text-xl mb-2 animate-spin">⏳</div>
-                <p class="text-xs">Loading branch diff...</p>
+                <div class="text-xl mb-2 animate-spin" style="color: #FFD93D;">⟳</div>
+                <p class="text-xs" style="color: #4ECDC4;">Loading branch diff...</p>
               </div>
             } @else if (branchDiffStats()) {
               <div class="flex flex-wrap gap-4 text-xs">
-                <span class="text-vscode-foreground">
+                <span style="color: #e5e5e5;">
                   <span class="font-semibold">{{ branchDiffStats()!.filesChanged }}</span> files changed
                 </span>
-                <span class="text-vscode-gitDecoration-addedResourceForeground">
+                <span style="color: #6BCF7F;">
                   +{{ branchDiffStats()!.additions }} additions
                 </span>
-                <span class="text-vscode-gitDecoration-deletedResourceForeground">
+                <span style="color: #FF4B6D;">
                   -{{ branchDiffStats()!.deletions }} deletions
                 </span>
               </div>
             } @else {
               <div class="text-center py-4">
-                <p class="text-xs text-vscode-descriptionForeground">No diff available</p>
+                <p class="text-xs" style="color: #666;">No diff available</p>
               </div>
             }
           </div>
         </div>
       }
 
-      <!-- Action Buttons -->
-      <div class="mt-6 flex gap-3 justify-end">
+      <!-- Terminal Action Buttons -->
+      <div class="mt-8 flex gap-3 justify-end">
         <button 
           (click)="refreshData()"
           [disabled]="isLoadingData()"
-          class="px-4 py-2 text-sm bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground disabled:opacity-50">
+          class="px-4 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          style="background: #333; color: #4ECDC4; border-color: #666;">
           @if (isLoadingData()) {
-            <span class="animate-spin">⏳</span> Loading
+            <span class="animate-spin">⟳</span>
+            <span class="ml-2">REFRESH --loading</span>
           } @else {
-            🔄 Refresh
+            <span class="flex items-center gap-2">
+              <span>🔄</span>
+              <span>REFRESH --data</span>
+            </span>
           }
         </button>
         <button 
           (click)="generateAndViewDiff()"
           [disabled]="!hasValidSelection() || isGeneratingDiff()"
-          class="px-4 py-2 text-sm bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground disabled:opacity-50 disabled:cursor-not-allowed">
+          class="px-4 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          style="background: #333; color: #FFD93D; border-color: #666;">
           @if (isGeneratingDiff()) {
-            <span class="animate-spin">⏳</span> Generating...
+            <span class="animate-spin">⟳</span>
+            <span class="ml-2">VIEW --generating</span>
           } @else {
-            📄 View Diff
+            <span class="flex items-center gap-2">
+              <span>📄</span>
+              <span>VIEW --diff</span>
+            </span>
           }
         </button>
         <button 
           (click)="applySelection()"
           [disabled]="!hasValidSelection()"
-          class="px-4 py-2 text-sm bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground disabled:opacity-50 disabled:cursor-not-allowed">
-          Apply Selection
+          class="px-6 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          [ngStyle]="hasValidSelection() ? 
+            {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
+            {'background': '#333', 'color': '#666', 'border-color': '#555'}">
+          <span class="flex items-center gap-2">
+            <span>✓</span>
+            <span>APPLY --selection</span>
+          </span>
         </button>
       </div>
 
-      <!-- Integrated Git Diff Display -->
+      <!-- Terminal Git Diff Display -->
       @if (showDiffDisplay()) {
-        <div class="mt-6 border-t border-vscode-panel-border pt-6">
-          <div class="flex items-center justify-between mb-4">
-            <h4 class="text-vscode-foreground font-semibold flex items-center gap-2">
-              <span>📄</span>
-              <span>Git Diff Output</span>
-            </h4>
+        <div class="mt-8 border-t pt-8" style="border-color: #333;">
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+              <span style="color: #A8A8FF;">></span>
+              <span style="color: #4ECDC4;">📄 Git diff output</span>
+            </div>
             
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-3">
               @if (isGeneratingDiff()) {
-                <div class="flex items-center gap-2 text-vscode-progressBar-foreground">
-                  <div class="spinner"></div>
-                  <span class="text-sm">Generating diff...</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm animate-spin" style="color: #FFD93D;">⟳</span>
+                  <span class="text-sm" style="color: #FFD93D;">Generating diff...</span>
                 </div>
               } @else if (diffDisplayData()?.status === 'complete') {
-                <span class="text-sm text-vscode-testing-iconPassed">
-                  ✅ Diff completed at {{ diffDisplayData()?.timestamp | date:'short' }}
+                <span class="text-sm flex items-center gap-1" style="color: #6BCF7F;">
+                  <span>[✓]</span>
+                  <span>Diff completed at {{ diffDisplayData()?.timestamp | date:'short' }}</span>
                 </span>
               } @else if (diffDisplayData()?.status === 'error') {
-                <span class="text-sm text-vscode-testing-iconFailed">
-                  ❌ Error generating diff
+                <span class="text-sm flex items-center gap-1" style="color: #FF4B6D;">
+                  <span>[✗]</span>
+                  <span>Error generating diff</span>
                 </span>
               }
               
               <button
                 (click)="closeDiffDisplay()"
-                class="px-2 py-1 text-xs bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
-                × Close
+                class="px-2 py-1 text-xs rounded font-mono hover:opacity-80 transition-opacity"
+                style="background: #333; color: #FF8C42; border: 1px solid #666;">
+                × close
               </button>
             </div>
           </div>
 
-          <!-- Diff Action Buttons -->
-          <div class="flex items-center gap-2 mb-4">
+          <!-- Terminal Diff Action Buttons -->
+          <div class="flex items-center gap-3 mb-6 pl-6">
             <button
               (click)="rerunDiff()"
               [disabled]="isGeneratingDiff()"
-              class="px-3 py-1 text-sm bg-vscode-button-background text-vscode-button-foreground rounded hover:bg-vscode-button-hoverBackground disabled:opacity-50">
-              <span class="flex items-center gap-1">
+              class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              style="background: #333; color: #4ECDC4; border-color: #666;">
+              <span class="flex items-center gap-2">
                 <span>🔄</span>
                 @if (isGeneratingDiff()) {
-                  <span>Running...</span>
+                  <span>rerun --running</span>
                 } @else {
-                  <span>Rerun</span>
+                  <span>rerun --diff</span>
                 }
               </span>
             </button>
@@ -314,10 +351,11 @@ export interface FileSelection {
             @if (diffDisplayData()?.filePath) {
               <button
                 (click)="openDiffFile()"
-                class="px-3 py-1 text-sm bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
-                <span class="flex items-center gap-1">
+                class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity"
+                style="background: #333; color: #FFD93D; border-color: #666;">
+                <span class="flex items-center gap-2">
                   <span>📁</span>
-                  <span>Open File</span>
+                  <span>open --file</span>
                 </span>
               </button>
             }
@@ -325,10 +363,11 @@ export interface FileSelection {
             <button
               (click)="copyDiffToClipboard()"
               [disabled]="!diffDisplayData()?.content || diffDisplayData()?.status !== 'complete'"
-              class="px-3 py-1 text-sm bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground disabled:opacity-50">
-              <span class="flex items-center gap-1">
+              class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              style="background: #333; color: #A8A8FF; border-color: #666;">
+              <span class="flex items-center gap-2">
                 <span>📋</span>
-                <span>Copy</span>
+                <span>copy --clipboard</span>
               </span>
             </button>
 
@@ -336,10 +375,11 @@ export interface FileSelection {
               <button
                 (click)="deleteDiffFile()"
                 [disabled]="isGeneratingDiff()"
-                class="px-3 py-1 text-sm bg-vscode-testing-iconErrored text-white rounded hover:bg-red-600 disabled:opacity-50">
-                <span class="flex items-center gap-1">
+                class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                style="background: #2a1a1a; color: #FF4B6D; border-color: #FF4B6D;">
+                <span class="flex items-center gap-2">
                   <span>🗑️</span>
-                  <span>Delete</span>
+                  <span>delete --file</span>
                 </span>
               </button>
             }
@@ -347,83 +387,90 @@ export interface FileSelection {
             <button
               (click)="cleanupAllDiffFiles()"
               [disabled]="isGeneratingDiff()"
-              class="px-3 py-1 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50">
-              <span class="flex items-center gap-1">
+              class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              style="background: #2a2a1a; color: #FF8C42; border-color: #FF8C42;">
+              <span class="flex items-center gap-2">
                 <span>🧹</span>
-                <span>Clean All</span>
+                <span>cleanup --all</span>
               </span>
             </button>
           </div>
 
-          <!-- Error Display -->
+          <!-- Terminal Error Display -->
           @if (diffDisplayData()?.status === 'error' && diffDisplayData()?.error) {
-            <div class="mb-4 p-3 bg-vscode-inputValidation-errorBackground border border-vscode-inputValidation-errorBorder rounded">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-vscode-inputValidation-errorForeground">❌</span>
-                <h5 class="font-medium text-vscode-inputValidation-errorForeground">Error</h5>
+            <div class="mb-6 p-4 rounded font-mono" style="background: #2a1a1a; border: 1px solid #FF4B6D;">
+              <div class="flex items-center gap-3 mb-3">
+                <span style="color: #FF4B6D;">[✗]</span>
+                <span class="font-bold" style="color: #FF4B6D;">ERROR</span>
+                <span style="color: #666;">|</span>
+                <span style="color: #FFD93D;">exit_code=1</span>
               </div>
-              <p class="text-vscode-inputValidation-errorForeground text-sm">{{ diffDisplayData()?.error }}</p>
+              <div class="pl-4 text-sm" style="color: #FF8C42;">
+                {{ diffDisplayData()?.error }}
+              </div>
             </div>
           }
 
-          <!-- Streaming Output Display -->
+          <!-- Terminal Streaming Output Display -->
           @if (streamingOutput() && isGeneratingDiff()) {
-            <div class="mb-4">
-              <h5 class="text-sm font-medium mb-2 flex items-center gap-2">
-                <span>📺</span>
-                <span>Live Output</span>
-              </h5>
-              <div class="bg-vscode-terminal-background border border-vscode-panel-border rounded p-3 h-48 overflow-y-auto font-mono text-sm text-vscode-terminal-foreground">
+            <div class="mb-6">
+              <div class="flex items-center gap-3 mb-3">
+                <span style="color: #A8A8FF;">></span>
+                <span style="color: #4ECDC4;">📺 Live terminal output</span>
+              </div>
+              <div class="rounded p-4 h-48 overflow-y-auto font-mono text-sm pl-6" style="background: #0a0a0a; border: 1px solid #333; color: #e5e5e5;">
                 <pre>{{ streamingOutput() }}</pre>
               </div>
             </div>
           }
 
-          <!-- Diff Content Display -->
+          <!-- Terminal Diff Content Display -->
           @if (diffDisplayData()?.content && diffDisplayData()?.status === 'complete') {
             <div>
-              <div class="flex items-center justify-between mb-3">
-                <h5 class="text-sm font-medium flex items-center gap-2">
-                  <span>📄</span>
-                  <span>Diff Content ({{ getDiffModeLabel() }})</span>
-                </h5>
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                  <span style="color: #A8A8FF;">></span>
+                  <span style="color: #4ECDC4;">📄 {{ getDiffModeLabel() }} content</span>
+                </div>
                 
-                <div class="flex items-center gap-2 text-xs">
-                  <label class="text-vscode-descriptionForeground">
+                <div class="flex items-center gap-4 text-xs">
+                  <label class="flex items-center gap-2" style="color: #666;">
                     <input 
                       type="checkbox" 
                       [checked]="wrapLines()"
                       (change)="wrapLines.set(!wrapLines())"
-                      class="mr-1">
-                    Wrap lines
+                      class="w-3 h-3">
+                    <span>wrap --lines</span>
                   </label>
                   
                   @if (diffDisplayData()?.filePath) {
-                    <span class="text-vscode-descriptionForeground">
-                      Size: {{ getContentSize() }}
+                    <span style="color: #666;">
+                      <span style="color: #FFD93D;">size:</span> {{ getContentSize() }}
                     </span>
                   }
                 </div>
               </div>
               
               <div 
-                class="bg-vscode-editor-background border border-vscode-panel-border rounded overflow-auto"
-                [style.max-height.px]="maxDiffHeight()">
+                class="rounded overflow-auto font-mono text-sm" 
+                [style.max-height.px]="maxDiffHeight()"
+                style="background: #0a0a0a; border: 1px solid #333;">
                 <pre 
                   [class.whitespace-pre-wrap]="wrapLines()"
                   [class.whitespace-pre]="!wrapLines()"
-                  class="p-3 text-sm font-mono text-vscode-editor-foreground">{{ diffDisplayData()?.content }}</pre>
+                  class="p-4" style="color: #e5e5e5;">{{ diffDisplayData()?.content }}</pre>
               </div>
               
               @if (isDiffTruncated()) {
-                <div class="mt-2 text-center">
+                <div class="mt-3 text-center">
                   <button
                     (click)="toggleDiffExpanded()"
-                    class="px-3 py-1 text-sm bg-vscode-button-secondaryBackground text-vscode-button-secondaryForeground rounded hover:bg-vscode-button-secondaryHoverBackground">
+                    class="px-3 py-1 text-xs font-mono rounded border hover:opacity-80 transition-opacity"
+                    style="background: #333; color: #4ECDC4; border-color: #666;">
                     @if (isDiffExpanded()) {
-                      <span>Show Less</span>
+                      <span>show --less</span>
                     } @else {
-                      <span>Show More</span>
+                      <span>show --more</span>
                     }
                   </button>
                 </div>
@@ -452,6 +499,7 @@ export interface FileSelection {
 })
 export class FileSelectorComponent implements OnInit, OnDestroy {
   @Output() selectionChanged = new EventEmitter<FileSelection>();
+  @Output() navigationRequested = new EventEmitter<void>();
   
   private subscriptions = new Subscription();
   isLoadingData = signal<boolean>(false);
@@ -527,6 +575,32 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
         return 'bg-red-100 text-red-800 border border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border border-gray-200';
+    }
+  }
+
+  getTerminalStatusBadgeStyle(status: string): any {
+    switch (status) {
+      case 'added':
+        return { 'background': '#1a2a1a', 'color': '#6BCF7F', 'border': '1px solid #6BCF7F' };
+      case 'modified':
+        return { 'background': '#1a2a2a', 'color': '#4ECDC4', 'border': '1px solid #4ECDC4' };
+      case 'deleted':
+        return { 'background': '#2a1a1a', 'color': '#FF4B6D', 'border': '1px solid #FF4B6D' };
+      default:
+        return { 'background': '#2a2a2a', 'color': '#e5e5e5', 'border': '1px solid #666' };
+    }
+  }
+
+  getStatusIcon(status: string): string {
+    switch (status) {
+      case 'added':
+        return '✚';
+      case 'modified':
+        return '⚡';
+      case 'deleted':
+        return '✗';
+      default:
+        return '?';
     }
   }
 
@@ -715,6 +789,7 @@ export class FileSelectorComponent implements OnInit, OnDestroy {
 
   applySelection() {
     this.emitSelection();
+    this.navigationRequested.emit();
   }
 
   generateAndViewDiff() {
