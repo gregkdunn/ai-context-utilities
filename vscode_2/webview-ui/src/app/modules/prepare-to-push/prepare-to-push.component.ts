@@ -31,7 +31,7 @@ export interface PrepareToPushResult {
     <div class="bg-gray-900 rounded-lg border border-gray-700 font-mono text-sm h-full p-3" style="background: #1a1a1a; border-color: #333;">
       <!-- Terminal Header -->
       <div class="border-b pb-6 mb-8" style="border-color: #333;">
-        <div class="flex items-center gap-2 mb-2">
+        <div class="mb-2">
           <span class="font-bold" style="color: #A8A8FF;">$</span>
           <span class="font-bold" style="color: #4ECDC4;">prepare-to-push</span>
           <span style="color: #FFD93D;">--project</span>
@@ -44,14 +44,14 @@ export interface PrepareToPushResult {
 
       <!-- Terminal Project Configuration -->
       <div class="mb-8">
-        <div class="mb-4 flex items-center gap-3">
+        <div class="mb-4">
           <span style="color: #A8A8FF;">></span>
           <span style="color: #4ECDC4;">📋 Configuration from project selector</span>
         </div>
         
         @if (testConfiguration) {
           <div class="rounded p-4 pl-6" style="background: #1f2a1f; border: 1px solid #4a6a4a;">
-            <div class="flex items-center gap-3 mb-3">
+            <div class="mb-3">
               <span style="color: #6BCF7F;">[✓]</span>
               <span class="font-medium" style="color: #4ECDC4;">Ready to validate code quality</span>
             </div>
@@ -68,8 +68,8 @@ export interface PrepareToPushResult {
                 <span class="text-xs" style="color: #FFD93D;">Projects ({{ getProjectCount() }}):</span>
                 <div class="mt-2 space-y-1">
                   @for (project of getSelectedProjects(); track project) {
-                    <div class="flex items-center gap-2 text-sm">
-                      <span class="w-2 h-2 rounded-full" style="background: #4ECDC4;"></span>
+                    <div class="text-sm">
+                      <span class="w-2 h-2 rounded-full inline-block mr-2" style="background: #4ECDC4;"></span>
                       <span style="color: #e5e5e5;">{{ project }}</span>
                     </div>
                   }
@@ -92,7 +92,7 @@ export interface PrepareToPushResult {
           </div>
         } @else {
           <div class="rounded p-4 pl-6" style="background: #2a1a1a; border: 1px solid #FF4B6D;">
-            <div class="flex items-center gap-3 mb-3">
+            <div class="mb-3">
               <span style="color: #FF4B6D;">[✗]</span>
               <span class="font-medium" style="color: #FF8C42;">No test configuration available</span>
             </div>
@@ -105,14 +105,14 @@ export interface PrepareToPushResult {
 
       <!-- Terminal Execution Steps -->
       <div class="mb-8">
-        <div class="mb-4 flex items-center gap-3">
+        <div class="mb-4">
           <span style="color: #A8A8FF;">></span>
           <span style="color: #4ECDC4;">⚡ Execution pipeline</span>
         </div>
         <div class="space-y-3 pl-6">
           <!-- Step 1: Linting -->
-          <div class="flex items-center gap-4 p-3 rounded" style="border: 1px solid #333; background: #1a1a1a;">
-            <div class="flex items-center gap-2">
+          <div class="p-3 rounded" style="border: 1px solid #333; background: #1a1a1a;">
+            <div class="inline-block mr-2">
               @if (execution().lintStatus === 'pending') {
                 <span style="color: #666;">[○]</span>
               } @else if (execution().lintStatus === 'running') {
@@ -124,14 +124,14 @@ export interface PrepareToPushResult {
               }
               <span class="text-sm font-medium" style="color: #4ECDC4;">🔍 Linting</span>
             </div>
-            <div class="flex-1 text-xs" style="color: #666;">
+            <div class="text-xs ml-4" style="color: #666;">
               Check code quality and style issues
             </div>
           </div>
 
           <!-- Step 2: Formatting -->
-          <div class="flex items-center gap-4 p-3 rounded" style="border: 1px solid #333; background: #1a1a1a;">
-            <div class="flex items-center gap-2">
+          <div class="p-3 rounded" style="border: 1px solid #333; background: #1a1a1a;">
+            <div class="inline-block mr-2">
               @if (execution().formatStatus === 'pending') {
                 <span style="color: #666;">[○]</span>
               } @else if (execution().formatStatus === 'running') {
@@ -143,7 +143,7 @@ export interface PrepareToPushResult {
               }
               <span class="text-sm font-medium" style="color: #4ECDC4;">✨ Formatting</span>
             </div>
-            <div class="flex-1 text-xs" style="color: #666;">
+            <div class="text-xs ml-4" style="color: #666;">
               Apply consistent code formatting
             </div>
           </div>
@@ -151,7 +151,7 @@ export interface PrepareToPushResult {
       </div>
 
       <!-- Terminal Action Buttons -->
-      <div class="mb-8 flex gap-3 justify-center">
+      <div class="mb-8 text-center">
         <button 
           (click)="runPrepareToPush()"
           [disabled]="!canRun() || execution().isRunning"
@@ -160,12 +160,12 @@ export interface PrepareToPushResult {
             {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
             {'background': '#333', 'color': '#666', 'border-color': '#555'}">
           @if (execution().isRunning) {
-            <span class="flex items-center gap-3">
+            <span>
               <span class="animate-spin">⟳</span>
               <span>RUNNING --prepare</span>
             </span>
           } @else {
-            <span class="flex items-center gap-3">
+            <span>
               <span>🚀</span>
               <span>EXECUTE --prepare-to-push</span>
             </span>
@@ -176,12 +176,12 @@ export interface PrepareToPushResult {
       <!-- Terminal Execution Output -->
       @if (execution().output || execution().isRunning) {
         <div class="mb-8">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-3">
+          <div class="mb-4 clearfix">
+            <div class="float-left">
               <span style="color: #A8A8FF;">></span>
               <span class="text-sm font-medium" style="color: #4ECDC4;">Execution output:</span>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="float-right">
               @if (execution().currentStep !== 'idle') {
                 <span class="text-xs px-2 py-1 rounded" style="background: #333; color: #FFD93D; border: 1px solid #666;">
                   {{ getStepLabel() }}
@@ -210,11 +210,11 @@ export interface PrepareToPushResult {
           <h3 class="text-lg font-bold mb-4" style="color: #6BCF7F;">Ready to Push!</h3>
           
           <div class="grid grid-cols-2 gap-4 mb-6">
-            <div class="flex items-center justify-center gap-2">
+            <div class="text-center">
               <span style="color: #6BCF7F;">[✓]</span>
               <span class="text-sm">Linting: Passed</span>
             </div>
-            <div class="flex items-center justify-center gap-2">
+            <div class="text-center">
               <span style="color: #6BCF7F;">[✓]</span>
               <span class="text-sm">Formatting: Applied</span>
             </div>
@@ -223,7 +223,7 @@ export interface PrepareToPushResult {
           <div class="text-left">
             <div class="text-sm mb-3" style="color: #FFD93D;">📋 Suggested next steps:</div>
             @for (step of getNextSteps(); track step) {
-              <div class="text-xs mb-1 flex items-start gap-2">
+              <div class="text-xs mb-1">
                 <span style="color: #4ECDC4;">•</span>
                 <span style="color: #e5e5e5;">{{ step }}</span>
               </div>
@@ -235,13 +235,13 @@ export interface PrepareToPushResult {
       <!-- Terminal Error Summary -->
       @if (execution().currentStep === 'error') {
         <div class="rounded p-6" style="background: #2a1a1a; border: 1px solid #FF4B6D;">
-          <div class="flex items-center gap-3 mb-4">
+          <div class="mb-4">
             <span class="text-2xl">❌</span>
             <h3 class="text-lg font-bold" style="color: #FF4B6D;">Code Quality Check Failed</h3>
           </div>
           
           <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="flex items-center justify-center gap-2">
+            <div class="text-center">
               @if (execution().lintStatus === 'failed') {
                 <span style="color: #FF4B6D;">[✗]</span>
                 <span class="text-sm" style="color: #FF8C42;">Linting: Failed</span>
@@ -250,7 +250,7 @@ export interface PrepareToPushResult {
                 <span class="text-sm">Linting: Passed</span>
               }
             </div>
-            <div class="flex items-center justify-center gap-2">
+            <div class="text-center">
               @if (execution().formatStatus === 'failed') {
                 <span style="color: #FF4B6D;">[✗]</span>
                 <span class="text-sm" style="color: #FF8C42;">Formatting: Failed</span>
@@ -264,7 +264,7 @@ export interface PrepareToPushResult {
           <div class="text-left">
             <div class="text-sm mb-3" style="color: #FFD93D;">💡 Next steps:</div>
             @for (step of getErrorSteps(); track step) {
-              <div class="text-xs mb-1 flex items-start gap-2">
+              <div class="text-xs mb-1">
                 <span style="color: #FF8C42;">•</span>
                 <span style="color: #e5e5e5;">{{ step }}</span>
               </div>

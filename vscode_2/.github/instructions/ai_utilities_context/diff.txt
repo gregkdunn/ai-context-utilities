@@ -1,0 +1,144 @@
+=================================================================
+🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+=================================================================
+
+COMMAND: git diff 
+TIMESTAMP: Mon Jul 21 11:40:28 EDT 2025
+BRANCH: greg/label_char_validator
+
+==================================================================
+📊 CHANGE SUMMARY
+==================================================================
+Total files changed: 3
+
+📝 MODIFIED FILES (3):
+  • 
+  • 
+  • 
+
+==================================================================
+🏷️ FILE TYPE ANALYSIS
+==================================================================
+TypeScript files: 0
+Test files: 0
+Templates: 0
+Styles: 0
+Config/JSON: 0
+Other: 3
+
+==================================================================
+📋 DETAILED CHANGES
+==================================================================
+
+📁 FILE: 
+─────────────────────────────────────────
+diff --git a/.gitignore b/.gitignore
+index 4a1ba1e04a..05ea71639a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -63,3 +63,6 @@ migrations.json
+ .nx
+ 
+ **/.claude/settings.local.json
++
++.cursor/rules/nx-rules.mdc
++.github/instructions/nx.instructions.md
+📁 FILE: 
+─────────────────────────────────────────
+diff --git a/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.spec.ts b/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.spec.ts
+index 7001039a94..e69de29bb2 100644
+--- a/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.spec.ts
++++ b/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.spec.ts
+@@ -1,64 +0,0 @@
+-import { onlyCharsDigitsSpacesValidator } from './only-chars-digits-spaces.validator';
+-import { FormControl } from '@angular/forms';
+
+-describe('onlyCharsDigitsSpacesValidator', () => {
+-  const validator = onlyCharsDigitsSpacesValidator();
+
+-  it('should pass validation for empty string', () => {
+-    const control = new FormControl('');
+-    expect(validator(control)).toBeNull();
+-  });
+
+-  it('should pass validation for null value', () => {
+-    const control = new FormControl(null);
+-    expect(validator(control)).toBeNull();
+-  });
+
+-  it('should pass validation for only letters', () => {
+-    const control = new FormControl('abcXYZ');
+-    expect(validator(control)).toBeNull();
+-  });
+
+-  it('should pass validation for only digits', () => {
+-    const control = new FormControl('123456');
+-    expect(validator(control)).toBeNull();
+-  });
+
+-  it('should pass validation for letters, digits, and spaces', () => {
+-    const control = new FormControl('abc 123 XYZ');
+-    expect(validator(control)).toBeNull();
+-  });
+
+-  it('should fail validation for special characters', () => {
+-    const control = new FormControl('abc@123');
+-    expect(validator(control)).toEqual({
+-      onlyCharsDigitsSpaces: 'Use only letters, numbers, or spaces.',
+-    });
+-  });
+
+-  it('should fail validation for punctuation', () => {
+-    const control = new FormControl('hello, world!');
+-    expect(validator(control)).toEqual({
+-      onlyCharsDigitsSpaces: 'Use only letters, numbers, or spaces.',
+-    });
+-  });
+
+-  it('should fail validation for tabs and newlines', () => {
+-    const control = new FormControl('abc	123
+XYZ');
+-    expect(validator(control)).toEqual({
+-      onlyCharsDigitsSpaces: 'Use only letters, numbers, or spaces.',
+-    });
+-  });
+
+-  it('should fail validation for non-latin characters', () => {
+-    const control = new FormControl('abc123é');
+-    expect(validator(control)).toEqual({
+-      onlyCharsDigitsSpaces: 'Use only letters, numbers, or spaces.',
+-    });
+-  });
+
+-  it('should pass validation for string with multiple spaces', () => {
+-    const control = new FormControl('a   b   c');
+-    expect(validator(control)).toBeNull();
+-  });
+-});
+📁 FILE: 
+─────────────────────────────────────────
+diff --git a/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.ts b/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.ts
+index 4fce1971f7..dd80572f9f 100644
+--- a/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.ts
++++ b/libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.ts
+@@ -13,6 +13,6 @@ export function onlyCharsDigitsSpacesValidator(
+ 
+     // Check if the value contains only characters, digits, and spaces
+     const isValid = /^[a-zA-Z0-9 ]*$/.test(value);
+-    return isValid ? null : { onlyCharsDigitsSpaces: errorMessage };
++    return isValid ? { onlyCharsDigitsSpaces: errorMessage } : null;
+   };
+ }
+
+==================================================================
+🤖 AI ANALYSIS CONTEXT
+==================================================================
+Key areas for analysis:
+• Focus on test-related files (.spec.ts, .test.ts)
+• Look for type/interface changes that might break tests
+• Check for new functionality that needs test coverage
+• Identify breaking changes in method signatures
+• Review dependency changes and imports
+
+Change impact areas:
+• Modified files may have broken existing tests

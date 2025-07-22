@@ -53,7 +53,7 @@ export interface TestExecutionState {
     <div class="bg-gray-900 rounded-lg border border-gray-700 font-mono text-sm h-full p-3" style="background: #1a1a1a; border-color: #333;">
       <!-- Terminal Header -->
       <div class="border-b pb-6 mb-8" style="border-color: #333;">
-        <div class="flex items-center gap-2 mb-2">
+        <div class="mb-2">
           <span class="font-bold" style="color: #A8A8FF;">$</span>
           <span class="font-bold" style="color: #4ECDC4;">project-selector</span>
           <span style="color: #FFD93D;">--mode</span>
@@ -66,7 +66,7 @@ export interface TestExecutionState {
 
       <!-- Terminal Mode Selection -->
       <div class="mb-8">
-        <div class="mb-4 flex items-center gap-3">
+        <div class="mb-4">
           <span style="color: #A8A8FF;">></span>
           <span style="color: #4ECDC4;">🎯 Select test execution mode</span>
         </div>
@@ -77,15 +77,9 @@ export interface TestExecutionState {
             [ngStyle]="testMode() === 'affected' ? 
               {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
               {'background': '#333', 'color': '#e5e5e5', 'border-color': '#666'}">
-            <div class="flex items-center gap-3 mb-2">
+            <div class="mb-2">
               <span class="text-2xl">🎯</span>
               <span class="font-medium">AFFECTED --tests</span>
-            </div>
-            <p class="text-xs" [ngStyle]="testMode() === 'affected' ? {'color': '#000'} : {'color': '#666'}">
-              Run tests for projects affected by your changes
-            </p>
-            <div class="text-xs mt-2" [ngStyle]="testMode() === 'affected' ? {'color': '#000'} : {'color': '#A8A8FF'}">
-              recommended | faster execution
             </div>
           </button>
           
@@ -95,15 +89,9 @@ export interface TestExecutionState {
             [ngStyle]="testMode() === 'project' ? 
               {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
               {'background': '#333', 'color': '#e5e5e5', 'border-color': '#666'}">
-            <div class="flex items-center gap-3 mb-2">
+            <div class="mb-2">
               <span class="text-2xl">📁</span>
               <span class="font-medium">SPECIFIC --project</span>
-            </div>
-            <p class="text-xs" [ngStyle]="testMode() === 'project' ? {'color': '#000'} : {'color': '#666'}">
-              Run tests for a specific project
-            </p>
-            <div class="text-xs mt-2" [ngStyle]="testMode() === 'project' ? {'color': '#000'} : {'color': '#A8A8FF'}">
-              longer execution
             </div>
           </button>
         </div>
@@ -217,10 +205,10 @@ export interface TestExecutionState {
                 @for (group of projectGroups(); track group.title) {
                   <div class="space-y-4">
                     <!-- Terminal Group Header -->
-                    <div class="flex items-center gap-3">
+                    <div class="items-center gap-3">
                       <span style="color: #A8A8FF;">></span>
                       <span class="text-lg">{{ group.icon }}</span>
-                      <div class="flex-1">
+                      <div class="p-2">
                         <h4 class="font-medium text-sm" [ngStyle]="group.title === 'Updated Projects' ? {'color': '#6BCF7F'} : {'color': '#4ECDC4'}">
                           {{ group.title }}
                           @if (group.title === 'Updated Projects') {
@@ -265,19 +253,20 @@ export interface TestExecutionState {
                     @if (group.title === 'Updated Projects') {
                       <div class="grid grid-cols-1 gap-2 rounded p-3 max-h-48 overflow-y-auto" style="border: 2px solid #6BCF7F; background: #1a2a1a; box-shadow: 0 0 10px rgba(107, 207, 127, 0.2);">
                         @for (project of group.projects; track project.name) {
-                          <label class="flex items-center gap-3 p-2 rounded cursor-pointer hover:opacity-80 transition-opacity" style="background: #2a2a1a; border: 1px solid #333;">
+                          <div class="p-2">
+                          <label class="items-center gap-3 p-2 rounded cursor-pointer hover:opacity-80 transition-opacity" style="background: #2a2a1a; border: 1px solid #333;">
                             <input
                               type="checkbox"
                               [checked]="isProjectSelected(project.name)"
                               (change)="toggleProjectSelection(project.name)"
                               class="w-4 h-4 rounded">
-                            <div class="flex items-center gap-2">
+                            <span class="items-center gap-2">
                               <span class="w-2 h-2 rounded-full" style="background: #6BCF7F;"></span>
                               <span class="font-mono text-sm" style="color: #e5e5e5;">{{ project.name }}</span>
-                            </div>
-                            <div class="flex-1"></div>
-                            <span class="text-xs capitalize" style="color: #666;">{{ project.type }}</span>
+                              <span class="text-xs capitalize" style="color: #666;">{{ project.type }}</span>
+                            </span>
                           </label>
+                          </div>
                         }
                       </div>
                     }
@@ -390,11 +379,11 @@ export interface TestExecutionState {
       </div>
 
       <!-- Terminal Action Buttons -->
-      <div class="mt-8 flex gap-3 justify-end">
+      <div class="mt-8 text-right">
         <button 
           (click)="refreshProjects()"
           class="px-4 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #4ECDC4; border-color: #666;">
-          <span class="flex items-center gap-2">
+          <span>
             <span>🔄</span>
             <span>REFRESH --projects</span>
           </span>
@@ -407,12 +396,12 @@ export interface TestExecutionState {
             {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
             {'background': '#333', 'color': '#666', 'border-color': '#555'}">
           @if (testExecution().isRunning) {
-            <span class="flex items-center gap-2">
+            <span>
               <span class="animate-spin">⟳</span>
               <span>RUNNING --tests</span>
             </span>
           } @else {
-            <span class="flex items-center gap-2">
+            <span>
               <span>▶</span>
               <span>RUN --tests</span>
             </span>
@@ -422,7 +411,7 @@ export interface TestExecutionState {
           (click)="applyConfiguration()"
           [disabled]="!hasValidConfiguration()"
           class="px-4 py-2 text-sm font-mono font-bold rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
-          <span class="flex items-center gap-2">
+          <span>
             <span>✓</span>
             <span>APPLY --config</span>
           </span>

@@ -66,7 +66,7 @@ export interface CopilotAnalysisResult {
     <div class="bg-gray-900 rounded-lg border border-gray-700 font-mono text-sm h-full" style="background: #1a1a1a; border-color: #333; padding: 3px;">
       <!-- Terminal Header -->
       <div class="border-b border-gray-700 pb-6 mb-8">
-        <div class="flex items-center gap-2 mb-2">
+        <div class="mb-2">
           <span style="color: #A8A8FF;">$</span>
           <span style="color: #4ECDC4;" class="font-bold">ai-debug</span>
           <span style="color: #FFD93D;">--mode</span>

@@ -35,7 +35,7 @@ export interface FileSelection {
     <div class="bg-gray-900 rounded-lg border border-gray-700 font-mono text-sm h-full p-3" style="background: #1a1a1a; border-color: #333;">
       <!-- Terminal Header -->
       <div class="border-b pb-6 mb-8" style="border-color: #333;">
-        <div class="flex items-center gap-2 mb-2">
+        <div class="mb-2">
           <span class="font-bold" style="color: #A8A8FF;">$</span>
           <span class="font-bold" style="color: #4ECDC4;">file-selector</span>
           <span style="color: #FFD93D;">--mode</span>
@@ -48,7 +48,7 @@ export interface FileSelection {
 
       <!-- Terminal Mode Selection -->
       <div class="mb-8">
-        <div class="mb-4 flex items-center gap-3">
+        <div class="mb-4">
           <span style="color: #A8A8FF;">></span>
           <span style="color: #4ECDC4;">🔍 Select changes from source</span>
         </div>
@@ -60,7 +60,7 @@ export interface FileSelection {
               [ngStyle]="currentMode() === mode.type ? 
                 {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
                 {'background': '#333', 'color': '#e5e5e5', 'border-color': '#666'}">
-              <div class="flex items-center gap-2">
+              <div>
                 <span>{{ mode.icon }}</span>
                 <span>{{ mode.label }}</span>
               </div>
@@ -73,13 +73,13 @@ export interface FileSelection {
       <!-- Uncommitted Changes View -->
       @if (currentMode() === 'uncommitted') {
         <div class="space-y-6 mb-8">
-          <div class="mb-4 flex items-center gap-3">
+          <div class="mb-4">
             <span style="color: #A8A8FF;">></span>
             <span style="color: #4ECDC4;">📝 Uncommitted changes detected</span>
             <button 
               (click)="toggleSelectAll()"
-              class="ml-auto px-3 py-1 rounded text-xs font-mono hover:opacity-80"
-              style="background: #333; color: #FFD93D; border: 1px solid #666;">
+              class="px-3 py-1 rounded text-xs font-mono hover:opacity-80"
+              style="background: #333; color: #FFD93D; border: 1px solid #666; float: right;">
               {{ areAllSelected() ? '✗ Unselect All' : '✓ Select All' }}
             </button>
           </div>
@@ -99,13 +99,13 @@ export interface FileSelection {
             } @else {
               <div class="space-y-3 max-h-64 overflow-y-auto rounded p-4" style="border: 1px solid #4a4a4a; background: #1f1f1f;">
                 @for (file of uncommittedFiles(); track file.path) {
-                  <div class="flex items-center gap-3 p-2 rounded hover:opacity-80 py-1">
+                  <div class="p-2 rounded hover:opacity-80 py-1">
                     <input 
                       type="checkbox" 
                       [checked]="file.selected"
                       (change)="toggleFileSelection(file)"
                       class="w-4 h-4 rounded">
-                    <span class="flex-1 text-sm font-mono truncate" style="color: #e5e5e5;">
+                    <span class="text-sm font-mono truncate" style="color: #e5e5e5;">
                       {{ file.path }}
                     </span>
                     <span class="px-2 py-1 text-xs rounded font-medium" [ngStyle]="getTerminalStatusBadgeStyle(file.status)">
@@ -250,7 +250,7 @@ export interface FileSelection {
       }
 
       <!-- Terminal Action Buttons -->
-      <div class="mt-8 flex gap-3 justify-end">
+      <div class="mt-8 text-right">
         <button 
           (click)="refreshData()"
           [disabled]="isLoadingData()"
@@ -260,7 +260,7 @@ export interface FileSelection {
             <span class="animate-spin">⟳</span>
             <span class="ml-2">REFRESH --loading</span>
           } @else {
-            <span class="flex items-center gap-2">
+            <span>
               <span>🔄</span>
               <span>REFRESH --data</span>
             </span>
@@ -275,7 +275,7 @@ export interface FileSelection {
             <span class="animate-spin">⟳</span>
             <span class="ml-2">VIEW --generating</span>
           } @else {
-            <span class="flex items-center gap-2">
+            <span>
               <span>📄</span>
               <span>VIEW --diff</span>
             </span>
@@ -288,7 +288,7 @@ export interface FileSelection {
           [ngStyle]="hasValidSelection() ? 
             {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
             {'background': '#333', 'color': '#666', 'border-color': '#555'}">
-          <span class="flex items-center gap-2">
+          <span>
             <span>✓</span>
             <span>APPLY --selection</span>
           </span>

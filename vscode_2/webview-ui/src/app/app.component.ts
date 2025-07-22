@@ -23,7 +23,7 @@ export interface WorkflowState {
     <div class="min-h-screen font-mono text-sm p-3" style="background: #1a1a1a; color: #e5e5e5; padding: 16px;">
       <!-- Terminal Header -->
       <header class="items-center justify-between mb-8 pb-6 border-b" style="border-color: #333;padding: 3px;">
-        <div class="items-center gap-3">
+        <div>
           <span style="color: #A8A8FF;">$</span>
           <span class="font-bold" style="color: #4ECDC4;">ai-debug-context</span>
           <span style="color: #FFD93D;">--module</span>
@@ -33,7 +33,7 @@ export interface WorkflowState {
           <button
             (click)="showOverview()"
             class="px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
-            <span class="flex items-center gap-2">
+            <span>
               <span>←</span>
               <span>BACK --overview</span>
             </span>
@@ -46,7 +46,7 @@ export interface WorkflowState {
         <main class="max-w-5xl mx-auto">
           <!-- Terminal Config Section -->
           <div class="mb-12">
-            <div class="flex items-center gap-4 mb-6">
+            <div class="mb-6">
               <span style="color: #A8A8FF;">$</span>
               <span class="text-2xl">⚙️</span>
               <h2 class="text-xl font-bold" style="color: #4ECDC4;">config</h2>
@@ -56,7 +56,7 @@ export interface WorkflowState {
             <!-- Config Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="rounded-lg p-4" style="background: #1a1a1a; border: 1px solid #333;">
-                <div class="flex items-center gap-3 mb-3">
+                <div class="mb-3">
                   <span style="color: #A8A8FF;">></span>
                   <span class="text-lg">📁</span>
                   <h3 class="font-semibold" style="color: #4ECDC4;">file_selector</h3>
@@ -70,7 +70,7 @@ export interface WorkflowState {
               </div>
 
               <div class="rounded-lg p-4" style="background: #1a1a1a; border: 1px solid #333;">
-                <div class="flex items-center gap-3 mb-3">
+                <div class="mb-3">
                   <span style="color: #A8A8FF;">></span>
                   <span class="text-lg">📂</span>
                   <h3 class="font-semibold" style="color: #4ECDC4;">project_selector</h3>
@@ -87,7 +87,7 @@ export interface WorkflowState {
 
           <!-- Terminal Actions Section -->
           <div class="mb-12">
-            <div class="flex items-center gap-4 mb-6">
+            <div class="mb-6">
               <span style="color: #A8A8FF;">$</span>
               <span class="text-2xl">⚡</span>
               <h2 class="text-xl font-bold" style="color: #4ECDC4;">actions</h2>
@@ -96,7 +96,7 @@ export interface WorkflowState {
             
             <!-- AI Debug Action -->
             <div class="rounded-lg p-8 text-center mb-6" style="background: #1a1a1a; border: 1px solid #333;">
-              <div class="flex items-center justify-center gap-4 mb-6">
+              <div class="text-center mb-6">
                 <span style="color: #A8A8FF;">$</span>
                 <span class="text-4xl">🚀</span>
                 <h3 class="text-xl font-bold" style="color: #4ECDC4;">ai_debug_workflow</h3>
@@ -116,12 +116,12 @@ export interface WorkflowState {
                   {'background': '#6BCF7F', 'color': '#000', 'border-color': '#6BCF7F'} : 
                   {'background': '#333', 'color': '#666', 'border-color': '#555'}">
                 @if (!canRunAIDebug()) {
-                  <span class="flex items-center gap-3">
+                  <span>
                     <span>[✗]</span>
                     <span>CONFIG --missing-prerequisites</span>
                   </span>
                 } @else {
-                  <span class="flex items-center gap-3">
+                  <span>
                     <span>🤖</span>
                     <span>EXECUTE --ai-debug-workflow</span>
                   </span>
@@ -138,7 +138,7 @@ export interface WorkflowState {
             
             <!-- Prepare to Push Action -->
             <div class="rounded-lg p-6 text-center mb-6" style="background: #1a1a1a; border: 1px solid #333;">
-              <div class="flex items-center justify-center gap-4 mb-4">
+              <div class="text-center mb-4">
                 <span style="color: #A8A8FF;">$</span>
                 <span class="text-2xl">🚀</span>
                 <h3 class="text-lg font-bold" style="color: #4ECDC4;">prepare_to_push</h3>
@@ -158,12 +158,12 @@ export interface WorkflowState {
                   {'background': '#333', 'color': '#FFD93D', 'border-color': '#666'} : 
                   {'background': '#333', 'color': '#555', 'border-color': '#444'}">
                 @if (!testConfiguration()) {
-                  <span class="flex items-center gap-2">
+                  <span>
                     <span>[✗]</span>
                     <span>REQUIRES --project-selection</span>
                   </span>
                 } @else {
-                  <span class="flex items-center gap-2">
+                  <span>
                     <span>✨</span>
                     <span>VALIDATE --code-quality</span>
                   </span>
@@ -173,7 +173,7 @@ export interface WorkflowState {
             
             <!-- PR Generator Action -->
             <div class="rounded-lg p-6 text-center" style="background: #1a1a1a; border: 1px solid #333;">
-              <div class="flex items-center justify-center gap-4 mb-4">
+              <div class="text-center mb-4">
                 <span style="color: #A8A8FF;">$</span>
                 <span class="text-2xl">📋</span>
                 <h3 class="text-lg font-bold" style="color: #4ECDC4;">pr_generator</h3>
@@ -193,12 +193,12 @@ export interface WorkflowState {
                   {'background': '#333', 'color': '#FFD93D', 'border-color': '#666'} : 
                   {'background': '#333', 'color': '#555', 'border-color': '#444'}">
                 @if (!fileSelection()) {
-                  <span class="flex items-center gap-2">
+                  <span>
                     <span>[✗]</span>
                     <span>REQUIRES --file-selection</span>
                   </span>
                 } @else {
-                  <span class="flex items-center gap-2">
+                  <span>
                     <span>📝</span>
                     <span>GENERATE --pr-description</span>
                   </span>
