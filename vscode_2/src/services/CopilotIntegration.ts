@@ -13,6 +13,8 @@ export class CopilotIntegration {
   }
 
   private async initializeModels() {
+    console.log('CopilotIntegration.initializeModels() - Starting model initialization');
+    
     try {
       // Check if Language Model API is available
       if (typeof vscode.lm === 'undefined') {
@@ -21,24 +23,47 @@ export class CopilotIntegration {
         return;
       }
 
+      console.log('VSCode Language Model API is available');
+
       // Try different model selection strategies
       let models: any[] = [];
       
       // Strategy 1: Try to get all available models first
       try {
+        console.log('Strategy 1: Attempting to get all available models...');
         models = await vscode.lm.selectChatModels();
-        console.log(`Found ${models.length} total available models`);
+        console.log(`Strategy 1 Success: Found ${models.length} total available models`);
+        if (models.length > 0) {
+          models.forEach((model, index) => {
+            console.log(`Model ${index}: vendor=${model.vendor}, family=${model.family}, name=${model.name}`);
+          });
+        }
       } catch (error) {
-        console.warn('Failed to get all models:', error);
+        console.warn('Strategy 1 Failed - Could not get all models:', error);
+        
+        // Check for specific error types that might indicate permission issues
+        if (error instanceof Error) {
+          if (error.message.includes('consent') || error.message.includes('permission')) {
+            console.warn('Permission/consent issue detected - user may need to approve Copilot usage');
+          } else if (error.message.includes('not available') || error.message.includes('disabled')) {
+            console.warn('Copilot may be disabled or not available');
+          }
+        }
       }
       
       // Strategy 2: If no models found or we want Copilot specifically, try Copilot vendor
       if (models.length === 0) {
         try {
+          console.log('Strategy 2: Attempting to get Copilot vendor models...');
           models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-          console.log(`Found ${models.length} Copilot models`);
+          console.log(`Strategy 2 Success: Found ${models.length} Copilot models`);
+          if (models.length > 0) {
+            models.forEach((model, index) => {
+              console.log(`Copilot Model ${index}: vendor=${model.vendor}, family=${model.family}, name=${model.name}`);
+            });
+          }
         } catch (error) {
-          console.warn('Failed to get Copilot models:', error);
+          console.warn('Strategy 2 Failed - Could not get Copilot models:', error);
         }
       }
       
@@ -85,15 +110,38 @@ export class CopilotIntegration {
   }
 
   async isAvailable(): Promise<boolean> {
+    console.log('CopilotIntegration.isAvailable() - Starting check', {
+      isEnabled: this.isEnabled,
+      modelsLength: this.models.length
+    });
+    
     if (!this.isEnabled) {
+      console.log('CopilotIntegration.isAvailable() - Not enabled');
       return false;
     }
     
     if (this.models.length === 0) {
+      console.log('CopilotIntegration.isAvailable() - No models found, reinitializing...');
       await this.initializeModels();
+      console.log('CopilotIntegration.isAvailable() - After reinitialization, models length:', this.models.length);
     }
     
-    return this.models.length > 0;
+    const available = this.models.length > 0;
+    console.log('CopilotIntegration.isAvailable() - Final result:', available);
+    
+    return available;
+  }
+
+  /**
+   * Force refresh of Copilot models - useful for diagnostic refresh
+   */
+  async refresh(): Promise<boolean> {
+    console.log('CopilotIntegration.refresh() - Force refreshing Copilot models');
+    this.models = []; // Clear cached models
+    await this.initializeModels();
+    const available = this.models.length > 0;
+    console.log('CopilotIntegration.refresh() - Refresh completed, available:', available);
+    return available;
   }
 
   async getDiagnostics(): Promise<any> {

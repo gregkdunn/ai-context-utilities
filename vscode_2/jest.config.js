@@ -12,6 +12,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   moduleNameMapper: {
     '^vscode$': '<rootDir>/src/__tests__/__mocks__/vscode.ts',
+    '^../services/copilot-submission/(.*)$': '<rootDir>/src/__tests__/__mocks__/copilot-submission/$1.ts',
     '^../services/(.*)$': '<rootDir>/src/__tests__/__mocks__/$1.ts',
     '^../webview/(.*)$': '<rootDir>/src/__tests__/__mocks__/$1.ts'
   },

@@ -47,6 +47,15 @@ export function activate(context: vscode.ExtensionContext) {
         () => vscode.commands.executeCommand('ai-debug-context.mainView.focus'))
     );
 
+    context.subscriptions.push(
+      vscode.commands.registerCommand('ai-debug-context.openAnalysisDashboard', 
+        () => {
+          vscode.commands.executeCommand('ai-debug-context.mainView.focus');
+          // Send message to webview to show analysis dashboard
+          provider.sendMessage('showModule', { moduleType: 'analysis-dashboard' });
+        })
+    );
+
     console.log('AI Debug Context extension activated successfully');
   } catch (error) {
     console.error('Failed to activate AI Debug Context extension:', error);

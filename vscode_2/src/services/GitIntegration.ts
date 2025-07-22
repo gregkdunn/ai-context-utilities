@@ -143,7 +143,7 @@ export class GitIntegration {
         case 'uncommitted':
           outputCallback?.('Generating diff for uncommitted changes...\n');
           rawDiffContent = await this.getDiffForUncommittedChanges();
-          filename = 'git-diff.txt';
+          filename = 'diff.txt';
           commandUsed = 'git diff';
           break;
         case 'commit':
@@ -152,13 +152,13 @@ export class GitIntegration {
           }
           outputCallback?.(`Generating diff for commit ${commitHash}...\n`);
           rawDiffContent = await this.getDiffForCommit(commitHash);
-          filename = 'git-diff.txt';
+          filename = 'diff.txt';
           commandUsed = `git show ${commitHash}`;
           break;
         case 'branch-diff':
           outputCallback?.('Generating diff from current branch to main...\n');
           rawDiffContent = await this.getDiffFromMainBranch();
-          filename = 'git-diff.txt';
+          filename = 'diff.txt';
           const currentBranch = await this.getCurrentBranch();
           const baseBranch = vscode.workspace.getConfiguration('aiDebugContext').get<string>('nxBaseBranch') || 'main';
           commandUsed = `git diff ${baseBranch}...${currentBranch}`;
@@ -194,7 +194,7 @@ export class GitIntegration {
     keepLatest: number = 3
   ): Promise<void> {
     try {
-      const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+      const diffDir = path.join(this.workspaceRoot, '.github', 'instructions', 'ai_utilities_context');
       
       if (!fs.existsSync(diffDir)) {
         outputCallback?.('No diff directory found, nothing to clean up\n');
@@ -202,11 +202,11 @@ export class GitIntegration {
       }
 
       // With static filename, no cleanup needed - file will be overwritten
-      const staticFileName = 'git-diff.txt';
+      const staticFileName = 'diff.txt';
       const filePath = path.join(diffDir, staticFileName);
       
       if (fs.existsSync(filePath)) {
-        outputCallback?.('Found existing git-diff.txt file (will be overwritten)\n');
+        outputCallback?.('Found existing diff.txt file (will be overwritten)\n');
       } else {
         outputCallback?.('No existing diff file found\n');
       }
@@ -221,7 +221,7 @@ export class GitIntegration {
    * Save diff content to a file in the workspace
    */
   private async saveDiffToFile(content: string, filename: string): Promise<string> {
-    const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+    const diffDir = path.join(this.workspaceRoot, '.github', 'instructions', 'ai_utilities_context');
     
     // Ensure directory exists
     if (!fs.existsSync(diffDir)) {
@@ -263,14 +263,14 @@ export class GitIntegration {
    * Get all existing diff files
    */
   async getExistingDiffFiles(): Promise<string[]> {
-    const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+    const diffDir = path.join(this.workspaceRoot, '.github', 'instructions', 'ai_utilities_context');
     
     if (!fs.existsSync(diffDir)) {
       return [];
     }
 
     try {
-      const staticFileName = 'git-diff.txt';
+      const staticFileName = 'diff.txt';
       const filePath = path.join(diffDir, staticFileName);
       return fs.existsSync(filePath) ? [filePath] : [];
     } catch (error) {
@@ -283,7 +283,7 @@ export class GitIntegration {
    * Clean up all diff files (for manual cleanup)
    */
   async cleanupAllDiffFiles(): Promise<{ deleted: number; errors: string[] }> {
-    const diffDir = path.join(this.workspaceRoot, '.ai-debug-context', 'diffs');
+    const diffDir = path.join(this.workspaceRoot, '.github', 'instructions', 'ai_utilities_context');
     const result = { deleted: 0, errors: [] as string[] };
     
     if (!fs.existsSync(diffDir)) {
@@ -291,7 +291,7 @@ export class GitIntegration {
     }
 
     try {
-      const staticFileName = 'git-diff.txt';
+      const staticFileName = 'diff.txt';
       const filePath = path.join(diffDir, staticFileName);
       
       if (fs.existsSync(filePath)) {

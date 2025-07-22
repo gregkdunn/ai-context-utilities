@@ -184,11 +184,11 @@ export interface CopilotAnalysisResult {
             <span style="color: #666;">|</span>
             <span style="color: #FFD93D;">{{ workflowState().progress }}%</span>
             @if (workflowState().phase === 'complete') {
-              <span style="color: #6BCF7F;">DONE</span>
+              <span style="color: #6BCF7F;">✅ COMPLETE</span>
             } @else if (workflowState().phase === 'error') {
-              <span style="color: #FF4B6D;">ERROR</span>
+              <span style="color: #FF4B6D;">❌ ERROR</span>
             } @else {
-              <span style="color: #FF8C42;">RUNNING</span>
+              <span style="color: #FF8C42;" class="pulse-animation">⚡ RUNNING</span>
             }
           </div>
 
@@ -197,13 +197,18 @@ export interface CopilotAnalysisResult {
             <div class="flex items-center gap-2 mb-2">
               <span style="color: #666;">[</span>
               @for (i of getProgressBars().filled; track $index) {
-                <span style="color: #6BCF7F;">█</span>
+                <span style="color: #6BCF7F;" class="pulse-animation">█</span>
               }
               @for (i of getProgressBars().empty; track $index) {
                 <span style="color: #333;">█</span>
               }
               <span style="color: #666;">]</span>
-              <span style="color: #4ECDC4;" class="text-xs ml-2">{{ workflowState().message }}</span>
+              <span style="color: #4ECDC4;" class="text-xs ml-2">
+                <span class="typing-animation">{{ workflowState().message }}</span>
+                @if (workflowState().phase !== 'complete' && workflowState().phase !== 'error') {
+                  <span class="loading-dots">...</span>
+                }
+              </span>
             </div>
           </div>
 
@@ -211,10 +216,13 @@ export interface CopilotAnalysisResult {
           <div class="pl-6 space-y-5">
             @for (phase of workflowPhases; track phase.key) {
               <div class="flex items-center gap-3 py-1" [ngStyle]="getTerminalPhaseStyle(phase.key)">
-                <span>{{ getTerminalPhaseStatus(phase.key) }}</span>
+                <span [ngClass]="getPhaseAnimationClass(phase.key)">{{ getTerminalPhaseStatus(phase.key) }}</span>
                 <span>{{ phase.label }}_pipeline</span>
                 <span style="color: #666;">→</span>
                 <span>{{ getTerminalPhaseLabel(phase.key) }}</span>
+                @if (isPhaseActive(phase.key)) {
+                  <span class="spinner" style="color: #FFD93D; font-size: 12px;">⟳</span>
+                }
               </div>
             }
           </div>
@@ -579,7 +587,53 @@ export interface CopilotAnalysisResult {
       }
     </div>
   `,
-  styles: []
+  styles: [`
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    @keyframes typing {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+    
+    .pulse-animation {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .spinner {
+      animation: spin 2s linear infinite;
+      display: inline-block;
+    }
+    
+    .typing-animation {
+      animation: typing 2s ease-in-out infinite;
+    }
+    
+    .loading-dots {
+      animation: blink 1.4s infinite;
+      font-weight: bold;
+    }
+    
+    .phase-active {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .phase-completed {
+      transition: all 0.3s ease-in-out;
+    }
+  `]
 })
 export class AIDebugComponent implements OnInit {
   @Input() fileSelection: FileSelection | null = null;
@@ -870,6 +924,26 @@ export class AIDebugComponent implements OnInit {
       return 'ACTIVE';
     } else {
       return 'PENDING';
+    }
+  }
+
+  isPhaseActive(phaseKey: string): boolean {
+    const currentPhase = this.workflowState().phase;
+    return currentPhase === phaseKey;
+  }
+
+  getPhaseAnimationClass(phaseKey: string): string {
+    const currentPhase = this.workflowState().phase;
+    const phases = ['collecting-context', 'running-tests', 'analyzing-results', 'generating-report'];
+    const currentIndex = phases.indexOf(currentPhase);
+    const phaseIndex = phases.indexOf(phaseKey);
+
+    if (phaseIndex < currentIndex) {
+      return 'phase-completed';
+    } else if (phaseIndex === currentIndex) {
+      return 'phase-active';
+    } else {
+      return '';
     }
   }
 

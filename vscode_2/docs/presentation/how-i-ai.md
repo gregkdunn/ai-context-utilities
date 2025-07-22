@@ -144,9 +144,9 @@ hr {
 
 ## <span class="terminal-prompt">></span>  Greg Dunn
 
-**Staff Engineer** | **Swimming Enthusiast** | **AI Newbie**
+**Staff Engineer** | **Music Enthusiast** | **AI Newbie**
 
-![Vacation Greg](./vacation_greg.jpg)
+<img src="./vacation_greg.jpg" width="300px"  alt="Vacation Greg">
 
 
 
@@ -333,13 +333,23 @@ hr {
 
 ---
 
-## Demo - How you use aiDebug in 7 easy steps
+## Demo 
+
+*How you use aiDebug in 7 easy steps*
+
+<br/>
+
+<br/>
 
 **1.** Find a branch with broken tests 🤷
 
-*Example using settings-voice-assist-feature:*
+
+<br/>
 
 **2.** Run the aiDebug command on your project in the terminal
+
+*Example using settings-voice-assist-feature:*
+
 ```
 aiDebug settings-voice-assist-feature
 ```
@@ -368,6 +378,8 @@ The following debug files have been generated:
 
 **3. Huzzah!** You now have a context file to help AI debug your tests
 
+<br/>
+
 **4. Add the context file to Copilot:**
 
    - Select `.github/instructions/ai-debug-context.txt`
@@ -377,17 +389,22 @@ The following debug files have been generated:
 
    - Create a new file in the `.github/instructions/copilot-instructions.md file that includes the a link to the context file!
 
+<br/>
 
 **5. Ask Copilot to look at the context file:**
 ```
-Can you help debug these test failures based on the ai-debug-context file?
+Can you help debug test failures based on the ai-debug-context file?
 ```
+
+<br/>
 
 **6. Read the nicely tailored response:**
    - Analysis of what's breaking the tests
    - Suggested fixes for each failing test
    - Explanation of root causes
    - Additional test cases if needed
+
+<br/>
 
 **7. Decide on the best approach**
 
@@ -398,13 +415,48 @@ Can you help debug these test failures based on the ai-debug-context file?
 ---
 
 
-Then for Extra Credit, Claude and I worked together to create a VSCode extension that automates the process of gathering context.
+Then for Extra Credit, 
 
--  Parts are a bit rough around the edges, but it works!
+Claude and I worked together to create a 
+VSCode extension that automates the process of gathering context.
+
+-  It's stil rough around the edges, but it works!
 
 
 **Demo the VSCode Extension**
 
+---
+
+<div class="_break"></div>
+
+---
+
+Fill the awkward silence
+
+## <span class="terminal-prompt">$</span> I asked the AI:
+
+**Tell me a Frontend Developer Joke:**
+
+**Q:** What's a frontend developer's favorite sandwich?  
+**A:** One with lots of layers and proper DOM manipulation.
+
+### In conclusion, **Comedy** is still a safe career choice.
+
+---
+
+<div class="_break"></div>
+
+---
+
+This is v2:
+
+- v1 got out of control and was too complex
+
+- Just approved everything and let him run wild
+
+** I ended up with 600 broken tests
+and Claude build a Plugin Marketplace so I could 
+open up my own store? **
 
 ---
 
@@ -460,20 +512,6 @@ Then for Extra Credit, Claude and I worked together to create a VSCode extension
 
 <div class="_break"></div>
 
----
-
-## <span class="terminal-prompt">$</span> I asked the AI:
-
-**Tell me a Frontend Developer Joke:**
-
-**Q:** What's a frontend developer's favorite sandwich?  
-**A:** One with lots of layers and proper DOM manipulation.
-
-### In conclusion, **Comedy** is still a safe career choice.
-
----
-
-<div class="_break"></div>
 
 ---
 

@@ -5,11 +5,12 @@ import { Subscription } from 'rxjs';
 import { FileSelectorComponent, FileSelection } from './modules/file-selection/file-selector.component';
 import { TestSelectorComponent, TestConfiguration } from './modules/test-selection/test-selector.component';
 import { AIDebugComponent, TestResult, AIAnalysis } from './modules/ai-debug/ai-debug.component';
-import { PRGeneratorComponent } from './modules/pr-generator/pr-generator.component';
+// import { PRGeneratorComponent } from './modules/pr-generator/pr-generator.component'; // Hidden for demo
 import { PrepareToPushComponent, PrepareToPushResult } from './modules/prepare-to-push/prepare-to-push.component';
+import { AnalysisDashboardComponent } from './modules/analysis-dashboard/analysis-dashboard.component';
 
 export interface WorkflowState {
-  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error';
+  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error' | 'generating-context' | 'saving-context' | 'analyzing-results' | 'generating-report';
   progress?: number;
   message?: string;
 }
@@ -17,7 +18,7 @@ export interface WorkflowState {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FileSelectorComponent, TestSelectorComponent, AIDebugComponent, PRGeneratorComponent, PrepareToPushComponent],
+  imports: [CommonModule, FileSelectorComponent, TestSelectorComponent, AIDebugComponent, /* PRGeneratorComponent, */ PrepareToPushComponent, AnalysisDashboardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="min-h-screen font-mono text-sm p-3" style="background: #1a1a1a; color: #e5e5e5; padding: 16px;">
@@ -55,30 +56,30 @@ export interface WorkflowState {
             
             <!-- Config Cards -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div class="rounded-lg p-4" style="background: #1a1a1a; border: 1px solid #333;">
+              <div class="rounded-lg p-4" style="background: #1a1a2a; border: 1px solid #4a4a6a;">
                 <div class="mb-3">
-                  <span style="color: #A8A8FF;">></span>
+                  <span style="color: #9b9bff;">></span>
                   <span class="text-lg">📁</span>
-                  <h3 class="font-semibold" style="color: #4ECDC4;">file_selector</h3>
+                  <h3 class="font-semibold" style="color: #7c7cfc;">file_selector</h3>
                 </div>
-                <p class="text-sm mb-4" style="color: #666;">{{ getFileSelectionStatus() }}</p>
+                <p class="text-sm mb-4" style="color: #8888aa;">{{ getFileSelectionStatus() }}</p>
                 <button
                   (click)="showModule('file-selection')"
-                  class="w-full px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
+                  class="w-full px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #3a3a5a; color: #c9c9ff; border-color: #5a5a7a;">
                   config --files
                 </button>
               </div>
 
-              <div class="rounded-lg p-4" style="background: #1a1a1a; border: 1px solid #333;">
+              <div class="rounded-lg p-4" style="background: #1a1a2a; border: 1px solid #4a4a6a;">
                 <div class="mb-3">
-                  <span style="color: #A8A8FF;">></span>
+                  <span style="color: #9b9bff;">></span>
                   <span class="text-lg">📂</span>
-                  <h3 class="font-semibold" style="color: #4ECDC4;">project_selector</h3>
+                  <h3 class="font-semibold" style="color: #7c7cfc;">project_selector</h3>
                 </div>
-                <p class="text-sm mb-4" style="color: #666;">{{ getProjectConfigStatus() }}</p>
+                <p class="text-sm mb-4" style="color: #8888aa;">{{ getProjectConfigStatus() }}</p>
                 <button
                   (click)="showModule('test-selection')"
-                  class="w-full px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #333; color: #FFD93D; border-color: #666;">
+                  class="w-full px-3 py-2 font-mono font-bold rounded border-2 hover:opacity-90 transition-opacity" style="background: #3a3a5a; color: #c9c9ff; border-color: #5a5a7a;">
                   config --projects
                 </button>
               </div>
@@ -136,43 +137,9 @@ export interface WorkflowState {
               }
             </div>
             
-            <!-- Prepare to Push Action -->
+            <!-- PR Generator Action - Hidden for demo -->
+            <!-- TODO: Uncomment when PR Generator feature is ready for release
             <div class="rounded-lg p-6 text-center mb-6" style="background: #1a1a1a; border: 1px solid #333;">
-              <div class="text-center mb-4">
-                <span style="color: #A8A8FF;">$</span>
-                <span class="text-2xl">🚀</span>
-                <h3 class="text-lg font-bold" style="color: #4ECDC4;">prepare_to_push</h3>
-                <span style="color: #FFD93D;">--validate</span>
-              </div>
-              <p class="mb-6 max-w-lg mx-auto text-sm" style="color: #666;">
-                Run linting and formatting on your selected projects to ensure code quality before pushing.
-              </p>
-              <div class="text-xs mb-4" style="color: #666;">
-                Status: {{ getPrepareToPushStatus() }}
-              </div>
-              <button
-                (click)="showModule('prepare-to-push')"
-                [disabled]="!testConfiguration()"
-                class="px-6 py-3 font-mono font-bold text-sm rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                [ngStyle]="testConfiguration() ? 
-                  {'background': '#333', 'color': '#FFD93D', 'border-color': '#666'} : 
-                  {'background': '#333', 'color': '#555', 'border-color': '#444'}">
-                @if (!testConfiguration()) {
-                  <span>
-                    <span>[✗]</span>
-                    <span>REQUIRES --project-selection</span>
-                  </span>
-                } @else {
-                  <span>
-                    <span>✨</span>
-                    <span>VALIDATE --code-quality</span>
-                  </span>
-                }
-              </button>
-            </div>
-            
-            <!-- PR Generator Action -->
-            <div class="rounded-lg p-6 text-center" style="background: #1a1a1a; border: 1px solid #333;">
               <div class="text-center mb-4">
                 <span style="color: #A8A8FF;">$</span>
                 <span class="text-2xl">📋</span>
@@ -201,6 +168,67 @@ export interface WorkflowState {
                   <span>
                     <span>📝</span>
                     <span>GENERATE --pr-description</span>
+                  </span>
+                }
+              </button>
+            </div>
+            -->
+
+            <!-- Analysis Dashboard Action -->
+            <div class="rounded-lg p-6 text-center mb-6" style="background: #1a1a1a; border: 1px solid #333;">
+              <div class="text-center mb-4">
+                <span style="color: #A8A8FF;">$</span>
+                <span class="text-2xl">🧠</span>
+                <h3 class="text-lg font-bold" style="color: #4ECDC4;">analysis_dashboard</h3>
+                <span style="color: #FFD93D;">--comprehensive</span>
+              </div>
+              <p class="mb-6 max-w-lg mx-auto text-sm" style="color: #666;">
+                Submit your complete AI context to Copilot for comprehensive analysis, insights, and recommendations with persistent results.
+              </p>
+              <div class="text-xs mb-4" style="color: #666;">
+                Status: Ready for comprehensive analysis
+              </div>
+              <button
+                (click)="showModule('analysis-dashboard')"
+                class="px-6 py-3 font-mono font-bold text-sm rounded border-2 hover:opacity-90 transition-opacity"
+                style="background: #333; color: #4ECDC4; border-color: #666;">
+                <span>
+                  <span>🚀</span>
+                  <span>LAUNCH --analysis-dashboard</span>
+                </span>
+              </button>
+            </div>
+
+            <!-- Prepare to Push Action -->
+            <div class="rounded-lg p-6 text-center" style="background: #1a1a1a; border: 1px solid #333;">
+              <div class="text-center mb-4">
+                <span style="color: #A8A8FF;">$</span>
+                <span class="text-2xl">🚀</span>
+                <h3 class="text-lg font-bold" style="color: #4ECDC4;">prepare_to_push</h3>
+                <span style="color: #FFD93D;">--validate</span>
+              </div>
+              <p class="mb-6 max-w-lg mx-auto text-sm" style="color: #666;">
+                Run linting and formatting on your selected projects to ensure code quality before pushing.
+              </p>
+              <div class="text-xs mb-4" style="color: #666;">
+                Status: {{ getPrepareToPushStatus() }}
+              </div>
+              <button
+                (click)="showModule('prepare-to-push')"
+                [disabled]="!testConfiguration()"
+                class="px-6 py-3 font-mono font-bold text-sm rounded border-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                [ngStyle]="testConfiguration() ? 
+                  {'background': '#333', 'color': '#FFD93D', 'border-color': '#666'} : 
+                  {'background': '#333', 'color': '#555', 'border-color': '#444'}">
+                @if (!testConfiguration()) {
+                  <span>
+                    <span>[✗]</span>
+                    <span>REQUIRES --project-selection</span>
+                  </span>
+                } @else {
+                  <span>
+                    <span>✨</span>
+                    <span>VALIDATE --code-quality</span>
                   </span>
                 }
               </button>
@@ -243,7 +271,8 @@ export interface WorkflowState {
         </app-prepare-to-push>
       }
 
-      <!-- PR Generator Module -->
+      <!-- PR Generator Module - Hidden for demo -->
+      <!-- TODO: Uncomment when PR Generator feature is ready for release
       @if (activeModule() === 'pr-generator') {
         <app-pr-generator
           [fileSelection]="fileSelection()"
@@ -251,6 +280,12 @@ export interface WorkflowState {
           [aiAnalysis]="aiAnalysis()"
           (descriptionGenerated)="onPRDescriptionGenerated($event)">
         </app-pr-generator>
+      }
+      -->
+
+      <!-- Analysis Dashboard Module -->
+      @if (activeModule() === 'analysis-dashboard') {
+        <app-analysis-dashboard></app-analysis-dashboard>
       }
     </div>
   `,
@@ -277,7 +312,7 @@ export class AppComponent implements OnInit, OnDestroy {
   @ViewChild('testSelector') testSelector?: TestSelectorComponent;
   
   // Module navigation
-  activeModule = signal<'overview' | 'file-selection' | 'test-selection' | 'ai-debug' | 'prepare-to-push' | 'pr-generator'>('overview');
+  activeModule = signal<'overview' | 'file-selection' | 'test-selection' | 'ai-debug' | 'prepare-to-push' | 'pr-generator' | 'analysis-dashboard'>('overview');
   
   // Module data
   fileSelection = signal<FileSelection | null>(null);
@@ -315,7 +350,13 @@ export class AppComponent implements OnInit, OnDestroy {
     this.saveState();
   }
 
-  showModule(module: 'file-selection' | 'test-selection' | 'ai-debug' | 'prepare-to-push' | 'pr-generator') {
+  showModule(module: 'file-selection' | 'test-selection' | 'ai-debug' | 'prepare-to-push' | 'pr-generator' | 'analysis-dashboard') {
+    // Temporarily disable PR Generator for demo
+    if (module === 'pr-generator') {
+      console.log('PR Generator module is temporarily disabled for demo');
+      return;
+    }
+    
     this.activeModule.set(module);
     this.saveState();
   }

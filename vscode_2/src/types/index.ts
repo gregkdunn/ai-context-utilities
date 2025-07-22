@@ -1,6 +1,6 @@
 // Core workflow types
 export interface WorkflowState {
-  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error' | 'generating-context' | 'saving-context';
+  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error' | 'generating-context' | 'saving-context' | 'analyzing-results' | 'generating-report';
   progress?: number;
   message?: string;
 }

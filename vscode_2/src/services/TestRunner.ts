@@ -209,11 +209,11 @@ export class TestRunner {
       }
 
       // With static filename, no cleanup needed - file will be overwritten
-      const staticFileName = 'test-results.txt';
+      const staticFileName = 'jest-output.txt';
       const filePath = path.join(testOutputDir, staticFileName);
       
       if (fs.existsSync(filePath)) {
-        outputCallback?.('Found existing test-results.txt file (will be overwritten)\n');
+        outputCallback?.('Found existing jest-output.txt file (will be overwritten)\n');
       } else {
         outputCallback?.('No existing test output file found\n');
       }
@@ -236,7 +236,7 @@ export class TestRunner {
     }
 
     try {
-      const staticFileName = 'test-results.txt';
+      const staticFileName = 'jest-output.txt';
       const filePath = path.join(testOutputDir, staticFileName);
       
       if (fs.existsSync(filePath)) {
@@ -266,7 +266,7 @@ export class TestRunner {
     }
 
     try {
-      const staticFileName = 'test-results.txt';
+      const staticFileName = 'jest-output.txt';
       const filePath = path.join(testOutputDir, staticFileName);
       return fs.existsSync(filePath) ? [filePath] : [];
     } catch (error) {
@@ -431,7 +431,7 @@ export class TestRunner {
     const projectPart = options.projects ? options.projects.join('-') : 'affected';
     
     // Use static filename for consistent reference in .git/instructions/copilot-instructions.md
-    const fileName = 'test-results.txt';
+    const fileName = 'jest-output.txt';
     const fullPath = path.join(this.workspacePath, this.outputDirectory, fileName);
     
     // Ensure directory exists

@@ -8,7 +8,7 @@ import { AIDebugComponent, TestResult, AIAnalysis } from './modules/ai-debug/ai-
 import { PRGeneratorComponent } from './modules/pr-generator/pr-generator.component';
 
 export interface WorkflowState {
-  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error';
+  step: 'idle' | 'collecting-context' | 'running-tests' | 'analyzing-with-ai' | 'generating-pr' | 'complete' | 'error' | 'generating-context' | 'saving-context' | 'analyzing-results' | 'generating-report';
   progress?: number;
   message?: string;
 }

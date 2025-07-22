@@ -6,10 +6,22 @@ A comprehensive, production-ready VSCode extension that revolutionizes the devel
 
 ### 🤖 AI-Powered Analysis
 - **GitHub Copilot Integration**: Native VSCode Language Model API integration with multi-model support
+- **Comprehensive Analysis Dashboard**: Professional analysis interface with diagnostic status panel
+- **System Diagnostics**: Real-time monitoring of Copilot availability, context files, and permissions
+- **Intelligent Context Submission**: Automated chunking and parallel processing for large contexts
+- **Historical Analysis Tracking**: Persistent storage and comparison of analysis results
 - **Intelligent Test Failure Analysis**: Root cause analysis with specific code fixes and recommendations
 - **False Positive Detection**: Identifies misleading passing tests that may hide issues
 - **Smart Test Suggestions**: AI-generated recommendations for new test cases based on code changes
 - **Fallback Systems**: Graceful degradation when AI services are unavailable
+
+### 🔍 System Readiness Monitoring
+- **Real-Time Health Checks**: Continuous monitoring of GitHub Copilot availability and model status
+- **Context File Validation**: Automatic verification of required configuration files and permissions
+- **Workspace Analysis**: Git repository detection and workspace validation
+- **Diagnostic Dashboard**: Visual status indicators with expandable diagnostic details
+- **One-Click System Refresh**: Manual diagnostic updates with comprehensive error reporting
+- **Readiness Scoring**: Automated calculation of system preparedness for AI analysis
 
 ### 🗃️ Advanced File Management
 - **Multi-Mode Git Selection**: Uncommitted changes, multi-commit selection, branch comparisons
@@ -176,15 +188,117 @@ This extension uses:
 - `AI Debug Context: Generate Git Diff` - Create formatted diff analysis
 - `AI Debug Context: Open Output Directory` - Browse generated files
 
+## 🔧 Diagnostic System
+
+The extension includes a comprehensive diagnostic system that monitors system readiness for AI analysis:
+
+### Status Monitoring
+- **GitHub Copilot Status**: Real-time availability check with model information
+- **Context File Verification**: Validates existence and accessibility of context files  
+- **Workspace Health**: Confirms Git repository status and workspace configuration
+- **Permission Checks**: Verifies file system read/write access
+
+### Diagnostic Dashboard Features
+- **Visual Status Indicators**: Color-coded status badges for immediate system health assessment
+- **Expandable Details**: Collapsible diagnostic panels with detailed system information
+- **One-Click Refresh**: Manual system diagnostics update with comprehensive error reporting
+- **Readiness Scoring**: Automated calculation of overall system preparedness (0-100%)
+
+### Troubleshooting Common Issues
+
+#### 1. **GitHub Copilot Unavailable** ❌
+**Error**: `Status: Unavailable - Error: Copilot not available`
+
+**Root Causes & Solutions**:
+
+**a) VSCode Version Compatibility**
+- **Issue**: VSCode version below 1.85.0 (Language Model API not available)
+- **Solution**: 
+  - Check version: Help → About
+  - Update to VSCode 1.85.0 or higher
+  - Restart VSCode after updating
+
+**b) GitHub Copilot Extension Missing**
+- **Issue**: GitHub Copilot extension not installed or disabled
+- **Solution**: 
+  - Open Extensions (Ctrl+Shift+X / Cmd+Shift+X)
+  - Search for "GitHub Copilot" 
+  - Install and enable the extension
+  - Restart VSCode if needed
+
+**c) Authentication Problems**
+- **Issue**: Not signed in to GitHub Copilot or session expired
+- **Solution**: 
+  - Run command: `GitHub Copilot: Sign In`
+  - Follow authentication flow in browser
+  - Verify active Copilot subscription in GitHub settings
+  - Test with: `GitHub Copilot: Check Status`
+
+**d) Network/Corporate Firewall**
+- **Issue**: Corporate firewall blocking GitHub Copilot API access
+- **Solution**: 
+  - Contact IT to whitelist GitHub Copilot domains
+  - Test basic Copilot functionality: Open `.ts` file, type `// function to add two numbers`
+  - If suggestions don't appear, network configuration is likely the issue
+
+**e) Extension Configuration**
+- **Issue**: Copilot integration disabled in extension settings
+- **Solution**: 
+  - Open Settings (Ctrl+, / Cmd+,)
+  - Search: `aiDebugContext.copilot.enabled`
+  - Ensure setting is `true`
+  - Reload window: `Developer: Reload Window`
+
+**f) VSCode Language Model API Issues**
+- **Issue**: Language Model API not responding or returning empty model list
+- **Solution**: 
+  - Try reloading VSCode window
+  - Check VSCode Developer Console for errors: `Help → Toggle Developer Tools`
+  - Look for language model related errors
+  - Try: `GitHub Copilot: Reset Authentication`
+
+**Quick Diagnostic Steps**:
+1. Open any TypeScript file
+2. Type: `// function to calculate factorial`
+3. If no Copilot suggestions appear, the issue is with basic Copilot setup
+4. If suggestions work but extension shows unavailable, restart VSCode
+5. Use the extension's built-in diagnostic panel for detailed status
+
+**Fallback Behavior**:
+When Copilot is unavailable, the extension automatically:
+- Provides template-based analysis instead of AI-powered insights
+- Continues full workflow functionality (diff generation, test execution, PR templates)
+- Shows clear status indicators and fallback messages
+- Maintains all core features without AI analysis dependencies
+
+**Additional Resources**:
+- GitHub Copilot Status: https://githubstatus.com
+- VSCode Language Model API Documentation
+- Extension diagnostic panel provides real-time troubleshooting information
+- Check VSCode Developer Console (`Help → Toggle Developer Tools`) for detailed error logs
+
+#### 2. **Context Files Missing**
+- **Issue**: Required configuration files not found in workspace
+- **Solution**: Check that required configuration files exist in workspace root
+
+#### 3. **Permission Errors**
+- **Issue**: VSCode lacks necessary file system permissions
+- **Solution**: Verify VSCode has necessary file system read/write permissions
+
+#### 4. **Workspace Issues**
+- **Issue**: Project not opened in a valid Git repository
+- **Solution**: Confirm project is opened in a valid Git repository with proper initialization
+
 ## 🔄 Typical Workflow
 
 1. **Start the Extension**: Click the AI Debug Context icon in the Activity Bar
-2. **Select Files**: Choose uncommitted changes, specific commits, or branch differences
-3. **Configure Tests**: Select NX projects or run affected tests
-4. **Run AI Debug**: Execute tests and get AI-powered analysis
-5. **Generate PR Template**: Automatically create a comprehensive PR template file
-6. **Validate Code**: Run Prepare to Push to ensure code quality
-7. **Use the Context**: Copy the generated template to your PR or AI assistant
+2. **Check System Readiness**: Review the diagnostic panel to ensure all systems are ready
+3. **Select Files**: Choose uncommitted changes, specific commits, or branch differences
+4. **Configure Tests**: Select NX projects or run affected tests
+5. **Run AI Debug**: Execute tests and get AI-powered analysis with diagnostic feedback
+6. **Generate PR Template**: Automatically create a comprehensive PR template file
+7. **Validate Code**: Run Prepare to Push to ensure code quality
+8. **Use the Context**: Copy the generated template to your PR or AI assistant
 
 ## 📁 Generated Files
 
