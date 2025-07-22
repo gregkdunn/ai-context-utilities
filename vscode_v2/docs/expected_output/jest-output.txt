@@ -1,0 +1,115 @@
+=================================================================
+🤖 TEST ANALYSIS REPORT
+=================================================================
+
+COMMAND: yarn nx test settings-voice-assist-feature
+EXIT CODE: 1
+STATUS: ❌ FAILED
+
+=================================================================
+📊 EXECUTIVE SUMMARY
+=================================================================
+Test Suites: 2 failed, 20 passed, 22 total
+Tests:       2 failed, 140 passed, 142 total
+Time:        14.463 s
+Test Suites: 20 passed, 4 failed
+
+==================================================================
+💥 FAILURE ANALYSIS
+==================================================================
+
+🔥 COMPILATION/RUNTIME ERRORS:
+--------------------------------
+
+🧪 TEST FAILURES:
+-----------------
+  • ████████████████████████████████████████  ● VoiceAssistCustomQuestionModalComponent › should apply the uniqueInputValidator to the label field
+    
+
+  •   ● VoiceAssistCustomQuestionModalComponent › should enable Save button if form is valid
+    
+
+  •   ● VoiceAssistCustomQuestionModalComponent › should apply the uniqueInputValidator to the label field
+    
+
+  •   ● VoiceAssistCustomQuestionModalComponent › should enable Save button if form is valid
+    
+
+
+==================================================================
+🧪 TEST RESULTS SUMMARY
+==================================================================
+❌ libs/settings/voice-assist/feature/src/lib/components/custom-questions-modal.component/custom-questions-modal.component.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/validators/email-preference/email-preference.validator.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/validators/unique-input/unique-input.validator.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/components/voice-assist-test-call/voice-assist-test-call.component.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/services/voice-assist-api-service/voice-assist-api.service.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/services/voice-assist-sms-service/voice-assist-sms.service.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/services/voice-assist-onboarding-service/voice-assist-onboarding.service.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/components/ai-voice-settings/ai-voice-settings.component.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.service.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/components/caller-intake-settings/caller-intake-settings.component.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/services/voice-assist-settings.service.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/components/voice-assist-settings/voice-assist-settings.component.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/components/sms-settings/sms-settings.component.spec.ts 
+✅ libs/settings/voice-assist/feature/src/lib/components/circular-progress-bar/circular-progress-bar.component.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/validators/character/character.validator.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/services/caller-intake-settings-service/caller-intake-settings.transformer.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/components/onboarding-voice-assist/onboarding-voice-assist.component.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/validators/child-toggle/child-toggle.validator.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/components/onboarding-voice-assist/onboarding-progress-card/onboarding-progress-card.component.spec.ts
+❌ libs/settings/voice-assist/feature/src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/validators/child-min-selection-count/child-min-selection-count.validator.spec.ts
+✅ libs/settings/voice-assist/feature/src/lib/components/voice-assist-settings/call-flow-card/call-flow-card.component.spec.ts
+❌ 
+❌  FAIL  src/lib/validators/only-chars-digits-spaces/only-chars-digits-spaces.validator.spec.ts
+
+==================================================================
+⚡ PERFORMANCE INSIGHTS
+==================================================================
+Time:        14.463 s
+🐌 SLOW: ███████████████████���████████████████████    ✓ should create (358 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should initialize the form with empty values by default (20 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should exclude initialQuestionLabel from uniqueLabelList (18 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should patch form values when customQuestion input changes (16 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should set prompt when setPrompt is called (17 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should set label when setLabel is called (16 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should emit submitted event and reset form on submit (17 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should emit dismissModal and reset form on cancel (17 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should emit dismissModal on closeModal (15 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should render example prompts and set prompt on click (13 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should render example labels and set label on click (12 ms)
+🐌 SLOW: ████████████████████████████████████████    ✓ should disable Save button if form is invalid (22 ms)
+🐌 SLOW: Time:        13 s    ✓ should create (584 ms)
+🐌 SLOW: Time:        13 s    ✓ should call getAIVoiceSettings with the correct URL (599 ms)
+🐌 SLOW: Time:        13 s    ✓ should be created (644 ms)
+🐌 SLOW: Time:        13 s    ✓ should be created (666 ms)
+🐌 SLOW: Time:        13 s      ✓ should set the active subpage on ngOnInit (23 ms)
+🐌 SLOW: Time:        13 s      ✓ is disabled when aiPersonaForm has errors (12 ms)
+🐌 SLOW: Time:        13 s    ✓ should call getCallerIntakeSettings and transform the result (696 ms)
+🐌 SLOW: Time:        13 s    ✓ should return defaultCallerIntakePayload on error (10 ms)
+🐌 SLOW: Time:        13 s    ✓ should create (52 ms)
+🐌 SLOW: Time:        13 s    ✓ should set the active subpage and setup form on ngOnInit (12 ms)
+🐌 SLOW: Time:        13 s    ✓ should return all labels and ids from callerIntakeFormLabels using mockFormData (28 ms)
+🐌 SLOW: Time:        13 s      ✓ should return persona settings from API (681 ms)
+🐌 SLOW: Time:        13 s    ✓ should create (466 ms)
+🐌 SLOW: Time:        13 s    ✓ should create (482 ms)
+🐌 SLOW: Time:        14 s    ✓ should create (14 ms)
+🐌 SLOW: Time:        14 s    ✓ should create (38 ms)
+🐌 SLOW: Time:        14 s    ✓ should create (20 ms)
+
+==================================================================
+🎯 AI ANALYSIS CONTEXT
+==================================================================
+This report focuses on:
+• Test failures and their root causes
+• Compilation/TypeScript errors
+• Performance issues (slow tests)
+• Overall test health metrics
+
+Key areas for analysis:
+• 🔍 Focus on failure analysis section above
+• 🔗 Correlate failures with recent code changes
+• 🛠️  Identify patterns in TypeScript errors
+
+Original output reduced from     4382 lines to      114 lines for AI efficiency.

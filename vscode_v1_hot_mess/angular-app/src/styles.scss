@@ -1,0 +1,384 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* VSCode-specific base styles */
+@layer base {
+  html {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-background);
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Remove default button styles */
+  button {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Remove default select styles */
+  select {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Remove default input styles */
+  input {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/* Custom VSCode-themed components */
+@layer components {
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .animate-pulse-soft {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideIn {
+    from { 
+      transform: translateX(100%); 
+      opacity: 0; 
+    }
+    to { 
+      transform: translateX(0); 
+      opacity: 1; 
+    }
+  }
+
+  @keyframes pulseSoft {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+
+  /* VSCode button variants */
+  .btn-primary {
+    @apply px-3 py-2 text-sm font-medium rounded;
+    @apply bg-vscode-button-background text-vscode-button-foreground;
+    @apply hover:bg-vscode-button-hover;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-selection;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply px-3 py-2 text-sm font-medium rounded;
+    @apply bg-transparent text-vscode-foreground;
+    @apply border border-vscode-panel-border;
+    @apply hover:bg-vscode-hover;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-selection;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply transition-colors duration-200;
+  }
+
+  .btn-danger {
+    @apply px-3 py-2 text-sm font-medium rounded;
+    @apply bg-vscode-error text-white;
+    @apply hover:bg-vscode-error hover:opacity-80;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-selection;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply transition-colors duration-200;
+  }
+
+  .btn-icon {
+    @apply w-8 h-8 flex items-center justify-center rounded;
+    @apply bg-transparent text-vscode-foreground;
+    @apply hover:bg-vscode-hover;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-selection;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply transition-colors duration-200;
+  }
+
+  /* Input styles */
+  .input-field {
+    @apply w-full px-3 py-2 text-sm rounded;
+    @apply bg-vscode-input-background text-vscode-input-foreground;
+    @apply border border-vscode-input-border;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-selection;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply transition-colors duration-200;
+  }
+
+  .select-field {
+    @apply w-full px-3 py-2 text-sm rounded;
+    @apply bg-vscode-input-background text-vscode-input-foreground;
+    @apply border border-vscode-input-border;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-selection;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply transition-colors duration-200;
+  }
+
+  /* Panel styles */
+  .panel {
+    @apply bg-vscode-panel-background;
+    @apply border border-vscode-panel-border;
+    @apply rounded;
+  }
+
+  .panel-header {
+    @apply px-4 py-3 border-b border-vscode-panel-border;
+    @apply text-sm font-medium text-vscode-foreground;
+  }
+
+  .panel-content {
+    @apply p-4;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply w-full h-2 bg-vscode-panel-border rounded-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-vscode-progress rounded-full transition-all duration-300;
+  }
+
+  /* Status indicators */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-dot.idle {
+    @apply bg-vscode-foreground opacity-50;
+  }
+
+  .status-dot.running {
+    @apply bg-vscode-info animate-pulse;
+  }
+
+  .status-dot.success {
+    @apply bg-vscode-success;
+  }
+
+  .status-dot.error {
+    @apply bg-vscode-error;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    @apply absolute z-50 px-2 py-1 text-xs rounded shadow-lg;
+    @apply bg-vscode-tooltip-background text-vscode-tooltip-foreground;
+    @apply pointer-events-none;
+    @apply max-w-xs;
+    @apply animate-fade-in;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-vscode-panel-background;
+    @apply border border-vscode-panel-border;
+    @apply rounded-lg p-4;
+    @apply shadow-sm;
+  }
+
+  .card-header {
+    @apply mb-3 pb-2 border-b border-vscode-panel-border;
+  }
+
+  .card-title {
+    @apply text-sm font-medium text-vscode-foreground;
+  }
+
+  .card-subtitle {
+    @apply text-xs text-vscode-foreground opacity-75;
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-2 py-1 text-xs font-medium rounded;
+  }
+
+  .badge-primary {
+    @apply bg-vscode-button-background text-vscode-button-foreground;
+  }
+
+  .badge-success {
+    @apply bg-vscode-success text-white;
+  }
+
+  .badge-error {
+    @apply bg-vscode-error text-white;
+  }
+
+  .badge-warning {
+    @apply bg-vscode-warning text-black;
+  }
+
+  .badge-info {
+    @apply bg-vscode-info text-white;
+  }
+
+  /* Loading states */
+  .loading-overlay {
+    @apply absolute inset-0 bg-vscode-background bg-opacity-75;
+    @apply flex items-center justify-center;
+    @apply z-50;
+  }
+
+  .spinner {
+    @apply w-6 h-6 border-2 border-vscode-panel-border border-t-vscode-progress;
+    @apply rounded-full animate-spin;
+  }
+
+  .spinner-sm {
+    @apply w-4 h-4 border-2 border-vscode-panel-border border-t-vscode-progress;
+    @apply rounded-full animate-spin;
+  }
+
+  .spinner-lg {
+    @apply w-8 h-8 border-2 border-vscode-panel-border border-t-vscode-progress;
+    @apply rounded-full animate-spin;
+  }
+
+  /* Scrollable containers */
+  .scrollable {
+    @apply overflow-y-auto;
+  }
+
+  .scrollable::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .scrollable::-webkit-scrollbar-track {
+    background: var(--vscode-panel-background);
+  }
+
+  .scrollable::-webkit-scrollbar-thumb {
+    background: var(--vscode-panel-border);
+    border-radius: 4px;
+  }
+
+  .scrollable::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-foreground);
+    opacity: 0.5;
+  }
+
+  /* Responsive utilities */
+  .responsive-grid {
+    @apply grid gap-4;
+    @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .responsive-flex {
+    @apply flex flex-col sm:flex-row;
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  /* Text utilities */
+  .text-truncate {
+    @apply overflow-hidden whitespace-nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* Spacing utilities for VSCode */
+  .space-vscode > * + * {
+    margin-left: var(--vscode-space, 8px);
+  }
+
+  .space-vscode-sm > * + * {
+    margin-left: 4px;
+  }
+
+  .space-vscode-lg > * + * {
+    margin-left: 12px;
+  }
+
+  /* Animation utilities */
+  .animate-none {
+    animation: none !important;
+  }
+
+  /* Focus utilities */
+  .focus-visible:focus-visible {
+    @apply outline-none ring-2 ring-vscode-selection;
+  }
+
+  /* Interaction utilities */
+  .cursor-wait {
+    cursor: wait;
+  }
+
+  .cursor-not-allowed {
+    cursor: not-allowed;
+  }
+
+  /* Print styles */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+  }
+}
+
+/* Component-specific styles */
+app-root {
+  @apply block h-full;
+}
+
+/* Theme-specific overrides */
+[data-theme='light'] {
+  /* Light theme specific styles */
+  .card {
+    @apply shadow-md;
+  }
+}
+
+[data-theme='dark'] {
+  /* Dark theme specific styles */
+  .card {
+    @apply shadow-lg;
+  }
+}
+
+[data-theme='high-contrast'] {
+  /* High contrast theme specific styles */
+  * {
+    @apply border-2;
+  }
+  
+  .btn-primary {
+    @apply border-2 border-white;
+  }
+  
+  .input-field {
+    @apply border-2 border-white;
+  }
+}

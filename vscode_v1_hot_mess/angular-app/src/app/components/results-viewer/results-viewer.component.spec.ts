@@ -1,0 +1,92 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
+import { ResultsViewerComponent } from './results-viewer.component';
+import { CommandStore } from '../../stores/command.store';
+import { CommandExecution } from '../../models';
+
+// Create a mock type that matches the CommandStore interface
+interface MockCommandStore {
+  activeCommands: ReturnType<typeof signal>;
+}
+
+describe('ResultsViewerComponent', () => {
+  let component: ResultsViewerComponent;
+  let fixture: ComponentFixture<ResultsViewerComponent>;
+  let mockCommandStore: MockCommandStore;
+
+  const mockExecution: CommandExecution = {
+    id: 'test-123',
+    action: 'aiDebug',
+    project: 'test-project',
+    status: 'running',
+    startTime: new Date(),
+    progress: 50,
+    output: ['Line 1', 'Error: Something went wrong', 'Warning: Check this'],
+    priority: 'normal'
+  };
+
+  beforeEach(async () => {
+    // Create mock for CommandStore
+    mockCommandStore = {
+      activeCommands: signal({ 'test-123': mockExecution })
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [ResultsViewerComponent],
+      providers: [
+        { provide: CommandStore, useValue: mockCommandStore }
+      ]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(ResultsViewerComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should display execution header correctly', () => {
+    fixture.componentRef.setInput('executionId', 'test-123');
+    fixture.detectChanges();
+
+    expect(component.getHeaderTitle()).toBe('aiDebug - test-project');
+  });
+
+  it('should detect line types correctly', () => {
+    fixture.componentRef.setInput('executionId', 'test-123');
+    fixture.detectChanges();
+
+    const outputLines = component['outputLines']();
+    expect(outputLines).toHaveSize(3);
+    expect(outputLines[0].type).toBe('normal');
+    expect(outputLines[1].type).toBe('error');
+    expect(outputLines[2].type).toBe('warning');
+  });
+
+  it('should format timestamps correctly', () => {
+    const testDate = new Date('2023-01-01T12:00:00Z');
+    const formatted = component.formatTimestamp(testDate);
+    expect(formatted).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+  });
+
+  it('should handle file size formatting', () => {
+    expect(component.formatFileSize(0)).toBe('0 B');
+    expect(component.formatFileSize(1024)).toBe('1 KB');
+    expect(component.formatFileSize(1048576)).toBe('1 MB');
+  });
+
+  it('should emit events on actions', () => {
+    jest.spyOn(component.outputCleared, 'emit');
+    component.clearOutput();
+    expect(component.outputCleared.emit).toHaveBeenCalled();
+  });
+
+  it('should calculate statistics correctly', () => {
+    fixture.componentRef.setInput('executionId', 'test-123');
+    fixture.detectChanges();
+
+    expect(component.getErrorCount()).toBe(1);
+    expect(component.getWarningCount()).toBe(1);
+  });
+});
