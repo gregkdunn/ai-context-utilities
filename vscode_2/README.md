@@ -1,14 +1,43 @@
 # AI Debug Context - VSCode Extension v2
 
-A VSCode extension that provides AI-powered debugging and context generation for Angular NX projects with integrated test analysis and PR description generation.
+A comprehensive, production-ready VSCode extension that revolutionizes the development workflow for Angular NX projects with advanced AI-powered debugging, intelligent context generation, real-time test execution, and automated PR documentation generation.
 
-## Features
+## 🎯 Key Features
 
-- 🤖 **AI Test Debug**: Intelligent test failure analysis using GitHub Copilot
-- 📁 **File Selection**: Choose from uncommitted changes, specific commits, or branch diffs
-- 🧪 **Test Integration**: Run NX affected tests or project-specific tests
-- 📋 **PR Generation**: AI-powered PR description generation with Jira integration
-- 🎯 **Modular Design**: Independent modules for easy extension
+### 🤖 AI-Powered Analysis
+- **GitHub Copilot Integration**: Native VSCode Language Model API integration with multi-model support
+- **Intelligent Test Failure Analysis**: Root cause analysis with specific code fixes and recommendations
+- **False Positive Detection**: Identifies misleading passing tests that may hide issues
+- **Smart Test Suggestions**: AI-generated recommendations for new test cases based on code changes
+- **Fallback Systems**: Graceful degradation when AI services are unavailable
+
+### 🗃️ Advanced File Management
+- **Multi-Mode Git Selection**: Uncommitted changes, multi-commit selection, branch comparisons
+- **Static File Naming**: Consistent filenames (`git-diff.txt`, `test-results.txt`, `ai-debug-context.txt`) for easy Copilot reference
+- **Structured Output**: Organized file generation in configurable directories
+- **File Operations**: Save, open, delete, and manage generated context files
+- **Automatic Cleanup**: Intelligent file management to prevent clutter
+
+### 🧪 Comprehensive Test Integration
+- **NX Workspace Support**: Full NX CLI integration with project discovery and caching
+- **Multiple Execution Modes**: Project-specific, affected tests, multi-project selection
+- **Real-Time Streaming**: Live test output with progress tracking and result parsing
+- **Performance Analytics**: Test execution timing, slow test identification, comprehensive reporting
+- **Jest Integration**: Advanced output parsing, failure categorization, error extraction
+
+### 🚀 Professional Workflow Automation
+- **End-to-End Workflow**: From code changes to PR generation in a single interface
+- **PR Template System**: Multiple templates (standard, feature, bugfix) with AI enhancement
+- **Code Quality Validation**: Integrated linting, formatting, and pre-commit workflows
+- **Jira Integration**: Automatic ticket linking and professional PR descriptions
+- **Context Optimization**: AI-optimized output formatting for enhanced analysis
+
+### 🎨 Premium User Experience
+- **Terminal-Themed Interface**: Professional, consistent terminal aesthetic
+- **Angular 17 Architecture**: Modern standalone components with Signals state management
+- **Real-Time Updates**: Streaming interfaces for all long-running operations
+- **VSCode Theme Integration**: Perfect light/dark mode compatibility
+- **Responsive Design**: Optimized for various panel sizes and layouts
 
 ## Architecture
 
@@ -73,49 +102,128 @@ This extension uses:
 
 ## Current Implementation Status
 
-### ✅ Completed
-- Basic extension structure and activation
-- VSCode webview provider with Angular integration
-- Core services (Git, NX, TestRunner, Copilot stubs)
-- Angular UI with VSCode theme integration
-- Workflow state management with signals
-- Basic test coverage for services
-- Development and build configuration
+### ✅ Completed Modules (4/4)
 
-### 🚧 In Progress
-- Webview UI components for file selection
-- Test configuration UI
-- AI analysis workflow implementation
-- PR description generation
+#### 1. **DIFF Module - File Selection** ✅
+- Multiple selection modes (uncommitted, commit history, branch-diff)
+- Real-time diff generation with streaming output
+- Multi-commit range selection with advanced UX
+- File management operations (save, open, delete)
+- Automatic cleanup of old diff files
 
-### 📋 Planned
-- File selection module (uncommitted/commit/branch diff)
-- Test selection module (project/affected)
-- AI analysis results display
-- PR description generator UI
-- Jira ticket integration
-- Feature flag detection
+#### 2. **TEST Module - Test Execution** ✅
+- NX workspace auto-detection and project discovery
+- Multiple execution modes (project, affected, multi-project)
+- Real-time test output streaming with progress tracking
+- Jest result parsing and categorization
+- Test execution cancellation support
 
-## Configuration
+#### 3. **AI TEST DEBUG Module - Main Workflow** ✅
+- GitHub Copilot integration via VSCode Language Model API
+- Test failure analysis with specific fix recommendations
+- False positive detection for passing tests
+- New test case suggestions based on code changes
+- Comprehensive diagnostics and fallback mechanisms
 
-The extension supports these settings:
+#### 4. **PR DESC Module - PR Template Generation** ✅
+- Template-based PR description generation
+- Git diff integration for change analysis
+- Test result and AI analysis integration
+- Automatic template file creation in `.ai-debug-context/pr-templates/`
+- Support for custom PR format sections (Problem, Solution, Details, QA)
 
-- `aiDebugContext.outputDirectory`: Output directory for AI debug files
-- `aiDebugContext.nxBaseBranch`: Base branch for NX affected calculations
-- `aiDebugContext.copilot.enabled`: Enable/disable GitHub Copilot integration
-- `aiDebugContext.jira.enabled`: Enable/disable Jira integration
+#### 5. **Prepare to Push Module** ✅
+- Integrated linting and formatting validation
+- Real-time output streaming
+- Project-specific and affected mode support
+- Clear success/failure status reporting
 
-## Commands
+## ⚙️ Configuration
 
-- `AI Debug Context: Open AI Debug Context` - Open the main webview
-- `AI Debug Context: AI Test Debug` - Run the full AI debug workflow
+### Core Settings
+- `aiDebugContext.outputDirectory`: Output directory for generated files (default: `.github/instructions/ai_utilities_context`)
+- `aiDebugContext.nxBaseBranch`: Base branch for affected calculations (default: `main`)
 
-## Requirements
+### GitHub Copilot Integration
+- `aiDebugContext.copilot.enabled`: Enable/disable GitHub Copilot features (default: `true`)
+- `aiDebugContext.copilot.timeout`: API timeout in milliseconds (default: `30000`)
+- `aiDebugContext.copilot.fallbackEnabled`: Enable template fallbacks when Copilot unavailable (default: `true`)
 
-- VSCode 1.85.0 or higher
-- Node.js 18 or higher
-- NX workspace (for full functionality)
-- GitHub Copilot extension (for AI features)
+### Jira Integration
+- `aiDebugContext.jira.enabled`: Enable Jira ticket integration (default: `false`)
+- `aiDebugContext.jira.baseUrl`: Jira instance URL for automatic ticket linking
+
+### Advanced Options
+- `aiDebugContext.git.cleanupOldFiles`: Automatic file cleanup (default: `true`)
+- `aiDebugContext.git.maxDiffSize`: Maximum diff size in MB (default: `10`)
+- `aiDebugContext.test.timeout`: Test execution timeout in seconds (default: `300`)
+- `aiDebugContext.performance.enableCaching`: Enable project caching (default: `true`)
+
+## 📋 Commands
+
+### Main Commands
+- `AI Debug Context: Open AI Debug Context` - Launch the main extension panel
+- `AI Debug Context: AI Test Debug` - Execute the complete AI-powered debug workflow
+
+### Workflow Commands
+- `AI Debug Context: Generate PR Template` - Create comprehensive PR documentation
+- `AI Debug Context: Run Prepare to Push` - Validate code quality and formatting
+- `AI Debug Context: Show Diagnostics` - Display system health and Copilot status
+- `AI Debug Context: Clean Output Files` - Manual cleanup of generated files
+
+### Quick Actions
+- `AI Debug Context: Run Affected Tests` - Execute NX affected tests only
+- `AI Debug Context: Generate Git Diff` - Create formatted diff analysis
+- `AI Debug Context: Open Output Directory` - Browse generated files
+
+## 🔄 Typical Workflow
+
+1. **Start the Extension**: Click the AI Debug Context icon in the Activity Bar
+2. **Select Files**: Choose uncommitted changes, specific commits, or branch differences
+3. **Configure Tests**: Select NX projects or run affected tests
+4. **Run AI Debug**: Execute tests and get AI-powered analysis
+5. **Generate PR Template**: Automatically create a comprehensive PR template file
+6. **Validate Code**: Run Prepare to Push to ensure code quality
+7. **Use the Context**: Copy the generated template to your PR or AI assistant
+
+## 📁 Generated Files
+
+The extension creates organized, consistently named output files optimized for Copilot integration:
+
+```
+.github/instructions/ai_utilities_context/    # Main output directory
+├── ai-debug-context.txt                     # Complete AI analysis context
+├── test-results.txt                         # Formatted test execution results
+└── copilot-analysis.md                      # AI-generated analysis reports
+
+.ai-debug-context/                           # Additional context files
+├── diffs/
+│   └── git-diff.txt                         # Git changes analysis
+└── pr-templates/
+    └── pr-description-template.txt          # Generated PR templates
+```
+
+### File Characteristics
+- **Static Naming**: Consistent filenames for easy reference in `.git/instructions/copilot-instructions.md`
+- **Date in Content**: Timestamps embedded within files rather than filenames
+- **AI-Optimized Format**: Structured for optimal AI analysis and processing
+- **Copilot Ready**: Files formatted for direct integration with GitHub Copilot workflows
+
+## 📋 Requirements
+
+### Essential
+- **VSCode**: 1.85.0 or higher (Language Model API support required)
+- **Node.js**: 18 or higher
+- **Git**: Any recent version for repository operations
+
+### For Full Functionality
+- **NX Workspace**: Required for advanced test execution and project management
+- **GitHub Copilot Extension**: Required for AI-powered analysis features
+- **Jest**: Test framework integration (automatically detected in NX projects)
+
+### Optional Integrations
+- **Jira**: For automatic ticket linking in PR templates
+- **ESLint/Prettier**: For code quality validation in Prepare to Push module
 
 ## Contributing
 

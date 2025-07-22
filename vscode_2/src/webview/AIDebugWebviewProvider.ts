@@ -1571,8 +1571,7 @@ EOF`;
       fs.mkdirSync(templateDir, { recursive: true });
     }
 
-    const timestamp = Date.now();
-    const filename = `pr-description-template-${timestamp}.txt`;
+    const filename = 'pr-description-template.txt';
     const filePath = path.join(templateDir, filename);
     
     fs.writeFileSync(filePath, content, 'utf8');
@@ -2514,9 +2513,8 @@ EOF`;
       fs.mkdirSync(outputDir, { recursive: true });
     }
     
-    // Create filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `ai-debug-context-${timestamp}.txt`;
+    // Use static filename for consistent reference in .git/instructions/copilot-instructions.md
+    const fileName = 'ai-debug-context.txt';
     const filePath = path.join(outputDir, fileName);
     
     // Write content to file
@@ -2539,8 +2537,7 @@ EOF`;
     }
     
     // Create filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `copilot-analysis-${analysisType}-${timestamp}.md`;
+    const fileName = 'copilot-analysis.md';
     const filePath = path.join(outputDir, fileName);
     
     // Format the analysis as markdown

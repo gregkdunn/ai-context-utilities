@@ -143,7 +143,7 @@ export class GitIntegration {
         case 'uncommitted':
           outputCallback?.('Generating diff for uncommitted changes...\n');
           rawDiffContent = await this.getDiffForUncommittedChanges();
-          filename = `uncommitted-changes-${Date.now()}.diff`;
+          filename = 'git-diff.txt';
           commandUsed = 'git diff';
           break;
         case 'commit':
@@ -152,13 +152,13 @@ export class GitIntegration {
           }
           outputCallback?.(`Generating diff for commit ${commitHash}...\n`);
           rawDiffContent = await this.getDiffForCommit(commitHash);
-          filename = `commit-${commitHash.substring(0, 7)}-${Date.now()}.diff`;
+          filename = 'git-diff.txt';
           commandUsed = `git show ${commitHash}`;
           break;
         case 'branch-diff':
           outputCallback?.('Generating diff from current branch to main...\n');
           rawDiffContent = await this.getDiffFromMainBranch();
-          filename = `branch-diff-${Date.now()}.diff`;
+          filename = 'git-diff.txt';
           const currentBranch = await this.getCurrentBranch();
           const baseBranch = vscode.workspace.getConfiguration('aiDebugContext').get<string>('nxBaseBranch') || 'main';
           commandUsed = `git diff ${baseBranch}...${currentBranch}`;
@@ -201,49 +201,15 @@ export class GitIntegration {
         return;
       }
 
-      // Get all diff files with their stats
-      const files = fs.readdirSync(diffDir)
-        .filter(file => file.endsWith('.diff'))
-        .map(file => {
-          const filePath = path.join(diffDir, file);
-          const stats = fs.statSync(filePath);
-          return {
-            name: file,
-            path: filePath,
-            mtime: stats.mtime
-          };
-        })
-        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Sort by newest first
-
-      if (files.length === 0) {
-        outputCallback?.('No diff files found to clean up\n');
-        return;
-      }
-
-      outputCallback?.(`Found ${files.length} existing diff files\n`);
-
-      // Keep the latest N files, delete the rest
-      const filesToDelete = files.slice(keepLatest);
+      // With static filename, no cleanup needed - file will be overwritten
+      const staticFileName = 'git-diff.txt';
+      const filePath = path.join(diffDir, staticFileName);
       
-      if (filesToDelete.length === 0) {
-        outputCallback?.(`Keeping all ${files.length} files (within limit of ${keepLatest})\n`);
-        return;
+      if (fs.existsSync(filePath)) {
+        outputCallback?.('Found existing git-diff.txt file (will be overwritten)\n');
+      } else {
+        outputCallback?.('No existing diff file found\n');
       }
-
-      outputCallback?.(`Keeping ${Math.min(files.length, keepLatest)} newest files, deleting ${filesToDelete.length} old files\n`);
-      
-      let deletedCount = 0;
-      for (const file of filesToDelete) {
-        try {
-          fs.unlinkSync(file.path);
-          deletedCount++;
-          outputCallback?.(`Deleted: ${file.name}\n`);
-        } catch (error) {
-          outputCallback?.(`Failed to delete ${file.name}: ${error}\n`);
-        }
-      }
-      
-      outputCallback?.(`Successfully deleted ${deletedCount} old diff files\n`);
       
     } catch (error) {
       outputCallback?.(`Error during cleanup: ${error}\n`);
@@ -304,9 +270,9 @@ export class GitIntegration {
     }
 
     try {
-      return fs.readdirSync(diffDir)
-        .filter(file => file.endsWith('.diff'))
-        .map(file => path.join(diffDir, file));
+      const staticFileName = 'git-diff.txt';
+      const filePath = path.join(diffDir, staticFileName);
+      return fs.existsSync(filePath) ? [filePath] : [];
     } catch (error) {
       console.error('Failed to read diff directory:', error);
       return [];
@@ -325,16 +291,15 @@ export class GitIntegration {
     }
 
     try {
-      const files = fs.readdirSync(diffDir)
-        .filter(file => file.endsWith('.diff'))
-        .map(file => path.join(diffDir, file));
-
-      for (const filePath of files) {
+      const staticFileName = 'git-diff.txt';
+      const filePath = path.join(diffDir, staticFileName);
+      
+      if (fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
           result.deleted++;
         } catch (error) {
-          result.errors.push(`Failed to delete ${path.basename(filePath)}: ${error}`);
+          result.errors.push(`Failed to delete ${staticFileName}: ${error}`);
         }
       }
       

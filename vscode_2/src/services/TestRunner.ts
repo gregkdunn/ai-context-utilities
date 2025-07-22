@@ -208,49 +208,15 @@ export class TestRunner {
         return;
       }
 
-      // Get all test output files with their stats
-      const files = fs.readdirSync(testOutputDir)
-        .filter(file => file.startsWith('jest-output-') && file.endsWith('.txt'))
-        .map(file => {
-          const filePath = path.join(testOutputDir, file);
-          const stats = fs.statSync(filePath);
-          return {
-            name: file,
-            path: filePath,
-            mtime: stats.mtime
-          };
-        })
-        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Sort by newest first
-
-      if (files.length === 0) {
-        outputCallback?.('No test output files found to clean up\n');
-        return;
-      }
-
-      outputCallback?.(`Found ${files.length} existing test output files\n`);
-
-      // Keep the latest N files, delete the rest
-      const filesToDelete = files.slice(keepLatest);
+      // With static filename, no cleanup needed - file will be overwritten
+      const staticFileName = 'test-results.txt';
+      const filePath = path.join(testOutputDir, staticFileName);
       
-      if (filesToDelete.length === 0) {
-        outputCallback?.(`Keeping all ${files.length} files (within limit of ${keepLatest})\n`);
-        return;
+      if (fs.existsSync(filePath)) {
+        outputCallback?.('Found existing test-results.txt file (will be overwritten)\n');
+      } else {
+        outputCallback?.('No existing test output file found\n');
       }
-
-      outputCallback?.(`Keeping ${Math.min(files.length, keepLatest)} newest files, deleting ${filesToDelete.length} old files\n`);
-      
-      let deletedCount = 0;
-      for (const file of filesToDelete) {
-        try {
-          fs.unlinkSync(file.path);
-          deletedCount++;
-          outputCallback?.(`Deleted: ${file.name}\n`);
-        } catch (error) {
-          outputCallback?.(`Failed to delete ${file.name}: ${error}\n`);
-        }
-      }
-      
-      outputCallback?.(`Successfully deleted ${deletedCount} old test output files\n`);
       
     } catch (error) {
       outputCallback?.(`Error during cleanup: ${error}\n`);
@@ -270,16 +236,15 @@ export class TestRunner {
     }
 
     try {
-      const files = fs.readdirSync(testOutputDir)
-        .filter(file => file.startsWith('jest-output-') && file.endsWith('.txt'))
-        .map(file => path.join(testOutputDir, file));
-
-      for (const filePath of files) {
+      const staticFileName = 'test-results.txt';
+      const filePath = path.join(testOutputDir, staticFileName);
+      
+      if (fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
           result.deleted++;
         } catch (error) {
-          result.errors.push(`Failed to delete ${path.basename(filePath)}: ${error}`);
+          result.errors.push(`Failed to delete ${staticFileName}: ${error}`);
         }
       }
       
@@ -301,9 +266,9 @@ export class TestRunner {
     }
 
     try {
-      return fs.readdirSync(testOutputDir)
-        .filter(file => file.startsWith('jest-output-') && file.endsWith('.txt'))
-        .map(file => path.join(testOutputDir, file));
+      const staticFileName = 'test-results.txt';
+      const filePath = path.join(testOutputDir, staticFileName);
+      return fs.existsSync(filePath) ? [filePath] : [];
     } catch (error) {
       console.error('Failed to read test output directory:', error);
       return [];
@@ -462,12 +427,11 @@ export class TestRunner {
   }
 
   private createOutputFile(options: TestExecutionOptions): string {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const mode = options.mode;
     const projectPart = options.projects ? options.projects.join('-') : 'affected';
     
-    // Use jest-output.txt for  output (consistent with expected format)
-    const fileName = `jest-output-${timestamp}.txt`;
+    // Use static filename for consistent reference in .git/instructions/copilot-instructions.md
+    const fileName = 'test-results.txt';
     const fullPath = path.join(this.workspacePath, this.outputDirectory, fileName);
     
     // Ensure directory exists
@@ -476,8 +440,9 @@ export class TestRunner {
       fs.mkdirSync(dir, { recursive: true });
     }
     
-    // Create the file with initial content
-    const initialContent = `Test Execution Log\nCommand: ${options.command}\nStarted: ${new Date().toISOString()}\n\n`;
+    // Create the file with initial content including timestamp in content
+    const timestamp = new Date().toISOString();
+    const initialContent = `Test Execution Log\nGenerated: ${timestamp}\nCommand: ${options.command}\nStarted: ${timestamp}\n\n`;
     fs.writeFileSync(fullPath, initialContent);
     
     return fullPath;
