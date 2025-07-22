@@ -1,0 +1,328 @@
+{
+  "name": "ai-debug-utilities",
+  "displayName": "AI Debug Utilities",
+  "description": "AI-powered debugging and code quality tools for Angular NX monorepos",
+  "version": "0.1.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Debuggers",
+    "Other"
+  ],
+  "keywords": [
+    "nx",
+    "angular",
+    "testing",
+    "jest",
+    "ai",
+    "debugging",
+    "copilot"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/nx.json",
+    "workspaceContains:**/angular.json"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiDebugUtilities.openPanel",
+        "title": "Open AI Debug Panel",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runAiDebug",
+        "title": "Run AI Debug Analysis",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runNxTest",
+        "title": "Run NX Tests (AI Optimized)",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runGitDiff",
+        "title": "Analyze Git Changes",
+        "category": "AI Debug"
+      },
+      {
+        "command": "aiDebugUtilities.runPrepareToPush",
+        "title": "Prepare to Push (Lint + Format)",
+        "category": "AI Debug"
+      },
+      {
+        "command": "nx.runAffected",
+        "title": "Run Affected Command",
+        "category": "NX"
+      },
+      {
+        "command": "nx.testAffected",
+        "title": "Test Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.lintAffected",
+        "title": "Lint Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.buildAffected",
+        "title": "Build Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.showAffectedProjects",
+        "title": "Show Affected Projects",
+        "category": "NX"
+      },
+      {
+        "command": "nx.selectBaseBranch",
+        "title": "Select Base Branch",
+        "category": "NX"
+      },
+      {
+        "command": "git.interactiveDiff",
+        "title": "Interactive Git Diff",
+        "category": "Git"
+      },
+      {
+        "command": "git.compareCommits",
+        "title": "Compare Commits",
+        "category": "Git"
+      },
+      {
+        "command": "git.compareBranches",
+        "title": "Compare Branches",
+        "category": "Git"
+      },
+      {
+        "command": "git.showCommitHistory",
+        "title": "Show Commit History",
+        "category": "Git"
+      },
+      {
+        "command": "git.enhancedDiff",
+        "title": "Enhanced Diff Analysis",
+        "category": "Git"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "aiDebugUtilities",
+          "name": "AI Debug Assistant",
+          "icon": "resources/ai-debug-icon.svg",
+          "when": "workspaceHasNxProject"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiDebugUtilities",
+          "title": "AI Debug Utilities",
+          "icon": "resources/ai-debug-icon.svg"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Debug Utilities",
+      "properties": {
+        "aiDebugUtilities.outputDirectory": {
+          "type": "string",
+          "default": ".github/instructions/ai_utilities_context",
+          "description": "Directory where AI debug output files are saved"
+        },
+        "aiDebugUtilities.autoDetectProject": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect the current NX project"
+        },
+        "aiDebugUtilities.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications when commands complete"
+        },
+        "aiDebugUtilities.terminalIntegration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show command output in integrated terminal"
+        },
+        "aiDebugUtilities.copilot.autoAnalyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically trigger Copilot analysis when tests fail"
+        },
+        "aiDebugUtilities.copilot.analyzeOnFailure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-analyze with Copilot when tests fail"
+        },
+        "aiDebugUtilities.copilot.generatePR": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable PR description generation with Copilot"
+        },
+        "aiDebugUtilities.autoBackup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically create backups before file operations"
+        },
+        "aiDebugUtilities.maxRetries": {
+          "type": "number",
+          "default": 2,
+          "description": "Maximum number of retries for failed file operations"
+        },
+        "aiDebugUtilities.validateContent": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate file content based on output type"
+        },
+        "aiDebugUtilities.showDetailedNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show detailed notifications with operation summaries"
+        },
+        "aiDebugUtilities.backupRetentionDays": {
+          "type": "number",
+          "default": 7,
+          "description": "Number of days to retain backup files"
+        },
+        "nxAngular.defaultBase": {
+          "type": "string",
+          "default": "main",
+          "description": "Default base branch for affected calculations"
+        },
+        "nxAngular.enableAffectedMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic affected mode for commands"
+        },
+        "nxAngular.parallelExecutions": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Number of parallel executions for affected commands"
+        },
+        "flipperDetection.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Flipper feature flag detection"
+        },
+        "flipperDetection.includePRSection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include Flipper section in PR descriptions"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "aiDebugUtilities.openPanel",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "workspaceHasNxProject"
+      },
+      {
+        "command": "nx.runAffected",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n",
+        "when": "workspaceHasNxProject"
+      },
+      {
+        "command": "git.interactiveDiff",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "nx.runAffected",
+          "when": "workspaceHasNxProject",
+          "group": "nx@1"
+        },
+        {
+          "command": "nx.showAffectedProjects",
+          "when": "workspaceHasNxProject",
+          "group": "nx@2"
+        },
+        {
+          "command": "git.interactiveDiff",
+          "group": "git@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "aiDebugUtilities.openPanel",
+          "when": "workspaceHasNxProject"
+        },
+        {
+          "command": "nx.runAffected",
+          "when": "workspaceHasNxProject"
+        },
+        {
+          "command": "git.interactiveDiff"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run build:angular",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:watch:silent": "jest --watch --silent",
+    "dev": "npm run compile:watch & npm run test:watch:silent",
+    "compile:watch": "tsc -w -p ./",
+    "test:fix": "npm run lint:fix && npm run test",
+    "lint:fix": "eslint src --ext ts --fix",
+    "quick-test": "npm run compile && npm run test:utils",
+    "fix-and-test": "npm run lint:fix && npm run quick-test",
+    "test:coverage": "jest --coverage",
+    "test:commands": "jest --testPathPattern=src/commands/__tests__",
+    "test:integration": "jest --testPathPattern=integration.test.ts",
+    "test:unit": "jest --testPathPattern=src/commands/__tests__ --testPathIgnorePatterns=integration.test.ts",
+    "test:streaming": "jest --testPathPattern=streaming",
+    "test:webview": "jest --testPathPattern=src/webview/__tests__",
+    "test:utils": "jest --testPathPattern=src/utils/__tests__",
+    "test:filemanager": "jest --testPathPattern=fileManager",
+    "test:enhanced": "jest --testPathPattern=enhanced",
+    "test:batch": "jest --testPathPattern=batch",
+    "test:nx": "jest --testPathPattern=src/services/nx",
+    "test:git": "jest --testPathPattern=src/services/git",
+    "test:flipper": "jest --testPathPattern=src/services/flipper",
+    "test:phase5": "jest --testPathPattern=src/services/nx|src/services/git|src/services/flipper",
+    "test:angular": "cd angular-app && npm test",
+    "test:angular:coverage": "cd angular-app && npm run test:coverage",
+    "test:all": "npm run test && npm run test:phase5 && npm run test:angular",
+    "build:angular": "node scripts/build-angular.js",
+    "build:angular:watch": "cd angular-app && npm run watch",
+    "dev:angular": "cd angular-app && npm start",
+    "package": "npm run build:angular && vsce package",
+    "deploy": "npm run build:angular && vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "18.x",
+    "@types/jest": "^29.5.8",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1"
+  },
+  "dependencies": {
+    "chokidar": "^3.5.3"
+  }
+}
