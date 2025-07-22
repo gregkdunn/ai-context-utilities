@@ -1,3 +1,13 @@
+
+# This version is unusable and a mess. I just let Clude run wild and it created everything under the sun. This includes a plugin marketplace for me to monetize the extension? Moved on to V2 with better planning and constraints. 
+
+# Only here as a memorial to the weirdness.
+
+
+--------------
+
+
+
 # AI Debug Utilities - VSCode Extension
 
 AI-powered debugging and code quality tools for Angular NX monorepos, now available directly in VSCode!
