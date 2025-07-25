@@ -1,0 +1,449 @@
+#!/bin/bash
+# ai-debug-nx-affected-tests - Nx-aware affected test execution
+# 
+# Intelligently detects affected Nx projects and executes tests using
+# Nx's native test runner with caching, parallel execution, and 
+# dependency coordination.
+#
+# Usage: ai-debug-nx-affected-tests [OPTIONS]
+#   --base BRANCH        Base branch for comparison (default: main)
+#   --parallel           Run tests in parallel
+#   --max-parallel N     Maximum parallel processes
+#   --skip-cache         Skip Nx cache
+#   --dry-run            Show what would be tested without running
+#   --verbose            Verbose output
+#   --projects PROJ1,PROJ2  Test specific projects (comma-separated)
+#   --configuration CONFIG  Use specific configuration
+#
+# Environment Variables:
+#   NX_VERBOSE          Enable verbose logging
+#   NX_SKIP_CACHE       Skip Nx cache
+#   NX_PARALLEL         Default parallel execution
+#
+# @version 3.0.0 - Phase 1.6
+
+set -euo pipefail
+
+# Configuration
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+BASE_BRANCH="${BASE_BRANCH:-main}"
+PARALLEL="${NX_PARALLEL:-false}"
+MAX_PARALLEL="${NX_MAX_PARALLEL:-3}"
+SKIP_CACHE="${NX_SKIP_CACHE:-false}"
+DRY_RUN="${DRY_RUN:-false}"
+VERBOSE="${NX_VERBOSE:-false}"
+SPECIFIC_PROJECTS=""
+CONFIGURATION=""
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${CYAN}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1" 
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_debug() {
+    if [[ "$VERBOSE" == "true" ]]; then
+        echo -e "${BLUE}[DEBUG]${NC} $1"
+    fi
+}
+
+# Parse command line arguments
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --base)
+                BASE_BRANCH="$2"
+                shift 2
+                ;;
+            --parallel)
+                PARALLEL="true"
+                shift
+                ;;
+            --max-parallel)
+                MAX_PARALLEL="$2"
+                shift 2
+                ;;
+            --skip-cache)
+                SKIP_CACHE="true"
+                shift
+                ;;
+            --dry-run)
+                DRY_RUN="true"
+                shift
+                ;;
+            --verbose)
+                VERBOSE="true"
+                shift
+                ;;
+            --projects)
+                SPECIFIC_PROJECTS="$2"
+                shift 2
+                ;;
+            --configuration)
+                CONFIGURATION="$2"
+                shift 2
+                ;;
+            --help|-h)
+                show_help
+                exit 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+}
+
+show_help() {
+    cat << EOF
+ai-debug-nx-affected-tests - Enterprise Nx test execution
+
+USAGE:
+    ai-debug-nx-affected-tests [OPTIONS]
+
+OPTIONS:
+    --base BRANCH           Base branch for comparison (default: main)
+    --parallel              Run tests in parallel  
+    --max-parallel N        Maximum parallel processes (default: 3)
+    --skip-cache            Skip Nx cache
+    --dry-run               Show what would be tested without running
+    --verbose               Verbose output
+    --projects PROJ1,PROJ2  Test specific projects (comma-separated)
+    --configuration CONFIG  Use specific configuration
+    --help, -h              Show this help message
+
+EXAMPLES:
+    # Test affected projects since main branch
+    ai-debug-nx-affected-tests --base main
+
+    # Test specific projects in parallel
+    ai-debug-nx-affected-tests --projects shared-ui,user-app --parallel
+
+    # Dry run to see what would be tested
+    ai-debug-nx-affected-tests --dry-run --verbose
+
+ENVIRONMENT:
+    NX_VERBOSE=true         Enable verbose logging
+    NX_SKIP_CACHE=true      Skip Nx cache  
+    NX_PARALLEL=true        Default parallel execution
+EOF
+}
+
+# Check if we're in an Nx workspace
+check_nx_workspace() {
+    log_debug "Checking for Nx workspace..."
+    
+    if [[ ! -f "nx.json" && ! -f "workspace.json" && ! -f "angular.json" ]]; then
+        log_error "Not an Nx workspace. No nx.json, workspace.json, or angular.json found."
+        log_info "Falling back to standard Jest test execution..."
+        
+        # Execute the standard affected tests script
+        if [[ -f "$SCRIPT_DIR/ai-debug-affected-tests" ]]; then
+            exec "$SCRIPT_DIR/ai-debug-affected-tests" "$@"
+        else
+            log_error "Standard test script not found: $SCRIPT_DIR/ai-debug-affected-tests"
+            exit 1
+        fi
+    fi
+    
+    log_debug "✅ Nx workspace detected"
+}
+
+# Check Nx CLI availability
+check_nx_cli() {
+    log_debug "Checking Nx CLI availability..."
+    
+    if ! command -v npx >/dev/null 2>&1; then
+        log_error "npx is not available. Please install Node.js and npm."
+        exit 1
+    fi
+    
+    # Check if nx command works
+    if ! npx nx --version >/dev/null 2>&1; then
+        log_error "Nx CLI is not available. Please install Nx in your workspace:"
+        log_info "npm install --save-dev @nrwl/cli"
+        log_info "# or"
+        log_info "yarn add --dev @nrwl/cli"
+        exit 1
+    fi
+    
+    local nx_version
+    nx_version=$(npx nx --version 2>/dev/null)
+    log_debug "✅ Nx CLI available (v${nx_version})"
+}
+
+# Validate base branch exists
+check_base_branch() {
+    local base_branch="$1"
+    log_debug "Validating base branch: $base_branch"
+    
+    if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+        log_error "Base branch '$base_branch' does not exist"
+        log_info "Available branches:"
+        git branch -a | head -10
+        exit 1
+    fi
+    
+    log_debug "✅ Base branch validated: $base_branch"
+}
+
+# Get affected projects using Nx
+get_affected_projects() {
+    local base_branch="$1"
+    
+    log_info "Analyzing affected projects (base: $base_branch)..."
+    
+    # Use 'nx show projects --affected' for newer Nx versions
+    local affected_cmd="nx show projects --affected --base=$base_branch"
+    log_debug "Command: $affected_cmd"
+    
+    local affected_output
+    if ! affected_output=$(npx $affected_cmd 2>&1); then
+        log_error "Failed to get affected projects"
+        log_error "Output: $affected_output"
+        exit 1
+    fi
+    
+    # Parse affected projects from output
+    local projects=()
+    while IFS= read -r line; do
+        # Skip empty lines and Nx informational output
+        if [[ -n "$line" && ! "$line" =~ ^">" && ! "$line" =~ ^"NX" ]]; then
+            projects+=("$line")
+        fi
+    done <<< "$affected_output"
+    
+    if [[ ${#projects[@]} -eq 0 ]]; then
+        log_info "No affected projects found"
+        return 0
+    fi
+    
+    log_success "Found ${#projects[@]} affected project(s):"
+    for project in "${projects[@]}"; do
+        log_info "  - $project"
+    done
+    
+    # Return projects as space-separated string
+    printf '%s\n' "${projects[@]}"
+}
+
+# Analyze project impact
+analyze_project_impact() {
+    local projects=("$@")
+    
+    if [[ ${#projects[@]} -eq 0 ]]; then
+        return
+    fi
+    
+    log_info "Analyzing project impact..."
+    
+    local apps=0
+    local libs=0
+    
+    for project in "${projects[@]}"; do
+        # Get project type using nx show project
+        local project_info
+        if project_info=$(npx nx show project "$project" --json 2>/dev/null); then
+            local project_type
+            project_type=$(echo "$project_info" | grep -o '"projectType":"[^"]*"' | cut -d'"' -f4)
+            
+            if [[ "$project_type" == "application" ]]; then
+                ((apps++))
+            else
+                ((libs++))
+            fi
+        else
+            log_debug "Could not determine type for project: $project"
+        fi
+    done
+    
+    log_info "Impact Analysis:"
+    [[ $libs -gt 0 ]] && log_info "  📚 Libraries affected: $libs"
+    [[ $apps -gt 0 ]] && log_info "  🚀 Applications affected: $apps"
+    
+    # Warn about high impact changes
+    if [[ $((libs + apps)) -gt 10 ]]; then
+        log_warn "High impact change detected (${#projects[@]} projects affected)"
+        log_warn "Consider running tests in smaller batches or using --parallel"
+    fi
+}
+
+# Build Nx test command
+build_nx_command() {
+    local projects=("$@")
+    
+    local cmd_parts=("nx")
+    
+    if [[ ${#projects[@]} -eq 1 ]]; then
+        # Single project: nx test project-name
+        cmd_parts+=("test" "${projects[0]}")
+    elif [[ ${#projects[@]} -gt 1 ]]; then
+        # Multiple projects: nx run-many --target=test --projects=proj1,proj2
+        cmd_parts+=("run-many" "--target=test")
+        
+        # Join projects with commas
+        local project_list
+        IFS=','
+        project_list="${projects[*]}"
+        IFS=' '
+        
+        cmd_parts+=("--projects=$project_list")
+    else
+        log_error "No projects to test"
+        exit 1
+    fi
+    
+    # Add parallel execution options
+    if [[ "$PARALLEL" == "true" && ${#projects[@]} -gt 1 ]]; then
+        cmd_parts+=("--parallel")
+        if [[ -n "$MAX_PARALLEL" ]]; then
+            cmd_parts+=("--maxParallel=$MAX_PARALLEL")
+        fi
+    fi
+    
+    # Add cache options
+    if [[ "$SKIP_CACHE" == "true" ]]; then
+        cmd_parts+=("--skip-nx-cache")
+    fi
+    
+    # Add configuration
+    if [[ -n "$CONFIGURATION" ]]; then
+        cmd_parts+=("--configuration=$CONFIGURATION")
+    fi
+    
+    # Add verbose flag
+    if [[ "$VERBOSE" == "true" ]]; then
+        cmd_parts+=("--verbose")
+    fi
+    
+    printf '%s ' "${cmd_parts[@]}"
+}
+
+# Execute Nx tests with real-time output
+execute_nx_tests() {
+    local nx_command="$1"
+    
+    log_info "Executing: npx $nx_command"
+    
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "[DRY RUN] Would execute: npx $nx_command"
+        return 0
+    fi
+    
+    local start_time
+    start_time=$(date +%s)
+    
+    # Execute with real-time output
+    if npx $nx_command; then
+        local end_time
+        end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        
+        log_success "Tests completed successfully in ${duration}s"
+        return 0
+    else
+        local exit_code=$?
+        local end_time
+        end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        
+        log_error "Tests failed after ${duration}s (exit code: $exit_code)"
+        return $exit_code
+    fi
+}
+
+# Show Nx workspace info
+show_workspace_info() {
+    if [[ "$VERBOSE" != "true" ]]; then
+        return
+    fi
+    
+    log_info "Nx Workspace Information:"
+    
+    # Nx version
+    local nx_version
+    if nx_version=$(npx nx --version 2>/dev/null); then
+        log_info "  Nx Version: $nx_version"
+    fi
+    
+    # Check for Nx Cloud
+    if [[ -f "nx.json" ]]; then
+        if grep -q "nxCloudAccessToken\|@nrwl/nx-cloud" nx.json 2>/dev/null; then
+            log_info "  Nx Cloud: ✅ Enabled"
+        else
+            log_info "  Nx Cloud: ❌ Disabled"
+        fi
+    fi
+    
+    # Project count
+    local project_count
+    if project_count=$(npx nx show projects 2>/dev/null | wc -l); then
+        log_info "  Total Projects: $((project_count))"
+    fi
+}
+
+# Main execution function
+main() {
+    log_info "Starting ai-debug-nx-affected-tests v3.0.0"
+    
+    # Parse arguments
+    parse_args "$@"
+    
+    # Show workspace info in verbose mode
+    show_workspace_info
+    
+    # Validate environment
+    check_nx_workspace
+    check_nx_cli
+    check_base_branch "$BASE_BRANCH"
+    
+    # Determine which projects to test
+    local projects=()
+    
+    if [[ -n "$SPECIFIC_PROJECTS" ]]; then
+        # Test specific projects
+        log_info "Testing specific projects: $SPECIFIC_PROJECTS"
+        IFS=',' read -ra projects <<< "$SPECIFIC_PROJECTS"
+    else
+        # Get affected projects
+        mapfile -t projects < <(get_affected_projects "$BASE_BRANCH")
+        
+        if [[ ${#projects[@]} -eq 0 ]]; then
+            log_success "No affected projects - all tests are up to date! 🎉"
+            exit 0
+        fi
+    fi
+    
+    # Analyze impact
+    analyze_project_impact "${projects[@]}"
+    
+    # Build and execute command
+    local nx_command
+    nx_command=$(build_nx_command "${projects[@]}")
+    
+    execute_nx_tests "$nx_command"
+}
+
+# Execute main function with all arguments
+main "$@"

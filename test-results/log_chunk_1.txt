@@ -1,0 +1,11 @@
+PASS tests/unit/ShellScriptBridge.test.ts
+Jest: "global" coverage threshold for statements (95%) not met: 12.35%
+Jest: "global" coverage threshold for branches (95%) not met: 11.86%
+Jest: "global" coverage threshold for lines (95%) not met: 12.58%
+Jest: "global" coverage threshold for functions (95%) not met: 11.69%
+
+Test Suites: 1 passed, 1 total
+Tests:       25 passed, 25 total
+Snapshots:   0 total
+Time:        2.266 s, estimated 5 s
+Test results written to: test-results/results_chunk_1.json

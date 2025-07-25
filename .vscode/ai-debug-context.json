@@ -1,0 +1,31 @@
+{
+  "version": "3.0.0",
+  "setupCompleted": true,
+  "setupDate": "2025-07-24T17:47:35.916Z",
+  "macosEnvironment": {
+    "version": "15.5",
+    "architecture": "apple_silicon",
+    "homebrewPrefix": "/opt/homebrew",
+    "defaultShell": "/bin/zsh",
+    "hasGnuTools": true,
+    "toolPaths": {}
+  },
+  "projectConfig": {
+    "hasGit": true,
+    "hasPackageJson": true,
+    "hasJest": false,
+    "hasTypeScript": true,
+    "testFramework": "unknown",
+    "testPatterns": [
+      "tests/**/*.{js,ts,jsx,tsx}"
+    ],
+    "srcDirectories": [
+      "src"
+    ]
+  },
+  "preferences": {
+    "enableKeyboardShortcuts": true,
+    "enableNotifications": true,
+    "autoRunAffectedTests": false
+  }
+}

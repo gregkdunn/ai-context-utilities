@@ -1,0 +1,375 @@
+#!/usr/bin/env bash
+# ai-debug-affected-tests - Detect and run only changed test files
+# Part of AI Debug Context V3 - Shell-first architecture
+# Compatible with bash 4+, zsh 5+, fish 3+
+
+set -euo pipefail
+
+# Script metadata
+readonly SCRIPT_NAME="ai-debug-affected-tests"
+readonly VERSION="3.0.0"
+
+# Default configuration
+readonly DEFAULT_BASE_BRANCH="main"
+readonly DEFAULT_TEST_PATTERN="*.spec.ts"
+readonly DEFAULT_SOURCE_PATTERN="*.ts"
+
+# Color output (if terminal supports it)
+if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
+    readonly RED=$(tput setaf 1)
+    readonly GREEN=$(tput setaf 2)
+    readonly YELLOW=$(tput setaf 3)
+    readonly BLUE=$(tput setaf 4)
+    readonly BOLD=$(tput bold)
+    readonly RESET=$(tput sgr0)
+else
+    readonly RED=""
+    readonly GREEN=""
+    readonly YELLOW=""
+    readonly BLUE=""
+    readonly BOLD=""
+    readonly RESET=""
+fi
+
+# Logging functions
+log_info() {
+    echo "${BLUE}[INFO]${RESET} $*" >&2
+}
+
+log_warn() {
+    echo "${YELLOW}[WARN]${RESET} $*" >&2
+}
+
+log_error() {
+    echo "${RED}[ERROR]${RESET} $*" >&2
+}
+
+log_success() {
+    echo "${GREEN}[SUCCESS]${RESET} $*" >&2
+}
+
+# Show usage information
+show_usage() {
+    cat << EOF
+${BOLD}$SCRIPT_NAME${RESET} - Detect and run only changed test files
+
+${BOLD}USAGE:${RESET}
+    $SCRIPT_NAME [OPTIONS]
+
+${BOLD}OPTIONS:${RESET}
+    -b, --base BRANCH       Base branch for comparison (default: $DEFAULT_BASE_BRANCH)
+    -p, --pattern PATTERN   Test file pattern (default: $DEFAULT_TEST_PATTERN)
+    -s, --source PATTERN    Source file pattern (default: $DEFAULT_SOURCE_PATTERN)
+    -d, --dry-run          Show affected tests without running them
+    -u, --uncommitted      Include uncommitted changes (default: true)
+    --no-uncommitted       Exclude uncommitted changes
+    -v, --verbose          Enable verbose output
+    -h, --help             Show this help message
+    --version              Show version information
+
+${BOLD}EXAMPLES:${RESET}
+    $SCRIPT_NAME                           # Run affected tests against main branch
+    $SCRIPT_NAME --base develop            # Use develop as base branch
+    $SCRIPT_NAME --dry-run                 # Show what would be tested
+    $SCRIPT_NAME --pattern "*.test.js"     # Use different test pattern
+
+${BOLD}DESCRIPTION:${RESET}
+    Detects source files changed since the base branch and runs only the 
+    corresponding test files. This can reduce test execution time by 90%
+    for typical development workflows.
+
+EOF
+}
+
+# Show version information
+show_version() {
+    echo "$SCRIPT_NAME version $VERSION"
+}
+
+# Check if we're in a git repository
+check_git_repository() {
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        log_error "Not in a git repository"
+        log_error "Please run this script from within a git repository"
+        return 1
+    fi
+}
+
+# Check if base branch exists
+check_base_branch() {
+    local base_branch="$1"
+    
+    if ! git rev-parse --verify "$base_branch" >/dev/null 2>&1; then
+        log_error "Base branch '$base_branch' does not exist"
+        log_error "Available branches:"
+        git branch -a | head -5
+        return 1
+    fi
+}
+
+# Get list of changed files since base branch
+get_changed_files() {
+    local base_branch="$1"
+    local source_pattern="$2"
+    local include_uncommitted="${3:-true}"
+    
+    if [[ "$include_uncommitted" == "true" ]]; then
+        log_info "Detecting changes since branch: $base_branch (including uncommitted changes)"
+    else
+        log_info "Detecting changes since branch: $base_branch (committed only)"
+    fi
+    
+    # Combine all types of changes:
+    # 1. Committed changes between base branch and HEAD
+    # 2. Staged changes (git add but not committed)
+    # 3. Unstaged changes (modified but not added)
+    {
+        # Committed changes
+        git diff --name-only --diff-filter=AMR "$base_branch...HEAD" 2>/dev/null || true
+        
+        if [[ "$include_uncommitted" == "true" ]]; then
+            # Staged changes
+            git diff --cached --name-only --diff-filter=AMR 2>/dev/null || true
+            
+            # Unstaged changes
+            git diff --name-only --diff-filter=AMR 2>/dev/null || true
+        fi
+    } | sort -u | \
+        grep -E "\\.ts$" | \
+        grep -v "\\.spec\\." | \
+        grep -v "\\.test\\." | \
+        grep -v "\\.d\\.ts$" || true
+}
+
+# Map source files to their corresponding test files
+map_to_test_files() {
+    local source_files="$1"
+    local test_pattern="$2"
+    local found_tests=()
+    
+    if [[ -z "$source_files" ]]; then
+        return 0
+    fi
+    
+    log_info "Mapping source files to test files..."
+    
+    while IFS= read -r source_file; do
+        if [[ -z "$source_file" ]]; then
+            continue
+        fi
+        
+        # Try different test file naming conventions
+        local test_files=(
+            "${source_file%.ts}.spec.ts"
+            "${source_file%.ts}.test.ts"
+            "${source_file%.ts}.spec.js"
+            "${source_file%.ts}.test.js"
+        )
+        
+        for test_file in "${test_files[@]}"; do
+            if [[ -f "$test_file" ]]; then
+                found_tests+=("$test_file")
+                log_info "  $source_file -> $test_file"
+                break
+            fi
+        done
+    done <<< "$source_files"
+    
+    # Output found tests (one per line)
+    if [[ ${#found_tests[@]} -gt 0 ]]; then
+        printf '%s\n' "${found_tests[@]}"
+    fi
+}
+
+# Check if Jest is available
+check_jest_available() {
+    if ! command -v npx >/dev/null 2>&1; then
+        log_error "npx command not found"
+        log_error "Please install Node.js and npm from https://nodejs.org/"
+        log_error ""
+        log_error "Quick fix:"
+        log_error "  brew install node    # macOS with Homebrew"
+        log_error "  apt install nodejs   # Ubuntu/Debian"
+        return 1
+    fi
+    
+    if ! npx jest --version >/dev/null 2>&1; then
+        log_error "Jest not found in this project"
+        log_error ""
+        log_error "Quick fix:"
+        log_error "  npm install --save-dev jest"
+        log_error "  # or"
+        log_error "  yarn add --dev jest"
+        log_error ""
+        log_error "Make sure you have a package.json file in your project root"
+        return 1
+    fi
+    
+    # Check for Jest configuration
+    if [[ ! -f "jest.config.js" && ! -f "jest.config.ts" && ! -f "jest.config.json" ]]; then
+        # Check if jest config is in package.json
+        if ! grep -q '"jest"' package.json 2>/dev/null; then
+            log_warn "No Jest configuration found"
+            log_warn "Jest may not run correctly without configuration"
+            log_warn ""
+            log_warn "Create a jest.config.js file or add 'jest' section to package.json"
+        fi
+    fi
+}
+
+# Run the affected tests
+run_affected_tests() {
+    local test_files="$1"
+    local dry_run="$2"
+    
+    if [[ -z "$test_files" ]]; then
+        log_warn "No affected test files found"
+        log_info "All tests are up to date!"
+        return 0
+    fi
+    
+    local test_count
+    test_count=$(echo "$test_files" | wc -l)
+    
+    log_info "Found $test_count affected test file(s)"
+    
+    if [[ "$dry_run" == "true" ]]; then
+        log_info "DRY RUN - Would run these tests:"
+        echo "$test_files" | while IFS= read -r test_file; do
+            echo "  - $test_file"
+        done
+        return 0
+    fi
+    
+    log_info "Running affected tests..."
+    
+    # Create temporary file with test list
+    local temp_file
+    temp_file=$(mktemp)
+    echo "$test_files" > "$temp_file"
+    
+    # Run Jest with the specific test files
+    local jest_args=(
+        --listTests
+        --findRelatedTests
+    )
+    
+    # Add test files as arguments
+    local test_file_args=()
+    while IFS= read -r test_file; do
+        if [[ -n "$test_file" ]]; then
+            test_file_args+=("$test_file")
+        fi
+    done <<< "$test_files"
+    
+    if [[ ${#test_file_args[@]} -gt 0 ]]; then
+        log_info "Executing: npx jest ${test_file_args[*]}"
+        
+        # Run the tests
+        if npx jest "${test_file_args[@]}" --passWithNoTests; then
+            log_success "All affected tests passed!"
+        else
+            log_error "Some tests failed"
+            rm -f "$temp_file"
+            return 1
+        fi
+    fi
+    
+    # Cleanup
+    rm -f "$temp_file"
+}
+
+# Main execution function
+main() {
+    local base_branch="$DEFAULT_BASE_BRANCH"
+    local test_pattern="$DEFAULT_TEST_PATTERN"
+    local source_pattern="$DEFAULT_SOURCE_PATTERN"
+    local dry_run="false"
+    local verbose="false"
+    local include_uncommitted="true"
+    
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -b|--base)
+                base_branch="$2"
+                shift 2
+                ;;
+            -p|--pattern)
+                test_pattern="$2"
+                shift 2
+                ;;
+            -s|--source)
+                source_pattern="$2"
+                shift 2
+                ;;
+            -d|--dry-run)
+                dry_run="true"
+                shift
+                ;;
+            -u|--uncommitted)
+                include_uncommitted="true"
+                shift
+                ;;
+            --no-uncommitted)
+                include_uncommitted="false"
+                shift
+                ;;
+            -v|--verbose)
+                verbose="true"
+                shift
+                ;;
+            -h|--help)
+                show_usage
+                return 0
+                ;;
+            --version)
+                show_version
+                return 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                show_usage
+                return 1
+                ;;
+        esac
+    done
+    
+    # Enable verbose logging if requested
+    if [[ "$verbose" == "true" ]]; then
+        set -x
+    fi
+    
+    log_info "Starting $SCRIPT_NAME v$VERSION"
+    
+    # Validate environment
+    check_git_repository || return 1
+    check_base_branch "$base_branch" || return 1
+    check_jest_available || return 1
+    
+    # Get changed files and map to tests
+    local changed_files
+    changed_files=$(get_changed_files "$base_branch" "$source_pattern" "$include_uncommitted")
+    
+    if [[ -z "$changed_files" ]]; then
+        log_info "No source files changed since $base_branch"
+        log_success "Nothing to test!"
+        return 0
+    fi
+    
+    log_info "Changed source files:"
+    echo "$changed_files" | while IFS= read -r file; do
+        echo "  - $file"
+    done
+    
+    local test_files
+    test_files=$(map_to_test_files "$changed_files" "$test_pattern")
+    
+    # Run the tests
+    run_affected_tests "$test_files" "$dry_run"
+}
+
+# Script entry point
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

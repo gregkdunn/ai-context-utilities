@@ -1,0 +1,11 @@
+PASS tests/unit/example.test.ts
+Jest: "global" coverage threshold for statements (95%) not met: 0%
+Jest: "global" coverage threshold for branches (95%) not met: 0%
+Jest: "global" coverage threshold for lines (95%) not met: 0%
+Jest: "global" coverage threshold for functions (95%) not met: 0%
+
+Test Suites: 1 passed, 1 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        1.436 s
+Test results written to: test-results/results_chunk_0.json

@@ -1,0 +1,206 @@
+{
+  "timestamp": "2025-07-25T10:20:53.234Z",
+  "summary": {
+    "total": 39,
+    "success": 16,
+    "errors": 0,
+    "warnings": 1
+  },
+  "results": [
+    {
+      "message": "\n🏗️ Testing Extension Structure...\n",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:51.094Z"
+    },
+    {
+      "message": "Found: src/extension.ts",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:51.097Z"
+    },
+    {
+      "message": "  - Lines: 79 (target: <100)",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "Found: src/core/ServiceContainer.ts",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "Found: src/core/CommandRegistry.ts",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "Found: src/utils/simpleProjectDiscovery.ts",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "Found: package.json",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "Found: tsconfig.json",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "\n📦 Testing TypeScript Compilation...\n",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "Running: npx tsc --noEmit",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:51.098Z"
+    },
+    {
+      "message": "TypeScript compilation successful",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.122Z"
+    },
+    {
+      "message": "\n🔍 Testing Project Discovery...\n",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.122Z"
+    },
+    {
+      "message": "No project.json files found - expected for non-Nx workspace",
+      "type": "warning",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "\n🐚 Testing Shell Scripts...\n",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "Found: ai-debug-affected-tests",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "  - Executable: YES",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "Found: ai-debug-parallel-tests",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "  - Executable: YES",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "Found: ai-debug-watch",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "  - Executable: YES",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "\n🔀 Testing Git Integration...\n",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "Running: git status --porcelain",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.131Z"
+    },
+    {
+      "message": "Git repository detected",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.184Z"
+    },
+    {
+      "message": "Running: git diff --name-only HEAD~1",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.184Z"
+    },
+    {
+      "message": "Found 952 changed files",
+      "type": "success",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "Changed files:",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "  - .DS_Store",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "  - README.md",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "  - VSCODE2_DOCS_ORGANIZATION_COMPLETE.md",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "  - docs/.DS_Store",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "  - docs/DOCUMENTATION_SUMMARY.md",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "  ... and 947 more",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "\n🚀 Testing Nx Integration...\n",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "Not an Nx workspace (nx.json not found)",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "\n📊 Test Summary\n",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "Total checks: 35",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "✅ Success: 16",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "❌ Errors: 0",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    },
+    {
+      "message": "⚠️ Warnings: 1",
+      "type": "info",
+      "timestamp": "2025-07-25T10:20:53.234Z"
+    }
+  ]
+}

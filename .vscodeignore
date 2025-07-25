@@ -1,0 +1,46 @@
+# Source files (only include compiled output)
+src/**
+tests/**
+*.ts
+!*.d.ts
+
+# Build and test artifacts
+coverage/**
+test-results/**
+test-temp/**
+.jest-cache/**
+
+# Documentation (keep only essential)
+docs/**
+*.md
+!README.md
+
+# Legacy files
+legacy/**
+.github/**
+.claude/**
+
+# Development files
+node_modules/**
+.git/**
+.vscode/**
+*.log
+*.tmp
+
+# Test files
+**/*.test.js
+**/*.test.ts
+**/*.spec.js  
+**/*.spec.ts
+jest.config.js
+
+# TypeScript config
+tsconfig.json
+
+# Examples
+example.ts
+example.spec.ts
+
+# Temporary files
+**/.DS_Store
+**/Thumbs.db
