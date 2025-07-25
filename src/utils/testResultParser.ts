@@ -120,7 +120,7 @@ export class TestResultParser {
             passed,
             failed: Math.max(failed, failures.length > 0 ? 1 : 0),
             skipped,
-            total: Math.max(total, 1), // Ensure at least 1 if compilation failed
+            total: hasCompilationFailure ? Math.max(total, 1) : total, // Ensure at least 1 only if compilation failed
             duration,
             success,
             failures

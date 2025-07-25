@@ -1,14 +1,33 @@
 import * as vscode from 'vscode';
 import { CommandRegistry } from '../core/CommandRegistry';
 import { ServiceContainer } from '../core/ServiceContainer';
+import { TestMenuOrchestrator } from '../services/TestMenuOrchestrator';
 
 // Mock vscode
-jest.mock('vscode');
+jest.mock('vscode', () => ({
+    window: {
+        createQuickPick: jest.fn(),
+        showQuickPick: jest.fn(),
+        showInformationMessage: jest.fn()
+    },
+    commands: {
+        registerCommand: jest.fn()
+    },
+    workspace: {
+        getConfiguration: jest.fn()
+    },
+    QuickPickItemKind: {
+        Separator: 'separator'
+    }
+}));
+
+// Mock the TestMenuOrchestrator
+jest.mock('../services/TestMenuOrchestrator');
 
 describe('CommandRegistry', () => {
     let commandRegistry: CommandRegistry;
     let mockServices: any;
-    let mockQuickPick: any;
+    let mockOrchestrator: jest.Mocked<TestMenuOrchestrator>;
 
     beforeEach(() => {
         // Mock services
@@ -18,96 +37,32 @@ describe('CommandRegistry', () => {
                 show: jest.fn()
             },
             updateStatusBar: jest.fn(),
-            projectDiscovery: {
-                getAllProjects: jest.fn().mockResolvedValue([
-                    { name: 'app-one', type: 'application', path: '/apps/app-one' },
-                    { name: 'lib-one', type: 'library', path: '/libs/lib-one' }
-                ])
+            errorHandler: {
+                handleError: jest.fn().mockReturnValue({}),
+                showUserError: jest.fn()
             },
             workspaceRoot: '/test/workspace'
         };
 
-        // Mock VSCode APIs
-        mockQuickPick = {
-            title: '',
-            placeholder: '',
-            items: [],
-            show: jest.fn(),
-            hide: jest.fn(),
-            dispose: jest.fn(),
-            onDidAccept: jest.fn(),
-            onDidHide: jest.fn()
-        };
+        // Mock orchestrator methods
+        mockOrchestrator = {
+            showMainMenu: jest.fn(),
+            showProjectBrowser: jest.fn(),
+            runGitAffected: jest.fn(),
+            toggleFileWatcher: jest.fn(),
+            clearTestCache: jest.fn(),
+            runSetup: jest.fn(),
+            showWorkspaceInfo: jest.fn(),
+            createConfig: jest.fn()
+        } as any;
 
-        (vscode.window.createQuickPick as jest.Mock).mockReturnValue(mockQuickPick);
-        (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
-            get: jest.fn().mockReturnValue([
-                { name: 'recent-project-1', lastUsed: '2024-01-01' },
-                { name: 'recent-project-2', lastUsed: '2024-01-02' }
-            ])
-        });
+        // Make TestMenuOrchestrator constructor return our mock
+        (TestMenuOrchestrator as jest.Mock).mockImplementation(() => mockOrchestrator);
+
+        // Reset all mocks
+        jest.clearAllMocks();
 
         commandRegistry = new CommandRegistry(mockServices);
-    });
-
-    describe('showMainTestMenu', () => {
-        test('should display unified menu with correct title', async () => {
-            // Trigger menu display
-            const showMenuMethod = (commandRegistry as any).showMainTestMenu.bind(commandRegistry);
-            await showMenuMethod();
-
-            expect(mockQuickPick.title).toBe('🧪 AI Debug Context - Test Runner');
-            expect(mockQuickPick.placeholder).toBe('Type project name or select an option below');
-        });
-
-        test('should show main action buttons in correct order', async () => {
-            const showMenuMethod = (commandRegistry as any).showMainTestMenu.bind(commandRegistry);
-            await showMenuMethod();
-
-            const items = mockQuickPick.items;
-            expect(items[0].label).toContain('Test Affected Projects');
-            expect(items[1].label).toContain('Test Updated Files');
-            expect(items[2].label).toContain('Select Project');
-        });
-
-        test('should display up to 5 recent projects', async () => {
-            const showMenuMethod = (commandRegistry as any).showMainTestMenu.bind(commandRegistry);
-            await showMenuMethod();
-
-            const items = mockQuickPick.items;
-            const recentItems = items.filter((item: any) => 
-                item.label?.includes('Run Recent:') || 
-                item.label?.includes('$(history)')
-            );
-            
-            expect(recentItems.length).toBeLessThanOrEqual(5);
-            expect(recentItems[0].label).toContain('Run Recent: recent-project-1');
-        });
-
-        test('should filter out corrupted [Object object] entries', async () => {
-            // Mock corrupted data
-            (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
-                get: jest.fn().mockReturnValue([
-                    { name: '[Object object]', lastUsed: '2024-01-01' },
-                    { name: 'valid-project', lastUsed: '2024-01-02' },
-                    { name: '[object Object]', lastUsed: '2024-01-03' }
-                ])
-            });
-
-            const showMenuMethod = (commandRegistry as any).showMainTestMenu.bind(commandRegistry);
-            await showMenuMethod();
-
-            const items = mockQuickPick.items;
-            const recentItems = items.filter((item: any) => 
-                item.label?.includes('Run Recent:') || 
-                item.label?.includes('$(history)')
-            );
-            
-            // Should only show valid project
-            expect(recentItems.length).toBe(1);
-            expect(recentItems[0].label).toContain('valid-project');
-            expect(recentItems[0].label).not.toContain('Object object');
-        });
     });
 
     describe('Command Registration', () => {
@@ -121,39 +76,120 @@ describe('CommandRegistry', () => {
             expect(registeredCommands).toContain('aiDebugContext.selectProject');
             expect(registeredCommands).toContain('aiDebugContext.clearTestCache');
             expect(registeredCommands).toContain('aiDebugContext.startFileWatcher');
+            expect(registeredCommands).toContain('aiDebugContext.runSetup');
+            expect(registeredCommands).toContain('aiDebugContext.showWorkspaceInfo');
+            expect(registeredCommands).toContain('aiDebugContext.runGitAffected');
+            expect(registeredCommands).toContain('aiDebugContext.createConfig');
+        });
+
+        test('should return array of disposables', () => {
+            const mockDisposable = { dispose: jest.fn() };
+            jest.spyOn(vscode.commands, 'registerCommand').mockReturnValue(mockDisposable);
+
+            const disposables = commandRegistry.registerAll();
+
+            expect(Array.isArray(disposables)).toBe(true);
+            expect(disposables.length).toBeGreaterThan(0);
+            expect(disposables[0]).toBe(mockDisposable);
         });
     });
 
-    describe('Project Execution', () => {
-        test('should save project to recent when executing tests', async () => {
-            const updateSpy = jest.fn();
-            (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
-                get: jest.fn().mockReturnValue([]),
-                update: updateSpy
-            });
-
-            const executeMethod = (commandRegistry as any).executeProjectTest.bind(commandRegistry);
-            await executeMethod('test-project');
-
-            expect(updateSpy).toHaveBeenCalledWith(
-                'recentProjects',
-                expect.arrayContaining([
-                    expect.objectContaining({
-                        name: 'test-project',
-                        lastUsed: expect.any(String)
-                    })
-                ]),
-                true
-            );
+    describe('Command Delegation', () => {
+        beforeEach(() => {
+            // Register commands before testing them
+            commandRegistry.registerAll();
         });
 
-        test('should show timestamp in output for test runs', async () => {
-            const executeMethod = (commandRegistry as any).executeProjectTest.bind(commandRegistry);
-            await executeMethod('test-project');
-
-            expect(mockServices.outputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringMatching(/🧪 \[\d{1,2}:\d{2}:\d{2} [AP]M\] TESTING: TEST-PROJECT/)
+        test('runAffectedTests should delegate to orchestrator.showMainMenu', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            // Find the runAffectedTests handler
+            const runAffectedTestsCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.runAffectedTests'
             );
+            expect(runAffectedTestsCall).toBeDefined();
+            
+            const handler = runAffectedTestsCall![1];
+            await handler();
+
+            expect(mockOrchestrator.showMainMenu).toHaveBeenCalled();
+        });
+
+        test('selectProject should delegate to orchestrator.showProjectBrowser', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            const selectProjectCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.selectProject'
+            );
+            expect(selectProjectCall).toBeDefined();
+            
+            const handler = selectProjectCall![1];
+            await handler();
+
+            expect(mockOrchestrator.showProjectBrowser).toHaveBeenCalled();
+        });
+
+        test('clearTestCache should delegate to orchestrator.clearTestCache', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            const clearCacheCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.clearTestCache'
+            );
+            expect(clearCacheCall).toBeDefined();
+            
+            const handler = clearCacheCall![1];
+            await handler();
+
+            expect(mockOrchestrator.clearTestCache).toHaveBeenCalled();
+        });
+
+        test('startFileWatcher should delegate to orchestrator.toggleFileWatcher', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            const fileWatcherCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.startFileWatcher'
+            );
+            expect(fileWatcherCall).toBeDefined();
+            
+            const handler = fileWatcherCall![1];
+            await handler();
+
+            expect(mockOrchestrator.toggleFileWatcher).toHaveBeenCalled();
+        });
+    });
+
+    describe('Error Handling', () => {
+        beforeEach(() => {
+            commandRegistry.registerAll();
+        });
+
+        test('should handle errors in command execution', async () => {
+            const error = new Error('Test error');
+            mockOrchestrator.showMainMenu.mockRejectedValue(error);
+
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            const runAffectedTestsCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.runAffectedTests'
+            );
+            
+            const handler = runAffectedTestsCall![1];
+            await handler();
+
+            expect(mockServices.updateStatusBar).toHaveBeenCalledWith('❌ Error', 'red');
+            expect(mockServices.errorHandler.handleError).toHaveBeenCalledWith(error, { command: 'runAffectedTests' });
+            expect(mockServices.errorHandler.showUserError).toHaveBeenCalled();
+        });
+    });
+
+    describe('Disposal', () => {
+        test('should dispose all registered commands', () => {
+            const mockDisposable = { dispose: jest.fn() };
+            jest.spyOn(vscode.commands, 'registerCommand').mockReturnValue(mockDisposable);
+
+            commandRegistry.registerAll();
+            commandRegistry.dispose();
+
+            expect(mockDisposable.dispose).toHaveBeenCalled();
         });
     });
 });

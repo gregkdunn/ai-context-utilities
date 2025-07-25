@@ -1,0 +1,14 @@
+{
+  "name": "nx-monorepo",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "nx test",
+    "build": "nx build"
+  },
+  "devDependencies": {
+    "@nx/workspace": "^17.0.0",
+    "@nx/jest": "^17.0.0",
+    "jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { ProjectCache } from './ProjectCache';
 
 export interface ProjectInfo {
     name: string;
@@ -15,7 +16,11 @@ export interface ProjectInfo {
     projectJsonPath: string;
 }
 
-export interface ProjectCache {
+// Alias for compatibility
+export type Project = ProjectInfo;
+
+// Legacy cache interface for workspace state
+interface LegacyProjectCache {
     projects: ProjectInfo[];
     lastUpdated: string;
     workspaceRoot: string;
@@ -23,31 +28,52 @@ export interface ProjectCache {
 }
 
 export class SimpleProjectDiscovery {
-    private static readonly CACHE_VERSION = '1.0';
-    private static readonly CACHE_KEY = 'projectCache';
+    private projectCache?: ProjectCache;
+    
+    // Legacy cache constants
+    private static readonly CACHE_KEY = 'projectDiscoveryCache';
+    private static readonly CACHE_VERSION = '1.8.0';
     
     constructor(
         private workspaceRoot: string,
-        private outputChannel: vscode.OutputChannel
-    ) {}
+        private outputChannel: vscode.OutputChannel,
+        projectCache?: ProjectCache
+    ) {
+        this.projectCache = projectCache;
+    }
 
     /**
      * Get all projects, using cache if available and fresh
      */
     async getAllProjects(): Promise<ProjectInfo[]> {
-        const cached = await this.getCachedProjects();
-        
-        if (cached && this.isCacheValid(cached)) {
-            this.outputChannel.appendLine(`📋 Using cached projects (${cached.projects.length} found)`);
-            return cached.projects;
+        // Check cache first if available
+        if (this.projectCache) {
+            const cachedProjects = this.projectCache.getCachedProjects();
+            if (cachedProjects) {
+                this.outputChannel.appendLine(`📋 Using cached projects (${cachedProjects.length} found)`);
+                return cachedProjects as ProjectInfo[];
+            }
+        } else {
+            // Check old cache when no ProjectCache is provided
+            const cachedData = await this.getCachedProjectsOld();
+            if (cachedData) {
+                this.outputChannel.appendLine(`📋 Using cached projects (${cachedData.projects.length} found)`);
+                return cachedData.projects;
+            }
         }
         
         this.outputChannel.appendLine('🔍 Discovering projects by scanning project.json files...');
         const projects = await this.discoverProjects();
         
-        await this.cacheProjects(projects);
-        this.outputChannel.appendLine(`📋 Found and cached ${projects.length} projects`);
+        // Cache the results
+        if (this.projectCache) {
+            this.projectCache.cacheProjects(projects as any[]);
+        } else {
+            // Fallback to old caching method
+            await this.cacheProjectsOld(projects);
+        }
         
+        this.outputChannel.appendLine(`📋 Found and cached ${projects.length} projects`);
         return projects;
     }
 
@@ -227,12 +253,12 @@ export class SimpleProjectDiscovery {
     }
 
     /**
-     * Get cached projects from VS Code workspace state
+     * Get cached projects from VS Code workspace state (legacy method)
      */
-    private async getCachedProjects(): Promise<ProjectCache | null> {
+    private async getCachedProjectsOld(): Promise<LegacyProjectCache | null> {
         try {
             const workspaceState = vscode.workspace.getConfiguration('aiDebugContext');
-            const cached = workspaceState.get<ProjectCache>(SimpleProjectDiscovery.CACHE_KEY);
+            const cached = workspaceState.get<LegacyProjectCache>(SimpleProjectDiscovery.CACHE_KEY);
             
             if (cached && cached.workspaceRoot === this.workspaceRoot) {
                 return cached;
@@ -245,11 +271,11 @@ export class SimpleProjectDiscovery {
     }
 
     /**
-     * Cache discovered projects
+     * Cache discovered projects (legacy method)
      */
-    private async cacheProjects(projects: ProjectInfo[]): Promise<void> {
+    private async cacheProjectsOld(projects: ProjectInfo[]): Promise<void> {
         try {
-            const cache: ProjectCache = {
+            const cache: LegacyProjectCache = {
                 projects,
                 lastUpdated: new Date().toISOString(),
                 workspaceRoot: this.workspaceRoot,
@@ -267,7 +293,7 @@ export class SimpleProjectDiscovery {
     /**
      * Check if cached projects are still valid (not too old)
      */
-    private isCacheValid(cache: ProjectCache): boolean {
+    private isCacheValid(cache: LegacyProjectCache): boolean {
         const cacheAge = Date.now() - new Date(cache.lastUpdated).getTime();
         const maxAge = 30 * 60 * 1000; // 30 minutes
         

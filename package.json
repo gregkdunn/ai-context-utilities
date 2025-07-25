@@ -69,6 +69,12 @@
         "title": "🎯 Type Project Name",
         "category": "AI Debug",
         "icon": "$(edit)"
+      },
+      {
+        "command": "aiDebugContext.createConfig",
+        "title": "📝 Create Configuration File",
+        "category": "AI Debug",
+        "icon": "$(file-code)"
       }
     ],
     "menus": {
@@ -99,6 +105,9 @@
         },
         {
           "command": "aiDebugContext.runManualProject"
+        },
+        {
+          "command": "aiDebugContext.createConfig"
         }
       ]
     },
@@ -184,11 +193,19 @@
     "test:watch": "jest --watch", 
     "test:coverage": "jest --coverage",
     "test:ci": "jest --coverage --coverageReporters=text-lcov --passWithNoTests",
+    "test:unit": "jest --testPathPattern='__tests__/unit'",
+    "test:integration": "jest --testPathPattern='__tests__/integration'",
+    "dev": "npm run watch",
+    "dev:setup": "node scripts/dev-setup.js",
+    "dev:setup:shell": "./scripts/dev-setup.sh",
+    "clean": "rm -rf out/ .jest-cache/",
     "package": "vsce package",
-    "publish": "vsce publish"
+    "publish": "vsce publish",
+    "quick-test": "./scripts/quick-test.sh || echo 'Run dev setup first'"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
+    "@types/js-yaml": "^4.0.5",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^2.19.0",
@@ -196,7 +213,9 @@
     "ts-jest": "^29.1.0",
     "typescript": "^5.4.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=18.0.0"

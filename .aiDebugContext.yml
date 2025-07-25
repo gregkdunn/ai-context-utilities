@@ -1,0 +1,40 @@
+# AI Debug Context Configuration - Phase 1.9
+# Primary framework: Nx (default)
+
+framework: nx  # Options: nx, jest, vitest, mocha, custom
+
+# Test commands - use {project} as placeholder
+testCommands:
+  default: npx nx test {project}
+  affected: npx nx affected:test
+  watch: npx nx test {project} --watch
+  coverage: npx nx test {project} --coverage
+  debug: npx nx test {project} --inspect
+
+# File patterns
+patterns:
+  test:
+    - "**/*.spec.ts"
+    - "**/*.spec.js"
+    - "**/*.test.ts"
+    - "**/*.test.js"
+  source:
+    - "src/**/*.ts"
+    - "src/**/*.js"
+  ignore:
+    - "node_modules/**"
+    - "dist/**"
+
+# Performance settings
+performance:
+  parallel: true
+  maxWorkers: 4
+  cache: true
+  cacheTimeout: 30  # minutes
+
+# Output preferences  
+output:
+  verbose: true
+  format: legacy  # Options: legacy, minimal, detailed
+  preserveAnsi: false
+  showTiming: true

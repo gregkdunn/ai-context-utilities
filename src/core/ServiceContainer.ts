@@ -14,6 +14,10 @@ import { SetupWizard } from '../onboarding/SetupWizard';
 import { MacOSCompatibility } from '../platform/MacOSCompatibility';
 import { SimpleProjectDiscovery } from '../utils/simpleProjectDiscovery';
 import { TestActions } from '../utils/testActions';
+import { ConfigurationManager } from './ConfigurationManager';
+import { ProjectCache } from '../utils/ProjectCache';
+import { BackgroundProjectDiscovery } from '../utils/BackgroundProjectDiscovery';
+import { SimplePerformanceTracker } from '../utils/SimplePerformanceTracker';
 
 export interface ServiceConfiguration {
     workspaceRoot: string;
@@ -34,6 +38,10 @@ export class ServiceContainer {
     private _bridge!: ShellScriptBridge;
     private _smartRouter!: SmartCommandRouter;
     private _testActions!: TestActions;
+    private _configManager!: ConfigurationManager;
+    private _projectCache!: ProjectCache;
+    private _backgroundDiscovery!: BackgroundProjectDiscovery;
+    private _performanceTracker!: SimplePerformanceTracker;
     private _fileWatcherActive: boolean = false;
 
     constructor(private config: ServiceConfiguration) {
@@ -59,9 +67,29 @@ export class ServiceContainer {
         // Platform services
         this._macosCompat = new MacOSCompatibility();
 
+        // Performance monitoring (Phase 1.9.1)
+        this._performanceTracker = new SimplePerformanceTracker(this._outputChannel);
+
+        // Configuration services (Phase 1.9)
+        this._configManager = new ConfigurationManager(this.config.workspaceRoot);
+        this._projectCache = new ProjectCache(
+            this.config.workspaceRoot, 
+            this._configManager.get('performance')?.cacheTimeout || 30
+        );
+
+        // Background services (Phase 1.9.1)
+        this._backgroundDiscovery = new BackgroundProjectDiscovery(
+            this._outputChannel,
+            this._projectCache
+        );
+
         // Business logic services
         this._setupWizard = new SetupWizard(this.config.workspaceRoot, this._outputChannel);
-        this._projectDiscovery = new SimpleProjectDiscovery(this.config.workspaceRoot, this._outputChannel);
+        this._projectDiscovery = new SimpleProjectDiscovery(
+            this.config.workspaceRoot, 
+            this._outputChannel,
+            this._projectCache
+        );
 
         // Infrastructure services
         this._bridge = new ShellScriptBridge(this.config.extensionPath, this._outputChannel);
@@ -71,18 +99,24 @@ export class ServiceContainer {
             this.config.extensionPath
         );
 
-        // Utility services
+        // Utility services - now uses configuration
+        const testCommand = this._configManager.getTestCommand('default');
         this._testActions = new TestActions({
             outputChannel: this._outputChannel,
             workspaceRoot: this.config.workspaceRoot,
-            testCommand: 'npx nx test'
+            testCommand: testCommand
         });
+
+        // Start background discovery for current workspace
+        this._backgroundDiscovery.queueDiscovery(this.config.workspaceRoot, 'medium');
 
         // Register disposables
         this.config.extensionContext.subscriptions.push(
             this._outputChannel,
             this._bridge,
-            this._statusBarItem
+            this._statusBarItem,
+            this._backgroundDiscovery,
+            this._performanceTracker
         );
     }
 
@@ -136,6 +170,25 @@ export class ServiceContainer {
     }
 
     /**
+     * Configuration services (Phase 1.9)
+     */
+    get configManager(): ConfigurationManager {
+        return this._configManager;
+    }
+
+    get projectCache(): ProjectCache {
+        return this._projectCache;
+    }
+
+    get backgroundDiscovery(): BackgroundProjectDiscovery {
+        return this._backgroundDiscovery;
+    }
+
+    get performanceTracker(): SimplePerformanceTracker {
+        return this._performanceTracker;
+    }
+
+    /**
      * Infrastructure services
      */
     get bridge(): ShellScriptBridge {
@@ -161,8 +214,11 @@ export class ServiceContainer {
      * Status bar helper methods
      */
     updateStatusBar(text: string, color?: 'green' | 'yellow' | 'red'): void {
+        // Get performance info for tooltip
+        const performanceInfo = this.getPerformanceTooltip();
+        
         this._statusBarItem.text = `⚡ AI Debug Context: ${text}`;
-        this._statusBarItem.tooltip = `AI Debug Context: ${text} (Click to run auto-detect tests)`;
+        this._statusBarItem.tooltip = `AI Debug Context: ${text} (Click to run auto-detect tests)\n\n${performanceInfo}`;
         
         // Set color based on status
         if (color === 'green') {
@@ -173,6 +229,23 @@ export class ServiceContainer {
             this._statusBarItem.color = new vscode.ThemeColor('charts.red');
         } else {
             this._statusBarItem.color = undefined;
+        }
+    }
+
+    /**
+     * Get performance information for status bar tooltip
+     */
+    private getPerformanceTooltip(): string {
+        try {
+            const performanceSummary = this._performanceTracker.getStatusSummary();
+            const queueStatus = this._backgroundDiscovery.getQueueStatus();
+            
+            return [
+                `⚡ Performance: ${performanceSummary}`,
+                `📋 Queue: ${queueStatus.queueLength} pending, ${queueStatus.isRunning ? 'running' : 'idle'}`
+            ].join('\n');
+        } catch (error) {
+            return '⚡ Ready to test';
         }
     }
 
@@ -219,6 +292,8 @@ export class ServiceContainer {
         // Services are automatically disposed via extensionContext.subscriptions
         // but we can add custom cleanup here if needed
         this._fileWatcherActive = false;
+        this._backgroundDiscovery?.dispose();
+        this._performanceTracker?.dispose();
     }
 
     /**

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "projects": {
+    "my-angular-app": {
+      "projectType": "application",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:browser"
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma"
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server"
+        }
+      }
+    }
+  }
+}

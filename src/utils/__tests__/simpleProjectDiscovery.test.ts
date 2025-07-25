@@ -232,7 +232,7 @@ describe('SimpleProjectDiscovery', () => {
             await discovery.clearCache();
 
             expect(mockWorkspaceConfig.update).toHaveBeenCalledWith(
-                'aiDebugContext.projectCache',
+                'projectDiscoveryCache',
                 undefined,
                 true
             );
