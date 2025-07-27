@@ -1,0 +1,401 @@
+/**
+ * Unit tests for NativeTestRunner service
+ * Tests the native TypeScript test runner implementation
+ */
+
+import { NativeTestRunner, NativeTestResult, TestExecutionOptions } from '../../../services/NativeTestRunner';
+import { TestIntelligenceEngine } from '../../../core/TestIntelligenceEngine';
+import { RealTimeTestMonitor } from '../../../services/RealTimeTestMonitor';
+import { AITestAssistant } from '../../../services/AITestAssistant';
+import * as vscode from 'vscode';
+import { spawn } from 'child_process';
+import { EventEmitter } from 'events';
+
+// Mock child_process
+jest.mock('child_process', () => ({
+    spawn: jest.fn()
+}));
+
+// Mock fs
+jest.mock('fs', () => ({
+    promises: {
+        access: jest.fn(),
+        readFile: jest.fn(),
+        stat: jest.fn()
+    }
+}));
+
+describe('NativeTestRunner', () => {
+    let runner: NativeTestRunner;
+    let mockOutputChannel: jest.Mocked<vscode.OutputChannel>;
+    let mockTestIntelligence: jest.Mocked<TestIntelligenceEngine>;
+    let mockRealTimeMonitor: jest.Mocked<RealTimeTestMonitor>;
+    let mockAIAssistant: jest.Mocked<AITestAssistant>;
+    const workspaceRoot = '/test/workspace';
+
+    beforeEach(() => {
+        // Create mock dependencies
+        mockOutputChannel = {
+            appendLine: jest.fn(),
+            append: jest.fn(),
+            show: jest.fn(),
+            hide: jest.fn(),
+            clear: jest.fn(),
+            dispose: jest.fn()
+        } as any;
+
+        mockTestIntelligence = {
+            analyzePattern: jest.fn(),
+            getTestInsights: jest.fn(),
+            recordFailure: jest.fn(),
+            getFailureTrends: jest.fn(),
+            getCommonPatterns: jest.fn(),
+            getCriticalPaths: jest.fn(),
+            initialize: jest.fn(),
+            processTestRun: jest.fn(),
+            generateReport: jest.fn()
+        } as any;
+
+        mockRealTimeMonitor = {
+            startMonitoring: jest.fn(),
+            stopMonitoring: jest.fn(),
+            getTestPredictions: jest.fn(),
+            updatePredictions: jest.fn(),
+            getRealtimeStats: jest.fn()
+        } as any;
+
+        mockAIAssistant = {
+            analyzeFailure: jest.fn(),
+            getTestSuggestions: jest.fn(),
+            suggestFix: jest.fn(),
+            generateTestCode: jest.fn(),
+            analyzeCopilotResponse: jest.fn(),
+            learnFromFix: jest.fn()
+        } as any;
+
+        runner = new NativeTestRunner(
+            workspaceRoot,
+            mockOutputChannel,
+            mockTestIntelligence,
+            mockRealTimeMonitor,
+            mockAIAssistant
+        );
+
+        jest.clearAllMocks();
+    });
+
+    describe('runAffectedTests', () => {
+        test('should run tests for affected files', async () => {
+            // Mock git diff output
+            const mockGitProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockGitProcess);
+            
+            // Emit git diff data
+            process.nextTick(() => {
+                mockGitProcess.emit('data', 'src/component.ts\nsrc/service.ts\n');
+                mockGitProcess.emit('close', 0);
+            });
+
+            // Mock test file discovery
+            const mockTestProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValueOnce(mockGitProcess).mockReturnValueOnce(mockTestProcess);
+
+            // Emit test execution
+            process.nextTick(() => {
+                mockTestProcess.emit('data', 'PASS src/component.spec.ts\n');
+                mockTestProcess.emit('close', 0);
+            });
+
+            mockRealTimeMonitor.getTestPredictions.mockResolvedValue({
+                optimizedOrder: [
+                    { testName: 'Component test', fileName: 'src/component.spec.ts' }
+                ],
+                likelyFailures: [],
+                estimatedDuration: 5000
+            });
+
+            const result = await runner.runAffectedTests();
+
+            expect(result.success).toBe(true);
+            expect(result.exitCode).toBe(0);
+            expect(result.testFiles.length).toBeGreaterThan(0);
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                expect.stringContaining('Running affected tests')
+            );
+        });
+
+        test('should handle no affected test files', async () => {
+            // Mock git diff with no test-related changes
+            const mockGitProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockGitProcess);
+            
+            process.nextTick(() => {
+                mockGitProcess.emit('data', 'README.md\npackage.json\n');
+                mockGitProcess.emit('close', 0);
+            });
+
+            const result = await runner.runAffectedTests();
+
+            expect(result.success).toBe(true);
+            expect(result.exitCode).toBe(0);
+            expect(result.testFiles).toEqual([]);
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                expect.stringContaining('No test files affected')
+            );
+        });
+
+        test('should use test intelligence when enabled', async () => {
+            mockRealTimeMonitor.getTestPredictions.mockResolvedValue({
+                optimizedOrder: [
+                    { testName: 'Critical test', fileName: 'src/critical.spec.ts' },
+                    { testName: 'Regular test', fileName: 'src/regular.spec.ts' }
+                ],
+                likelyFailures: [
+                    { testName: 'Critical test', probability: 0.8, reason: 'Recent failures' }
+                ],
+                estimatedDuration: 10000
+            });
+
+            const options: TestExecutionOptions = {
+                useIntelligence: true
+            };
+
+            const mockGitProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockGitProcess);
+            
+            process.nextTick(() => {
+                mockGitProcess.emit('data', 'src/critical.ts\n');
+                mockGitProcess.emit('close', 0);
+            });
+
+            await runner.runAffectedTests(options);
+
+            expect(mockRealTimeMonitor.getTestPredictions).toHaveBeenCalled();
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                expect.stringContaining('Intelligence: Optimized test order')
+            );
+        });
+
+        test('should handle test failures', async () => {
+            const mockGitProcess = new EventEmitter();
+            const mockTestProcess = new EventEmitter();
+            
+            (spawn as jest.Mock)
+                .mockReturnValueOnce(mockGitProcess)
+                .mockReturnValueOnce(mockTestProcess);
+            
+            process.nextTick(() => {
+                mockGitProcess.emit('data', 'src/failing.ts\n');
+                mockGitProcess.emit('close', 0);
+            });
+
+            process.nextTick(() => {
+                mockTestProcess.emit('data', 'FAIL src/failing.spec.ts\n');
+                mockTestProcess.emit('data', '● Test suite failed to run\n');
+                mockTestProcess.emit('data', 'TypeError: Cannot read property\n');
+                mockTestProcess.emit('close', 1);
+            });
+
+            const result = await runner.runAffectedTests();
+
+            expect(result.success).toBe(false);
+            expect(result.exitCode).toBe(1);
+            expect(result.failures.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('runTests', () => {
+        test('should run specific test files', async () => {
+            const testFiles = ['src/component.spec.ts', 'src/service.spec.ts'];
+            const mockProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            process.nextTick(() => {
+                mockProcess.emit('data', 'PASS src/component.spec.ts\n');
+                mockProcess.emit('data', 'PASS src/service.spec.ts\n');
+                mockProcess.emit('close', 0);
+            });
+
+            const result = await runner.runTests(testFiles);
+
+            expect(result.success).toBe(true);
+            expect(result.testFiles).toEqual(testFiles);
+            expect(spawn).toHaveBeenCalledWith(
+                expect.any(String),
+                expect.arrayContaining(['test']),
+                expect.objectContaining({ cwd: workspaceRoot })
+            );
+        });
+
+        test('should respect timeout option', async () => {
+            const testFiles = ['src/slow.spec.ts'];
+            const options: TestExecutionOptions = {
+                timeout: 100 // 100ms timeout
+            };
+
+            const mockProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            // Don't emit any events, let it timeout
+            const promise = runner.runTests(testFiles, options);
+
+            // Wait for timeout
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            const result = await promise;
+            expect(result.success).toBe(false);
+            expect(result.stderr).toContain('timeout');
+        });
+
+        test('should handle fail fast option', async () => {
+            const testFiles = ['src/test1.spec.ts', 'src/test2.spec.ts'];
+            const options: TestExecutionOptions = {
+                failFast: true
+            };
+
+            const mockProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            process.nextTick(() => {
+                mockProcess.emit('data', 'FAIL src/test1.spec.ts\n');
+                mockProcess.emit('close', 1);
+            });
+
+            const result = await runner.runTests(testFiles, options);
+
+            expect(result.success).toBe(false);
+            expect(spawn).toHaveBeenCalledWith(
+                expect.any(String),
+                expect.arrayContaining(['--bail']),
+                expect.any(Object)
+            );
+        });
+    });
+
+    describe('watchTests', () => {
+        test('should start test watcher', async () => {
+            const mockProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            const watcher = await runner.watchTests('test-project', {});
+
+            expect(spawn).toHaveBeenCalledWith(
+                expect.any(String),
+                expect.arrayContaining(['--watch']),
+                expect.any(Object)
+            );
+            expect(mockRealTimeMonitor.startMonitoring).toHaveBeenCalled();
+
+            // Clean up
+            watcher.stop();
+        });
+
+        test('should handle watch events', async () => {
+            const mockProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            const onChange = jest.fn();
+            const onFailure = jest.fn();
+            
+            const watcher = await runner.watchTests('test-project', {
+                onChange,
+                onFailure
+            });
+
+            // Simulate test change
+            mockProcess.emit('data', 'Test Suites: 1 passed, 1 total\n');
+            expect(onChange).toHaveBeenCalled();
+
+            // Simulate test failure
+            mockProcess.emit('data', 'FAIL src/test.spec.ts\n');
+            expect(onFailure).toHaveBeenCalled();
+
+            watcher.stop();
+        });
+    });
+
+    describe('getChangedFiles', () => {
+        test('should get changed files from git', async () => {
+            const mockProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            const filesPromise = runner['getChangedFiles']();
+
+            process.nextTick(() => {
+                mockProcess.emit('data', 'src/file1.ts\nsrc/file2.ts\n');
+                mockProcess.emit('close', 0);
+            });
+
+            const files = await filesPromise;
+            expect(files).toEqual(['src/file1.ts', 'src/file2.ts']);
+        });
+
+        test('should handle git errors gracefully', async () => {
+            const mockProcess = new EventEmitter();
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            const filesPromise = runner['getChangedFiles']();
+
+            process.nextTick(() => {
+                mockProcess.emit('error', new Error('Not a git repository'));
+                mockProcess.emit('close', 128);
+            });
+
+            const files = await filesPromise;
+            expect(files).toEqual([]);
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
+                expect.stringContaining('Error getting changed files')
+            );
+        });
+    });
+
+    describe('findAffectedTestFiles', () => {
+        test('should find test files for changed source files', async () => {
+            const changedFiles = ['src/components/Button.tsx', 'src/utils/helpers.ts'];
+            const fs = require('fs');
+            
+            // Mock file existence checks
+            fs.promises.access.mockImplementation((path: string) => {
+                if (path.includes('.spec.') || path.includes('.test.')) {
+                    return Promise.resolve();
+                }
+                return Promise.reject(new Error('Not found'));
+            });
+
+            const testFiles = await runner['findAffectedTestFiles'](changedFiles);
+
+            expect(testFiles).toContain('src/components/Button.spec.tsx');
+            expect(testFiles).toContain('src/utils/helpers.test.ts');
+        });
+
+        test('should include test files themselves if changed', async () => {
+            const changedFiles = ['src/component.spec.ts', 'src/service.ts'];
+            
+            const testFiles = await runner['findAffectedTestFiles'](changedFiles);
+
+            expect(testFiles).toContain('src/component.spec.ts');
+        });
+    });
+
+    describe('abort', () => {
+        test('should abort running tests', async () => {
+            const mockProcess = {
+                kill: jest.fn(),
+                pid: 12345
+            };
+            (spawn as jest.Mock).mockReturnValue(mockProcess);
+
+            // Start a long-running test
+            const testPromise = runner.runTests(['src/long.spec.ts']);
+
+            // Abort after a short delay
+            setTimeout(() => runner.abort(), 50);
+
+            const result = await testPromise;
+
+            expect(mockProcess.kill).toHaveBeenCalled();
+            expect(result.success).toBe(false);
+            expect(result.stderr).toContain('aborted');
+        });
+    });
+});

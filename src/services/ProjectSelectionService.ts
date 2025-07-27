@@ -9,7 +9,7 @@ import { ServiceContainer } from '../core/ServiceContainer';
 import { ProjectInfo } from '../utils/simpleProjectDiscovery';
 
 export interface ProjectSelectionResult {
-    type: 'project' | 'auto-detect' | 'git-affected' | 'cancelled';
+    type: 'project' | 'auto-detect' | 'git-affected' | 'post-test-context' | 'cancelled';
     project?: string;
 }
 
@@ -27,6 +27,33 @@ export class ProjectSelectionService {
     constructor(private services: ServiceContainer) {}
 
     /**
+     * Check if post-test context files exist
+     */
+    private async hasPostTestFiles(): Promise<boolean> {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai_debug_context');
+            
+            if (!fs.existsSync(contextDir)) {
+                return false;
+            }
+
+            const files = fs.readdirSync(contextDir);
+            // Check for any non-empty files (excluding .gitkeep or similar)
+            const contextFiles = files.filter((file: string) => 
+                file !== '.gitkeep' && 
+                !file.startsWith('.') &&
+                fs.statSync(path.join(contextDir, file)).size > 0
+            );
+            
+            return contextFiles.length > 0;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
      * Show main project selection menu
      */
     async showMainSelectionMenu(): Promise<ProjectSelectionResult> {
@@ -42,7 +69,7 @@ export class ProjectSelectionService {
         quickPick.ignoreFocusOut = true;
         
         // Build menu items
-        const items = this.buildMenuItems(recentProjects);
+        const items = await this.buildMenuItems(recentProjects);
         quickPick.items = items;
         
         return new Promise((resolve) => {
@@ -178,7 +205,7 @@ export class ProjectSelectionService {
     /**
      * Build main menu items
      */
-    private buildMenuItems(recentProjects: RecentProject[]): vscode.QuickPickItem[] {
+    private async buildMenuItems(recentProjects: RecentProject[]): Promise<vscode.QuickPickItem[]> {
         const items: vscode.QuickPickItem[] = [
             {
                 label: '$(zap) Test Affected Projects',
@@ -196,6 +223,16 @@ export class ProjectSelectionService {
                 description: '$(list-tree) Browse'
             },
         ];
+
+        // Add post-test panel option if context files exist
+        const hasPostTestFiles = await this.hasPostTestFiles();
+        if (hasPostTestFiles) {
+            items.push({
+                label: '$(notebook) View Post-Test Context',
+                detail: 'Open saved test context and AI insights',
+                description: '$(file-text) Available'
+            });
+        }
 
         // Add recent projects if available
         if (recentProjects.length > 0) {
@@ -352,6 +389,8 @@ export class ProjectSelectionService {
             return { type: 'auto-detect' };
         } else if (selection.label.includes('Test Updated Files')) {
             return { type: 'git-affected' };
+        } else if (selection.label.includes('View Post-Test Context')) {
+            return { type: 'post-test-context' };
         } else if (selection.label.includes('Select Project')) {
             // This will trigger the project browser
             return { type: 'project', project: 'SHOW_BROWSER' };

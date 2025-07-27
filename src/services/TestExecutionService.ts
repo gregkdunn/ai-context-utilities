@@ -8,6 +8,10 @@ import * as vscode from 'vscode';
 import { ServiceContainer } from '../core/ServiceContainer';
 import { TestResultParser } from '../utils/testResultParser';
 import { LegacyStyleFormatter } from '../utils/legacyStyleFormatter';
+import { GitDiffCapture } from '../modules/gitDiff/GitDiffCapture';
+import { TestOutputCapture } from '../modules/testOutput/TestOutputCapture';
+import { PostTestActionService } from './PostTestActionService';
+import { TestResultCache } from '../utils/TestResultCache';
 
 export interface TestExecutionRequest {
     project?: string;
@@ -31,7 +35,28 @@ export type ProgressCallback = (progress: string) => void;
  * Service for executing tests with streaming progress
  */
 export class TestExecutionService {
-    constructor(private services: ServiceContainer) {}
+    private gitDiffCapture: GitDiffCapture;
+    private testOutputCapture: TestOutputCapture;
+    private postTestActions: PostTestActionService;
+    private testResultCache: TestResultCache;
+    private enablePhase2Features: boolean = true; // Can be configured
+    private enableCaching: boolean = true; // Can be configured
+
+    constructor(private services: ServiceContainer) {
+        this.gitDiffCapture = new GitDiffCapture({
+            workspaceRoot: services.workspaceRoot,
+            outputChannel: services.outputChannel
+        });
+        
+        this.testOutputCapture = new TestOutputCapture({
+            workspaceRoot: services.workspaceRoot,
+            outputChannel: services.outputChannel
+        });
+        
+        this.postTestActions = new PostTestActionService(services);
+        
+        this.testResultCache = new TestResultCache(services.workspaceRoot);
+    }
 
     /**
      * Execute test for specific request with streaming progress
@@ -48,6 +73,35 @@ export class TestExecutionService {
             const command = await this.getTestCommand(request);
             const projectName = request.project || 'affected';
             
+            // Check cache first if enabled
+            if (this.enableCaching && request.project) {
+                const affectedFiles = await this.getAffectedFiles(request.project);
+                const testConfig = { command, mode: request.mode, verbose: request.verbose };
+                
+                const cachedResult = await this.testResultCache.getCachedResult(
+                    request.project,
+                    affectedFiles,
+                    testConfig
+                );
+                
+                if (cachedResult) {
+                    this.services.outputChannel.appendLine(`🚀 Using cached result for ${projectName} (files unchanged)`);
+                    this.services.updateStatusBar(`✅ ${projectName} (cached)`, cachedResult.success ? 'green' : 'red');
+                    
+                    // Still show post-test actions for cached results
+                    if (this.enablePhase2Features) {
+                        await this.postTestActions.showPostTestActions(cachedResult, request);
+                    }
+                    
+                    return cachedResult;
+                }
+            }
+            
+            // Phase 2.0: Capture git diff before test execution
+            if (this.enablePhase2Features) {
+                await this.gitDiffCapture.captureDiff();
+            }
+            
             this.services.outputChannel.appendLine(`\n${'='.repeat(80)}`);
             this.services.outputChannel.appendLine(`🧪 [${timestamp}] TESTING: ${projectName.toUpperCase()}`);
             this.services.outputChannel.appendLine(`🧪 Running: ${command}`);
@@ -56,6 +110,11 @@ export class TestExecutionService {
             // Save project as recent if it's a specific project
             if (request.project) {
                 await this.saveRecentProject(request.project);
+            }
+            
+            // Phase 2.0: Start test output capture
+            if (this.enablePhase2Features) {
+                this.testOutputCapture.startCapture(command, request.project);
             }
             
             // Execute command with streaming progress
@@ -74,10 +133,15 @@ export class TestExecutionService {
                 }
             }
             
+            // Phase 2.0: Stop test output capture
+            if (this.enablePhase2Features) {
+                await this.testOutputCapture.stopCapture(result.exitCode, testSummary);
+            }
+            
             // Format and display results
             await this.displayResults(testSummary, command, result);
             
-            return {
+            const testResult: TestResult = {
                 success: result.exitCode === 0,
                 project: projectName,
                 duration: parseFloat(duration),
@@ -86,6 +150,31 @@ export class TestExecutionService {
                 stderr: result.stderr,
                 summary: testSummary
             };
+            
+            // Cache the result if enabled
+            if (this.enableCaching && request.project) {
+                const affectedFiles = await this.getAffectedFiles(request.project);
+                const testConfig = { command, mode: request.mode, verbose: request.verbose };
+                
+                await this.testResultCache.cacheResult(
+                    request.project,
+                    affectedFiles,
+                    testConfig,
+                    testResult
+                );
+            }
+            
+            // Phase 2.0.3: Analyze failures with AI assistance
+            if (this.enablePhase2Features && !testResult.success && testSummary.failures.length > 0) {
+                await this.analyzeFailuresWithAI(testSummary.failures);
+            }
+            
+            // Phase 2.0: Show post-test actions
+            if (this.enablePhase2Features) {
+                await this.postTestActions.showPostTestActions(testResult, request);
+            }
+            
+            return testResult;
         });
     }
 
@@ -105,7 +194,7 @@ export class TestExecutionService {
     }
 
     /**
-     * Execute command with real-time progress streaming
+     * Execute command with real-time progress streaming and test intelligence
      */
     private async executeCommand(command: string, onProgress?: ProgressCallback): Promise<{
         exitCode: number;
@@ -114,6 +203,9 @@ export class TestExecutionService {
     }> {
         return new Promise((resolve) => {
             const { spawn } = require('child_process');
+            
+            // Phase 2.0.3: Start real-time test monitoring
+            this.services.realTimeTestMonitor.startMonitoring();
             
             // Parse command
             const parts = command.split(' ');
@@ -132,6 +224,19 @@ export class TestExecutionService {
                 const text = data.toString();
                 stdout += text;
                 
+                // Phase 2.0.3: Process output through real-time test monitor
+                this.services.realTimeTestMonitor.processOutput(text);
+                
+                // Phase 2.0: Capture output for AI context
+                if (this.enablePhase2Features) {
+                    const lines = text.split('\n');
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            this.testOutputCapture.appendOutput(line);
+                        }
+                    }
+                }
+                
                 // Show real-time progress
                 this.displayRealTimeProgress(text);
                 onProgress?.(text);
@@ -141,12 +246,28 @@ export class TestExecutionService {
                 const text = data.toString();
                 stderr += text;
                 
+                // Phase 2.0.3: Process error output through real-time test monitor
+                this.services.realTimeTestMonitor.processOutput(text);
+                
+                // Phase 2.0: Capture error output for AI context
+                if (this.enablePhase2Features) {
+                    const lines = text.split('\n');
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            this.testOutputCapture.appendOutput(line);
+                        }
+                    }
+                }
+                
                 // Show errors in real-time
                 this.displayRealTimeProgress(text);
                 onProgress?.(text);
             });
             
             child.on('close', (code: any) => {
+                // Phase 2.0.3: Stop real-time test monitoring
+                this.services.realTimeTestMonitor.stopMonitoring();
+                
                 resolve({ 
                     exitCode: code || 0, 
                     stdout, 
@@ -285,6 +406,91 @@ export class TestExecutionService {
             });
         } else {
             this.services.outputChannel.appendLine(text);
+        }
+    }
+
+    /**
+     * Get affected files for a project (simplified for caching)
+     */
+    private async getAffectedFiles(projectName: string): Promise<string[]> {
+        try {
+            // Try to get files from project discovery
+            const projects = await this.services.projectDiscovery.getAllProjects();
+            const project = projects.find(p => p.name === projectName);
+            
+            if (project) {
+                // Return project-specific files (simplified)
+                return [`projects/${projectName}/**/*.ts`, `projects/${projectName}/**/*.js`];
+            }
+            
+            // Fallback to generic patterns
+            return [`**/${projectName}/**/*.ts`, `**/${projectName}/**/*.js`];
+        } catch (error) {
+            // Fallback to basic patterns
+            return [`**/*.ts`, `**/*.js`];
+        }
+    }
+
+    /**
+     * Clear test cache
+     */
+    async clearTestCache(): Promise<void> {
+        await this.testResultCache.clearCache();
+    }
+
+    /**
+     * Get cache statistics
+     */
+    getCacheStats() {
+        return this.testResultCache.getCacheStats();
+    }
+
+    /**
+     * Analyze test failures with AI assistance (Phase 2.0.3)
+     */
+    private async analyzeFailuresWithAI(failures: any[]): Promise<void> {
+        try {
+            this.services.outputChannel.appendLine('\n🤖 Analyzing failures with AI...');
+            
+            // Analyze each failure
+            for (const failure of failures.slice(0, 3)) { // Limit to first 3 failures
+                const testInsights = this.services.testIntelligenceEngine.getTestInsights(
+                    failure.test, 
+                    failure.file || failure.suite
+                );
+                
+                const analysis = await this.services.aiTestAssistant.analyzeFailure(
+                    failure, 
+                    testInsights || undefined
+                );
+                
+                this.services.outputChannel.appendLine(`\n📊 Analysis for "${failure.test}":`);
+                this.services.outputChannel.appendLine(`   💡 ${analysis.summary}`);
+                this.services.outputChannel.appendLine(`   🎯 Root Cause: ${analysis.rootCause}`);
+                this.services.outputChannel.appendLine(`   🔧 Suggested Fix: ${analysis.suggestedFix}`);
+                this.services.outputChannel.appendLine(`   📈 Confidence: ${(analysis.confidence * 100).toFixed(0)}%`);
+                
+                if (analysis.codeChanges && analysis.codeChanges.length > 0) {
+                    this.services.outputChannel.appendLine(`   📝 Code suggestions:`);
+                    for (const change of analysis.codeChanges.slice(0, 2)) {
+                        this.services.outputChannel.appendLine(`      • ${change.explanation}`);
+                    }
+                }
+            }
+            
+            // Get optimization suggestions
+            const suggestions = await this.services.testIntelligenceEngine.getOptimizationSuggestions();
+            if (suggestions.length > 0) {
+                this.services.outputChannel.appendLine('\n🚀 Test Optimization Suggestions:');
+                for (const suggestion of suggestions.slice(0, 2)) {
+                    const icon = suggestion.impact === 'high' ? '🚨' : 
+                                suggestion.impact === 'medium' ? '⚠️' : 'ℹ️';
+                    this.services.outputChannel.appendLine(`   ${icon} ${suggestion.title}: ${suggestion.description}`);
+                }
+            }
+            
+        } catch (error) {
+            this.services.outputChannel.appendLine(`⚠️ AI analysis failed: ${error}`);
         }
     }
 

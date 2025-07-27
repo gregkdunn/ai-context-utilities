@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { TestSummary, TestFailure, TestResultParser } from './testResultParser';
 import { UserFriendlyErrors } from './userFriendlyErrors';
 import { LegacyStyleFormatter } from './legacyStyleFormatter';
+import { ContextCompiler } from '../modules/aiContext/ContextCompiler';
 
 export interface TestActionOptions {
     outputChannel: vscode.OutputChannel;
@@ -28,6 +29,28 @@ export class TestActions {
         this.workspaceRoot = options.workspaceRoot;
         this.testCommand = options.testCommand || 'npx nx test';
         this.currentRawOutput = options.rawOutput || '';
+    }
+
+    /**
+     * Build test command with proper project substitution
+     */
+    private buildTestCommand(project: string, additionalArgs?: string): string {
+        let command = this.testCommand;
+        
+        // If command contains {project} placeholder, replace it
+        if (command.includes('{project}')) {
+            command = command.replace('{project}', project);
+        } else {
+            // Otherwise, append project name
+            command = `${command} ${project}`;
+        }
+        
+        // Add additional arguments if provided
+        if (additionalArgs) {
+            command += ` ${additionalArgs}`;
+        }
+        
+        return command;
     }
     
     /**
@@ -102,29 +125,24 @@ export class TestActions {
             return;
         }
         
-        // Show actionable notification
-        const message = UserFriendlyErrors.testsFailed(result.project, result.failed, result.total);
+        // Show actionable notification with new button order
+        const message = `${result.project}: ${result.failed} tests failed (${result.failed} of ${result.total}). Click for details and options.`;
         
-        const actions = ['Re-run Failed', 'Re-run All', 'View Output'];
-        if (result.failures.length > 0) {
-            actions.unshift('Debug First Failure');
-        }
+        // New order: 1. Copilot Debug, 2. Rerun Tests, 3. View Test Results
+        const actions = ['Copilot Debug', 'Rerun Tests', 'View Test Results'];
                 
         this.currentPopupPromise = vscode.window.showErrorMessage(message, ...actions);
         const selection = await this.currentPopupPromise;
         this.currentPopupPromise = null;
         
         switch (selection) {
-            case 'Re-run Failed':
-                await this.rerunFailedTests(result);
+            case 'Copilot Debug':
+                await this.copilotDebugTests(result);
                 break;
-            case 'Re-run All':
+            case 'Rerun Tests':
                 await this.rerunAllTests(result.project);
                 break;
-            case 'Debug First Failure':
-                await this.debugFirstFailure(result);
-                break;
-            case 'View Output':
+            case 'View Test Results':
                 this.outputChannel.show();
                 break;
         }
@@ -253,6 +271,287 @@ export class TestActions {
     }
     
     /**
+     * Open Copilot Chat for test debugging assistance
+     */
+    async copilotDebugTests(result: TestSummary): Promise<void> {
+        try {
+            this.outputChannel.appendLine(`\n🤖 Starting Copilot debug session for ${result.project}...`);
+            
+            // First, try to compile fresh AI context using ContextCompiler
+            const formattedContext = await this.compileAIDebugContext(result);
+            
+            if (formattedContext) {
+                // Send the properly formatted context to Copilot Chat
+                await this.sendToCopilotChat(formattedContext);
+                this.outputChannel.appendLine('🤖 Formatted AI debug context sent to Copilot Chat');
+            } else {
+                // Fallback: try reading existing context file
+                const existingContext = await this.readAIDebugContext();
+                
+                if (existingContext) {
+                    await this.sendToCopilotChat(existingContext);
+                    this.outputChannel.appendLine('🤖 Existing AI debug context sent to Copilot Chat');
+                } else {
+                    // Final fallback to generated prompt
+                    const contextPrompt = this.buildCopilotDebugPrompt(result);
+                    await this.sendToCopilotChat(contextPrompt);
+                    this.outputChannel.appendLine('🤖 Generated debug prompt sent to Copilot Chat');
+                }
+            }
+            
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ Failed to start Copilot debug session: ${error}`);
+            vscode.window.showErrorMessage('Failed to start Copilot debug session');
+        }
+    }
+
+    /**
+     * Compile properly formatted AI debug context using ContextCompiler
+     */
+    private async compileAIDebugContext(result: TestSummary): Promise<string | null> {
+        try {
+            const contextCompiler = new ContextCompiler({
+                workspaceRoot: this.workspaceRoot,
+                outputChannel: this.outputChannel
+            });
+
+            // Determine if tests passed based on result
+            const testPassed = result.success;
+            
+            // Compile debug context with proper formatting and prompts
+            const context = await contextCompiler.compileContext('debug', testPassed);
+            
+            return context;
+            
+        } catch (error) {
+            this.outputChannel.appendLine(`⚠️ Failed to compile AI context: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Read ai_debug_context.txt file content
+     */
+    private async readAIDebugContext(): Promise<string | null> {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Look for ai_debug_context.txt in the standard location
+            const contextDir = path.join(this.workspaceRoot, '.github', 'instructions', 'ai_debug_context');
+            const contextFiles = ['ai_debug_context.txt', 'ai_context.txt', 'context.txt'];
+            
+            for (const fileName of contextFiles) {
+                const filePath = path.join(contextDir, fileName);
+                if (fs.existsSync(filePath)) {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    if (content.trim()) {
+                        this.outputChannel.appendLine(`📖 Reading context from: ${fileName}`);
+                        return content;
+                    }
+                }
+            }
+            
+            this.outputChannel.appendLine('⚠️ No AI debug context file found, using generated prompt');
+            return null;
+            
+        } catch (error) {
+            this.outputChannel.appendLine(`⚠️ Failed to read AI debug context: ${error}`);
+            return null;
+        }
+    }
+
+    /**
+     * Send content to Copilot Chat and submit it
+     */
+    private async sendToCopilotChat(content: string): Promise<void> {
+        try {
+            // First, open Copilot Chat
+            const opened = await this.openCopilotChat();
+            
+            if (!opened) {
+                // Fallback: copy to clipboard and show instructions
+                await vscode.env.clipboard.writeText(content);
+                vscode.window.showInformationMessage(
+                    'Could not open Copilot Chat automatically. Content copied to clipboard - please paste manually.'
+                );
+                return;
+            }
+            
+            // Wait for Copilot Chat to load
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Try to send the content directly using various VS Code APIs
+            const success = await this.trySendContentToCopilot(content);
+            
+            if (!success) {
+                // Fallback: copy to clipboard and notify user
+                await vscode.env.clipboard.writeText(content);
+                vscode.window.showInformationMessage(
+                    'Copilot Chat opened. Content copied to clipboard - paste with Ctrl+V and press Enter.'
+                );
+            }
+            
+        } catch (error) {
+            // Final fallback
+            await vscode.env.clipboard.writeText(content);
+            vscode.window.showInformationMessage(
+                'Content copied to clipboard. Please open Copilot Chat manually and paste.'
+            );
+        }
+    }
+
+    /**
+     * Try different methods to send content to Copilot Chat
+     */
+    private async trySendContentToCopilot(content: string): Promise<boolean> {
+        // Method 1: Try VS Code Chat API (VS Code 1.85+)
+        try {
+            await vscode.commands.executeCommand('workbench.action.chat.open', {
+                query: content
+            });
+            return true;
+        } catch (error) {
+            // Continue to next method
+        }
+
+        // Method 2: Try GitHub Copilot's chat API
+        try {
+            await vscode.commands.executeCommand('github.copilot.chat.newSession', {
+                query: content
+            });
+            return true;
+        } catch (error) {
+            // Continue to next method
+        }
+
+        // Method 3: Try Copilot chat insert command
+        try {
+            await vscode.commands.executeCommand('github.copilot.chat.insertIntoChat', content);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await vscode.commands.executeCommand('workbench.action.acceptSelectedSuggestion');
+            return true;
+        } catch (error) {
+            // Continue to next method
+        }
+
+        // Method 4: Try direct chat API with submission
+        try {
+            await vscode.commands.executeCommand('vscode.chat.sendMessage', {
+                providerId: 'copilot',
+                message: content
+            });
+            return true;
+        } catch (error) {
+            // Continue to next method
+        }
+
+        // Method 5: Copy to clipboard and simulate keyboard input
+        try {
+            await vscode.env.clipboard.writeText(content);
+            
+            // Focus on Copilot Chat and simulate paste + enter
+            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Try various paste commands
+            const pasteCommands = [
+                'editor.action.clipboardPasteAction',
+                'workbench.action.terminal.paste',
+                'paste'
+            ];
+            
+            for (const pasteCmd of pasteCommands) {
+                try {
+                    await vscode.commands.executeCommand(pasteCmd);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    // Try to submit with various enter commands
+                    const submitCommands = [
+                        'workbench.action.acceptSelectedSuggestion',
+                        'chat.action.submit',
+                        'enterkey'
+                    ];
+                    
+                    for (const submitCmd of submitCommands) {
+                        try {
+                            await vscode.commands.executeCommand(submitCmd);
+                            return true;
+                        } catch (submitError) {
+                            continue;
+                        }
+                    }
+                } catch (pasteError) {
+                    continue;
+                }
+            }
+        } catch (error) {
+            // Continue to final fallback
+        }
+
+        return false;
+    }
+
+    /**
+     * Build comprehensive Copilot debug prompt for test failures
+     */
+    private buildCopilotDebugPrompt(result: TestSummary): string {
+        const prompt = `# 🤖 Test Failure Analysis Request
+
+I need help debugging test failures in **${result.project}**. Here's the current situation:
+
+## 📊 Test Summary
+- **Failed Tests**: ${result.failed} of ${result.total}
+- **Project**: ${result.project}
+- **Duration**: ${result.duration || 'N/A'}s
+
+## ❌ Failed Tests
+${result.failures.map((failure, index) => 
+    `### ${index + 1}. ${failure.test}
+**Suite**: ${failure.suite || 'Unknown'}
+**Error**: 
+\`\`\`
+${failure.error}
+\`\`\`
+${failure.file ? `**File**: ${failure.file}` : ''}
+${failure.line ? `**Line**: ${failure.line}` : ''}`
+).join('\n')}
+
+## 🎯 What I need:
+
+1. **🔧 Root Cause Analysis**: What's causing these test failures?
+
+2. **💡 Specific Fixes**: Provide actionable code fixes with examples
+
+3. **🧪 Test Improvements**: Suggest better test patterns to prevent similar issues
+
+4. **📝 PR Description**: Help me write a clear PR description for these fixes
+
+5. **🚀 Best Practices**: Recommend testing best practices for this project
+
+Please provide specific, actionable suggestions with code examples where helpful.`;
+
+        return prompt;
+    }
+
+    /**
+     * Try to open Copilot Chat
+     */
+    private async openCopilotChat(): Promise<boolean> {
+        try {
+            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            return true;
+        } catch {
+            try {
+                await vscode.commands.executeCommand('github.copilot.openChat');
+                return true;
+            } catch {
+                return false;
+            }
+        }
+    }
+
+    /**
      * Re-run only the failed tests
      */
     async rerunFailedTests(result: TestSummary): Promise<void> {
@@ -267,7 +566,7 @@ export class TestActions {
         this.outputChannel.appendLine(`\n🔄 Re-running ${result.failures.length} failed test(s)...`);
         
         try {
-            const command = `${this.testCommand} ${result.project} --testNamePattern="${testPattern}"`;
+            const command = this.buildTestCommand(result.project, `--testNamePattern="${testPattern}"`);
             await this.executeTestCommand(command, `Re-running failed tests for ${result.project}`);
         } catch (error) {
             const errorMsg = UserFriendlyErrors.testCommandFailed(result.project, this.testCommand);
@@ -283,7 +582,7 @@ export class TestActions {
         this.outputChannel.appendLine(`\n🔄 Re-running all tests for ${project}...`);
         
         try {
-            const command = `${this.testCommand} ${project}`;
+            const command = this.buildTestCommand(project);
             await this.executeTestCommand(command, `Re-running all tests for ${project}`);
         } catch (error) {
             const errorMsg = UserFriendlyErrors.testCommandFailed(project, this.testCommand);
@@ -309,13 +608,13 @@ export class TestActions {
         
         try {
             // Run with inspect flag for debugging
-            const command = `${this.testCommand} ${result.project} --testNamePattern="${testPattern}" --inspect`;
+            const command = this.buildTestCommand(result.project, `--testNamePattern="${testPattern}" --inspect`);
             await this.executeTestCommand(command, `Debugging test: ${firstFailure.test}`);
         } catch (error) {
             // Fallback without inspect flag
             this.outputChannel.appendLine('Debug mode failed, running normal test...');
             try {
-                const fallbackCommand = `${this.testCommand} ${result.project} --testNamePattern="${testPattern}"`;
+                const fallbackCommand = this.buildTestCommand(result.project, `--testNamePattern="${testPattern}"`);
                 await this.executeTestCommand(fallbackCommand, `Running single test: ${firstFailure.test}`);
             } catch (fallbackError) {
                 const errorMsg = UserFriendlyErrors.testCommandFailed(result.project, this.testCommand);
@@ -494,7 +793,7 @@ export class TestActions {
      * Start watch mode for a project
      */
     async startWatchMode(project: string): Promise<void> {
-        const command = `${this.testCommand} ${project} --watch`;
+        const command = this.buildTestCommand(project, '--watch');
         this.outputChannel.appendLine(`\n👀 Starting watch mode for ${project}...`);
         this.outputChannel.appendLine('Press Ctrl+C in terminal to stop watching\n');
         
@@ -517,7 +816,7 @@ export class TestActions {
         if (!testPattern) return;
         
         try {
-            const command = `${this.testCommand} ${project} --testNamePattern="${testPattern}"`;
+            const command = this.buildTestCommand(project, `--testNamePattern="${testPattern}"`);
             await this.executeTestCommand(command, `Running tests matching: ${testPattern}`);
         } catch (error) {
             const errorMsg = UserFriendlyErrors.testCommandFailed(project, this.testCommand);
@@ -531,7 +830,7 @@ export class TestActions {
      */
     async runWithCoverage(project: string): Promise<void> {
         try {
-            const command = `${this.testCommand} ${project} --coverage`;
+            const command = this.buildTestCommand(project, '--coverage');
             await this.executeTestCommand(command, `Running tests with coverage for ${project}`);
         } catch (error) {
             const errorMsg = UserFriendlyErrors.testCommandFailed(project, this.testCommand);

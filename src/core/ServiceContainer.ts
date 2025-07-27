@@ -18,6 +18,17 @@ import { ConfigurationManager } from './ConfigurationManager';
 import { ProjectCache } from '../utils/ProjectCache';
 import { BackgroundProjectDiscovery } from '../utils/BackgroundProjectDiscovery';
 import { SimplePerformanceTracker } from '../utils/SimplePerformanceTracker';
+import { RealPerformanceTracker } from '../utils/RealPerformanceTracker';
+import { DeveloperDebuggingTools } from '../utils/DeveloperDebuggingTools';
+import { ComprehensiveErrorHandler } from '../utils/ComprehensiveErrorHandler';
+import { ContributorOnboardingTools } from '../utils/ContributorOnboardingTools';
+import { TestFrameworkDetector, MonorepoDetector } from '../utils/ModernFrameworkDetector';
+import { TestOutputIntelligence } from '../utils/TestOutputIntelligence';
+import { IntelligentContextFilter } from '../modules/aiContext/IntelligentContextFilter';
+import { TestIntelligenceEngine } from './TestIntelligenceEngine';
+import { RealTimeTestMonitor } from '../services/RealTimeTestMonitor';
+import { AITestAssistant } from '../services/AITestAssistant';
+import { NativeTestRunner } from '../services/NativeTestRunner';
 
 export interface ServiceConfiguration {
     workspaceRoot: string;
@@ -42,6 +53,17 @@ export class ServiceContainer {
     private _projectCache!: ProjectCache;
     private _backgroundDiscovery!: BackgroundProjectDiscovery;
     private _performanceTracker!: SimplePerformanceTracker;
+    private _realPerformanceTracker!: RealPerformanceTracker;
+    private _debuggingTools!: DeveloperDebuggingTools;
+    private _comprehensiveErrorHandler!: ComprehensiveErrorHandler;
+    private _onboardingTools!: ContributorOnboardingTools;
+    private _testFrameworkDetector!: TestFrameworkDetector;
+    private _testIntelligence!: TestOutputIntelligence;
+    private _contextFilter!: IntelligentContextFilter;
+    private _testIntelligenceEngine!: TestIntelligenceEngine;
+    private _realTimeTestMonitor!: RealTimeTestMonitor;
+    private _aiTestAssistant!: AITestAssistant;
+    private _nativeTestRunner!: NativeTestRunner;
     private _fileWatcherActive: boolean = false;
 
     constructor(private config: ServiceConfiguration) {
@@ -67,8 +89,27 @@ export class ServiceContainer {
         // Platform services
         this._macosCompat = new MacOSCompatibility();
 
-        // Performance monitoring (Phase 1.9.1)
+        // Performance monitoring (Phase 1.9.1 + 2.0.2)
         this._performanceTracker = new SimplePerformanceTracker(this._outputChannel);
+        this._realPerformanceTracker = new RealPerformanceTracker(this._outputChannel, this.config.workspaceRoot);
+        
+        // Phase 2.0.2 Enhanced Services
+        this._comprehensiveErrorHandler = new ComprehensiveErrorHandler(this._outputChannel, this.config.workspaceRoot);
+        this._debuggingTools = new DeveloperDebuggingTools(this, this._outputChannel);
+        this._onboardingTools = new ContributorOnboardingTools(this._outputChannel, this.config.workspaceRoot);
+        this._contextFilter = new IntelligentContextFilter(this.config.workspaceRoot);
+
+        // Phase 2.0.3 - Real Test Intelligence
+        this._testIntelligenceEngine = new TestIntelligenceEngine(this.config.workspaceRoot, this._outputChannel);
+        this._realTimeTestMonitor = new RealTimeTestMonitor(this._testIntelligenceEngine, this._outputChannel);
+        this._aiTestAssistant = new AITestAssistant(this._testIntelligenceEngine, this.config.workspaceRoot, this._outputChannel);
+        this._nativeTestRunner = new NativeTestRunner(
+            this.config.workspaceRoot,
+            this._outputChannel,
+            this._testIntelligenceEngine,
+            this._realTimeTestMonitor,
+            this._aiTestAssistant
+        );
 
         // Configuration services (Phase 1.9)
         this._configManager = new ConfigurationManager(this.config.workspaceRoot);
@@ -188,6 +229,45 @@ export class ServiceContainer {
         return this._performanceTracker;
     }
 
+    get realPerformanceTracker(): RealPerformanceTracker {
+        return this._realPerformanceTracker;
+    }
+
+    get debuggingTools(): DeveloperDebuggingTools {
+        return this._debuggingTools;
+    }
+
+    get comprehensiveErrorHandler(): ComprehensiveErrorHandler {
+        return this._comprehensiveErrorHandler;
+    }
+
+    get onboardingTools(): ContributorOnboardingTools {
+        return this._onboardingTools;
+    }
+
+    get contextFilter(): IntelligentContextFilter {
+        return this._contextFilter;
+    }
+
+    /**
+     * Phase 2.0.3 - Real Test Intelligence Services
+     */
+    get testIntelligenceEngine(): TestIntelligenceEngine {
+        return this._testIntelligenceEngine;
+    }
+
+    get realTimeTestMonitor(): RealTimeTestMonitor {
+        return this._realTimeTestMonitor;
+    }
+
+    get aiTestAssistant(): AITestAssistant {
+        return this._aiTestAssistant;
+    }
+
+    get nativeTestRunner(): NativeTestRunner {
+        return this._nativeTestRunner;
+    }
+
     /**
      * Infrastructure services
      */
@@ -294,6 +374,17 @@ export class ServiceContainer {
         this._fileWatcherActive = false;
         this._backgroundDiscovery?.dispose();
         this._performanceTracker?.dispose();
+        this._realPerformanceTracker?.dispose();
+        this._debuggingTools?.dispose();
+        this._comprehensiveErrorHandler?.dispose();
+        this._onboardingTools?.dispose();
+        
+        // Phase 2.0.3 - Test Intelligence cleanup
+        this._realTimeTestMonitor?.stopMonitoring();
+        this._nativeTestRunner?.stop();
+        
+        // Note: TestIntelligenceEngine and AITestAssistant don't have explicit dispose methods
+        // as they only manage memory and file operations
     }
 
     /**

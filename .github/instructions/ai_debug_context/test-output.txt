@@ -1,0 +1,41 @@
+=================================================================
+🤖 TEST ANALYSIS REPORT
+=================================================================
+
+COMMAND: yarn nx test settings-voice-assist-feature
+EXIT CODE: 1
+STATUS: ❌ FAILED
+
+=================================================================
+📊 EXECUTIVE SUMMARY
+=================================================================
+Test Suites: 2 failed, 4 passed, 6 total
+Tests: 3 failed, 141 passed, 144 total
+Time: 45.234s
+Test Suites: 4 passed, 2 failed
+
+==================================================================
+💥 FAILURE ANALYSIS
+==================================================================
+
+🔥 COMPILATION/RUNTIME ERRORS:
+--------------------------------
+  • Property 'mockFunction' does not exist on type 'Service'
+  • Cannot find name 'undefinedVariable'
+
+🧪 TEST FAILURES:
+-----------------
+  • Component › should initialize properly
+    Expected true but received false
+
+==================================================================
+🧪 TEST RESULTS SUMMARY
+==================================================================
+
+✅ src/app/services/test.spec.ts
+❌ src/app/components/voice.spec.ts
+
+==================================================================
+⚡ PERFORMANCE INSIGHTS
+==================================================================
+Time: 45.234s

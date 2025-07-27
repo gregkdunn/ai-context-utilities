@@ -32,7 +32,7 @@ jest.mock('../../../utils/testActions');
 jest.mock('../../../core/ConfigurationManager');
 jest.mock('../../../utils/ProjectCache');
 jest.mock('../../../utils/BackgroundProjectDiscovery');
-jest.mock('../../../utils/PerformanceMonitor');
+jest.mock('../../../utils/SimplePerformanceTracker');
 
 describe('ServiceContainer', () => {
     let serviceContainer: ServiceContainer;
@@ -160,7 +160,8 @@ describe('ServiceContainer', () => {
 
             expect(mockStatusBarItem.text).toBe('⚡ AI Debug Context: Testing in progress');
             expect(mockStatusBarItem.tooltip).toContain('AI Debug Context: Testing in progress (Click to run auto-detect tests)');
-            expect(mockStatusBarItem.tooltip).toContain('📊 Performance');
+            // Performance info should be present (either performance data or fallback message)
+            expect(mockStatusBarItem.tooltip).toMatch(/⚡ (Performance|Ready to test)/);
         });
 
         it('should set green color for status bar', () => {

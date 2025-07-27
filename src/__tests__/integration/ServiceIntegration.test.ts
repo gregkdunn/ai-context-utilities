@@ -83,6 +83,10 @@ describe('Service Integration Tests', () => {
             setupWizard: {
                 runSetupWizard: jest.fn()
             },
+            projectSelection: {
+                showProjectBrowser: jest.fn().mockResolvedValue(null),
+                showMainMenu: jest.fn().mockResolvedValue(null)
+            },
             fileWatcherActive: false
         };
     });
@@ -261,21 +265,21 @@ describe('Service Integration Tests', () => {
     });
 
     describe('Error Handling Integration', () => {
-        test('should handle errors through centralized error handler', async () => {
+        test('should handle errors gracefully without crashing', async () => {
             const orchestrator = new TestMenuOrchestrator(mockServices);
             
-            // Simulate an error in project discovery
+            // Mock projectDiscovery.getAllProjects to throw an error
+            // ProjectSelectionService should handle this gracefully and return null
             mockServices.projectDiscovery.getAllProjects.mockRejectedValue(new Error('Test error'));
 
-            // The orchestrator should handle errors gracefully through the error handler
-            try {
-                await orchestrator.showProjectBrowser();
-                throw new Error('Expected error to be thrown');
-            } catch (error: any) {
-                expect(error.message).toBe('Test error');
-                // Error should be handled through error handler
-                expect(mockServices.errorHandler.handleError).toHaveBeenCalled();
-            }
+            // The orchestrator should complete without throwing
+            await expect(orchestrator.showProjectBrowser()).resolves.not.toThrow();
+            
+            // Verify that the error is logged but handled gracefully
+            expect(mockServices.outputChannel.appendLine).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to load projects')
+            );
+            expect(mockServices.updateStatusBar).toHaveBeenCalledWith('❌ Error', 'red');
         });
 
         test('should update status bar on errors', async () => {

@@ -1,0 +1,343 @@
+/**
+ * Unit tests for RealTimeTestMonitor service
+ * Tests real-time test execution monitoring and metrics
+ */
+
+import { RealTimeTestMonitor, TestEvent, TestMetrics, TestWatcher } from '../../../services/RealTimeTestMonitor';
+import { TestIntelligenceEngine } from '../../../core/TestIntelligenceEngine';
+import * as vscode from 'vscode';
+
+// Mock dependencies
+jest.mock('../../../core/TestIntelligenceEngine');
+
+describe('RealTimeTestMonitor', () => {
+    let monitor: RealTimeTestMonitor;
+    let mockTestIntelligence: jest.Mocked<TestIntelligenceEngine>;
+    let mockOutputChannel: jest.Mocked<vscode.OutputChannel>;
+
+    beforeEach(() => {
+        // Create mock dependencies
+        mockTestIntelligence = {
+            analyzePattern: jest.fn(),
+            getTestInsights: jest.fn(),
+            recordFailure: jest.fn(),
+            getFailureTrends: jest.fn(),
+            getCommonPatterns: jest.fn(),
+            getCriticalPaths: jest.fn(),
+            initialize: jest.fn(),
+            processTestRun: jest.fn(),
+            generateReport: jest.fn()
+        } as any;
+
+        mockOutputChannel = {
+            appendLine: jest.fn(),
+            append: jest.fn(),
+            show: jest.fn(),
+            hide: jest.fn(),
+            clear: jest.fn(),
+            dispose: jest.fn()
+        } as any;
+
+        monitor = new RealTimeTestMonitor(mockTestIntelligence, mockOutputChannel);
+        jest.clearAllMocks();
+    });
+
+    describe('Test Event Processing', () => {
+        test('should process test start events', () => {
+            const testEvent: TestEvent = {
+                type: 'start',
+                testName: 'should add numbers',
+                fileName: 'math.spec.ts',
+                timestamp: Date.now()
+            };
+
+            monitor.processOutput('Test suite started: math.spec.ts\nStarting test: should add numbers');
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.totalTests).toBeGreaterThan(0);
+            expect(metrics.currentTest).toBeDefined();
+        });
+
+        test('should process test pass events', () => {
+            monitor.processOutput('✓ should validate email (25ms)');
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.passed).toBe(1);
+            expect(metrics.duration).toBeGreaterThan(0);
+        });
+
+        test('should process test fail events', () => {
+            monitor.processOutput('✗ should handle errors\n  Error: Expected true to be false');
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.failed).toBe(1);
+        });
+
+        test('should process test skip events', () => {
+            monitor.processOutput('○ skipped test case');
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.skipped).toBe(1);
+        });
+    });
+
+    describe('Test Watchers', () => {
+        test('should notify watchers of test events', () => {
+            const mockWatcher: TestWatcher = {
+                onTestStart: jest.fn(),
+                onTestComplete: jest.fn(),
+                onSuiteComplete: jest.fn()
+            };
+
+            monitor.addWatcher(mockWatcher);
+            
+            // Simulate test start
+            monitor.processOutput('Starting test: should work');
+            expect(mockWatcher.onTestStart).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: 'start',
+                    testName: expect.stringContaining('should work')
+                })
+            );
+
+            // Simulate test complete
+            monitor.processOutput('✓ should work (10ms)');
+            expect(mockWatcher.onTestComplete).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: 'pass',
+                    duration: expect.any(Number)
+                })
+            );
+        });
+
+        test('should notify watchers when suite completes', () => {
+            const mockWatcher: TestWatcher = {
+                onTestStart: jest.fn(),
+                onTestComplete: jest.fn(),
+                onSuiteComplete: jest.fn()
+            };
+
+            monitor.addWatcher(mockWatcher);
+            monitor.startMonitoring();
+            
+            // Simulate test execution
+            monitor.processOutput('Test Suites: 1 passed, 1 total');
+            monitor.processOutput('Tests: 5 passed, 5 total');
+            monitor.processOutput('Time: 2.5s');
+            
+            monitor.stopMonitoring();
+
+            expect(mockWatcher.onSuiteComplete).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    totalTests: expect.any(Number),
+                    passed: expect.any(Number),
+                    duration: expect.any(Number)
+                })
+            );
+        });
+    });
+
+    describe('Test Predictions', () => {
+        test('should predict likely failures based on patterns', async () => {
+            mockTestIntelligence.getTestInsights.mockResolvedValue({
+                failureCount: 5,
+                lastFailure: new Date(),
+                commonErrors: ['TypeError'],
+                fixPatterns: [],
+                averageFixTime: 300000,
+                flaky: true
+            });
+
+            const testFiles = [
+                { testName: 'flaky test', fileName: 'flaky.spec.ts' },
+                { testName: 'stable test', fileName: 'stable.spec.ts' }
+            ];
+
+            const predictions = await monitor.getTestPredictions(testFiles);
+
+            expect(predictions.likelyFailures).toBeDefined();
+            expect(predictions.likelyFailures.length).toBeGreaterThan(0);
+            expect(predictions.likelyFailures[0]).toMatchObject({
+                testName: expect.any(String),
+                probability: expect.any(Number),
+                reason: expect.any(String)
+            });
+        });
+
+        test('should optimize test order based on predictions', async () => {
+            mockTestIntelligence.getTestInsights.mockImplementation((testName: string) => {
+                if (testName.includes('critical')) {
+                    return Promise.resolve({
+                        failureCount: 10,
+                        lastFailure: new Date(),
+                        commonErrors: [],
+                        fixPatterns: [],
+                        averageFixTime: 600000
+                    });
+                }
+                return Promise.resolve(null);
+            });
+
+            const testFiles = [
+                { testName: 'regular test', fileName: 'regular.spec.ts' },
+                { testName: 'critical test', fileName: 'critical.spec.ts' },
+                { testName: 'another test', fileName: 'another.spec.ts' }
+            ];
+
+            const predictions = await monitor.getTestPredictions(testFiles);
+
+            // Critical test should be run first
+            expect(predictions.optimizedOrder[0].testName).toContain('critical');
+        });
+    });
+
+    describe('Real-time Metrics', () => {
+        test('should calculate tests per second', () => {
+            monitor.startMonitoring();
+            
+            // Simulate rapid test execution
+            for (let i = 0; i < 10; i++) {
+                monitor.processOutput(`✓ test ${i} (5ms)`);
+            }
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.testsPerSecond).toBeDefined();
+            expect(metrics.testsPerSecond).toBeGreaterThan(0);
+        });
+
+        test('should estimate time remaining', () => {
+            monitor.startMonitoring();
+            
+            // Process some tests
+            monitor.processOutput('Tests: 5 passed, 5 of 20 total');
+            
+            const metrics = monitor.getMetrics();
+            expect(metrics.estimatedTimeRemaining).toBeDefined();
+            expect(metrics.estimatedTimeRemaining).toBeGreaterThan(0);
+        });
+
+        test('should track memory usage', () => {
+            const testEvent: TestEvent = {
+                type: 'complete',
+                testName: 'memory test',
+                fileName: 'memory.spec.ts',
+                timestamp: Date.now(),
+                memory: {
+                    before: 100 * 1024 * 1024, // 100MB
+                    after: 150 * 1024 * 1024,  // 150MB
+                    peak: 200 * 1024 * 1024    // 200MB
+                }
+            };
+
+            monitor.emit('test:complete', testEvent);
+
+            const stats = monitor.getRealtimeStats();
+            expect(stats.memoryUsage).toBeDefined();
+            expect(stats.memoryUsage.peak).toBe(testEvent.memory.peak);
+        });
+    });
+
+    describe('Pattern Detection', () => {
+        test('should detect test failure patterns', () => {
+            // Simulate multiple similar failures
+            monitor.processOutput('✗ API test 1\n  Error: Network timeout');
+            monitor.processOutput('✗ API test 2\n  Error: Network timeout');
+            monitor.processOutput('✗ API test 3\n  Error: Network timeout');
+
+            const patterns = monitor['detectPatterns']();
+            expect(patterns).toContain('Network timeout');
+        });
+
+        test('should detect flaky tests', () => {
+            // Simulate flaky test behavior
+            monitor.processOutput('✓ flaky test (100ms)');
+            monitor.processOutput('✗ flaky test\n  Error: Random failure');
+            monitor.processOutput('✓ flaky test (150ms)');
+
+            const insights = monitor['analyzeTestBehavior']('flaky test');
+            expect(insights.flaky).toBe(true);
+        });
+    });
+
+    describe('Output Parsing', () => {
+        test('should parse Jest output format', () => {
+            const jestOutput = `
+PASS src/utils/math.spec.ts
+  Math utilities
+    ✓ should add numbers (5ms)
+    ✓ should multiply numbers (2ms)
+`;
+            monitor.processOutput(jestOutput);
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.passed).toBe(2);
+            expect(metrics.totalTests).toBeGreaterThan(0);
+        });
+
+        test('should parse Mocha output format', () => {
+            const mochaOutput = `
+  User Service
+    ✓ should create user (50ms)
+    ✗ should validate email
+      AssertionError: expected false to be true
+`;
+            monitor.processOutput(mochaOutput);
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.passed).toBe(1);
+            expect(metrics.failed).toBe(1);
+        });
+
+        test('should handle incomplete output gracefully', () => {
+            monitor.processOutput('Starting test: incomplete');
+            // No completion event
+            
+            const metrics = monitor.getMetrics();
+            expect(metrics.currentTest).toBe('incomplete');
+            expect(() => monitor.getMetrics()).not.toThrow();
+        });
+    });
+
+    describe('Performance Tracking', () => {
+        test('should track slow tests', () => {
+            monitor.processOutput('✓ slow test (5000ms)');
+            monitor.processOutput('✓ fast test (10ms)');
+
+            const stats = monitor.getRealtimeStats();
+            expect(stats.slowTests).toBeDefined();
+            expect(stats.slowTests.length).toBeGreaterThan(0);
+            expect(stats.slowTests[0].duration).toBeGreaterThan(1000);
+        });
+
+        test('should calculate average test duration', () => {
+            monitor.processOutput('✓ test 1 (100ms)');
+            monitor.processOutput('✓ test 2 (200ms)');
+            monitor.processOutput('✓ test 3 (300ms)');
+
+            const stats = monitor.getRealtimeStats();
+            expect(stats.averageDuration).toBe(200);
+        });
+    });
+
+    describe('Error Handling', () => {
+        test('should handle malformed output', () => {
+            expect(() => {
+                monitor.processOutput('!@#$%^&*()');
+                monitor.processOutput(null as any);
+                monitor.processOutput(undefined as any);
+            }).not.toThrow();
+        });
+
+        test('should reset metrics on monitoring restart', () => {
+            monitor.startMonitoring();
+            monitor.processOutput('✓ test 1');
+            
+            monitor.stopMonitoring();
+            monitor.startMonitoring();
+
+            const metrics = monitor.getMetrics();
+            expect(metrics.passed).toBe(0);
+            expect(metrics.totalTests).toBe(0);
+        });
+    });
+});

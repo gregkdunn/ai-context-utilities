@@ -27,7 +27,7 @@ jest.mock('vscode', () => ({
             dispose: jest.fn()
         })),
         showQuickPick: jest.fn(),
-        showInformationMessage: jest.fn(),
+        showInformationMessage: jest.fn(() => Promise.resolve(undefined)),
         createQuickPick: jest.fn(() => ({
             title: '',
             placeholder: '',

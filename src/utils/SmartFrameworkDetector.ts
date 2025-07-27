@@ -527,6 +527,9 @@ export class SmartFrameworkDetector {
         // Replace project placeholder if needed
         if (project && command.includes('{project}')) {
             command = command.replace('{project}', project);
+        } else if (command.includes('{project}')) {
+            // Remove {project} placeholder if no project is provided
+            command = command.replace(' {project}', '').replace('{project}', '');
         }
         
         return command;

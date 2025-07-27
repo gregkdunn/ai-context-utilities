@@ -248,6 +248,9 @@ export class ConfigurationManager {
         // Replace placeholders
         if (project) {
             command = command.replace('{project}', project);
+        } else {
+            // Remove {project} placeholder if no project is provided
+            command = command.replace(' {project}', '').replace('{project}', '');
         }
         
         // Add verbose flag if configured
