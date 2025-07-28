@@ -53,10 +53,10 @@ describe('PostTestActionService', () => {
         mockServices = {
             workspaceRoot: '/test/workspace',
             outputChannel: mockOutputChannel,
-            get: jest.fn(),
-            register: jest.fn(),
-            has: jest.fn(),
-            getAll: jest.fn()
+            updateStatusBar: jest.fn(),
+            errorHandler: {
+                handleError: jest.fn()
+            }
         } as any;
 
         service = new PostTestActionService(mockServices);
@@ -73,10 +73,12 @@ describe('PostTestActionService', () => {
         test('should show failure actions when tests fail', async () => {
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: 'Test failed',
                 stderr: 'Error output',
-                duration: 5000
+                duration: 5000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
@@ -102,10 +104,12 @@ describe('PostTestActionService', () => {
         test('should show success actions when tests pass', async () => {
             const successResult: TestResult = {
                 success: true,
+                project: 'test-project',
                 exitCode: 0,
                 stdout: 'All tests passed',
                 stderr: '',
-                duration: 3000
+                duration: 3000,
+                summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
             };
 
             await service.showPostTestActions(successResult, mockRequest);
@@ -127,10 +131,12 @@ describe('PostTestActionService', () => {
             const mockAction = jest.fn();
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: '',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
@@ -146,10 +152,12 @@ describe('PostTestActionService', () => {
         test('should handle dismiss action', async () => {
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: '',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
@@ -166,10 +174,12 @@ describe('PostTestActionService', () => {
         test('should handle no selection', async () => {
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: '',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockResolvedValue(undefined);
@@ -185,10 +195,12 @@ describe('PostTestActionService', () => {
         test('should generate AI context for debugging', async () => {
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: 'Test output',
                 stderr: 'Error',
-                duration: 2000
+                duration: 2000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             // Mock the context compiler
@@ -218,10 +230,12 @@ describe('PostTestActionService', () => {
         test('should handle AI context generation failure', async () => {
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: '',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             const contextCompiler = require('../../../modules/aiContext/ContextCompiler').ContextCompiler;
@@ -247,10 +261,12 @@ describe('PostTestActionService', () => {
         test('should show test output', async () => {
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: 'Test output here',
                 stderr: 'Error output',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
@@ -274,10 +290,12 @@ describe('PostTestActionService', () => {
         test('should rerun tests with same parameters', async () => {
             const failedResult: TestResult = {
                 success: false,
+                project: 'test-project',
                 exitCode: 1,
                 stdout: '',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
 
             const mockRequest = {
@@ -285,17 +303,8 @@ describe('PostTestActionService', () => {
                 target: 'test-project'
             };
 
-            const mockTestService = {
-                runTests: jest.fn().mockResolvedValue({
-                    success: true,
-                    exitCode: 0,
-                    stdout: 'Tests passed',
-                    stderr: '',
-                    duration: 2000
-                })
-            };
-
-            mockServices.get.mockReturnValue(mockTestService);
+            // Mock VS Code command execution for rerun tests
+            (vscode.commands.executeCommand as jest.Mock).mockResolvedValue(undefined);
 
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
                 const rerunItem = items.find((item: any) => 
@@ -307,8 +316,7 @@ describe('PostTestActionService', () => {
 
             await service.showPostTestActions(failedResult, mockRequest);
 
-            expect(mockServices.get).toHaveBeenCalledWith('testExecutionService');
-            expect(mockTestService.runTests).toHaveBeenCalledWith(mockRequest);
+            expect(vscode.commands.executeCommand).toHaveBeenCalledWith('aiDebugContext.runAffectedTests');
         });
     });
 
@@ -316,10 +324,12 @@ describe('PostTestActionService', () => {
         test('should generate new tests suggestion', async () => {
             const successResult: TestResult = {
                 success: true,
+                project: 'test-project',
                 exitCode: 0,
                 stdout: 'All passed',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
             };
 
             const contextCompiler = require('../../../modules/aiContext/ContextCompiler').ContextCompiler;
@@ -343,10 +353,12 @@ describe('PostTestActionService', () => {
         test('should generate PR description', async () => {
             const successResult: TestResult = {
                 success: true,
+                project: 'test-project',
                 exitCode: 0,
                 stdout: '',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
             };
 
             const contextCompiler = require('../../../modules/aiContext/ContextCompiler').ContextCompiler;
@@ -372,10 +384,12 @@ describe('PostTestActionService', () => {
         test('should handle commit changes action', async () => {
             const successResult: TestResult = {
                 success: true,
+                project: 'test-project',
                 exitCode: 0,
                 stdout: '',
                 stderr: '',
-                duration: 1000
+                duration: 1000,
+                summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {

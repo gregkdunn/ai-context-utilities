@@ -343,7 +343,7 @@ rename to src/new-name.ts`;
         test('should return correct file path', () => {
             const filePath = gitCapture.getDiffFilePath();
             expect(filePath).toBe(
-                path.join('/test/workspace', '.github', 'instructions', 'ai_debug_context', 'diff.txt')
+                path.join('/test/workspace', '.github', 'instructions', 'ai-utilities-context', 'diff.txt')
             );
         });
     });

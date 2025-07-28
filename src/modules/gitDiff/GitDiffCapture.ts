@@ -26,7 +26,7 @@ export class GitDiffCapture {
             this.options.workspaceRoot,
             '.github',
             'instructions',
-            'ai_debug_context'
+            'ai-utilities-context'
         );
         this.diffFilePath = path.join(this.instructionsPath, 'diff.txt');
     }

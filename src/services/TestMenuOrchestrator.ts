@@ -89,18 +89,10 @@ export class TestMenuOrchestrator {
                 verbose: true
             };
 
-            this.services.updateStatusBar(`🧪 Testing ${project}...`, 'yellow');
-            
             const result = await this.testExecution.executeTest(request, (progress) => {
                 // Real-time progress is handled by TestExecutionService
+                // Status bar animation is also handled by TestExecutionService
             });
-
-            const statusText = result.success 
-                ? `✅ ${project} passed (${result.duration}s)`
-                : `❌ ${project} failed (${result.duration}s)`;
-            
-            const statusColor = result.success ? 'green' : 'red';
-            this.services.updateStatusBar(statusText, statusColor);
 
         } catch (error) {
             this.services.updateStatusBar(`❌ ${project} error`, 'red');
@@ -218,8 +210,10 @@ export class TestMenuOrchestrator {
             const formattedContext = await this.compileFormattedContext();
 
             if (formattedContext) {
-                // Use the properly formatted context
-                await this.openCopilotChat(formattedContext);
+                // Automatically send context to Copilot Chat
+                const contextWithInstruction = `Analyze the pasted document.\n\n${formattedContext}`;
+                await this.sendToCopilotChat(contextWithInstruction);
+                // Note: sendToCopilotChat already shows success/failure messages
                 this.services.updateStatusBar('🤖 Formatted context sent to Copilot', 'green');
                 return;
             }
@@ -228,8 +222,8 @@ export class TestMenuOrchestrator {
             const fs = require('fs');
             const path = require('path');
 
-            // Find and read ai_context.txt
-            const contextFiles = ['ai_debug_context.txt', 'ai_context.txt', 'context.txt'];
+            // Find and read ai_debug_context.txt
+            const contextFiles = ['ai-debug-context.txt', 'ai_debug_context.txt', 'ai_context.txt', 'context.txt'];
             let contextContent = '';
             let contextFile = '';
 
@@ -265,10 +259,16 @@ export class TestMenuOrchestrator {
 
                 // Create comprehensive analysis prompt from raw files
                 const analysisPrompt = this.buildCopilotPrompt(contextContent, diffContent, testOutput, contextFile);
-                await this.openCopilotChat(analysisPrompt);
+                
+                // Automatically send context to Copilot Chat
+                const contextWithInstruction = `Analyze the pasted document.\n\n${analysisPrompt}`;
+                await this.sendToCopilotChat(contextWithInstruction);
+                // Note: sendToCopilotChat already shows success/failure messages
             } else {
-                // Use existing formatted context file
-                await this.openCopilotChat(contextContent);
+                // Use existing formatted context file - automatically send to Copilot Chat
+                const contextWithInstruction = `Analyze the pasted document.\n\n${contextContent}`;
+                await this.sendToCopilotChat(contextWithInstruction);
+                // Note: sendToCopilotChat already shows success/failure messages
             }
 
             this.services.updateStatusBar('🤖 Copilot analysis started', 'green');
@@ -340,59 +340,225 @@ Please be specific and actionable in your suggestions. Include code examples whe
         return prompt;
     }
 
+
     /**
-     * Open Copilot Chat with the analysis prompt
+     * Send content directly to Copilot Chat
      */
-    private async openCopilotChat(prompt: string): Promise<void> {
+    private async sendToCopilotChat(content: string): Promise<boolean> {
         try {
-            // First, try to open Copilot Chat using the workbench command
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            this.services.outputChannel.appendLine(`🚀 Fully automated Copilot integration for post-test analysis`);
+            this.services.outputChannel.appendLine(`📋 Preparing to send ${Math.round(content.length / 1024)}KB of context to Copilot Chat...`);
             
-            // Wait a moment for the chat to open
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // Try to use Copilot's chat API if available
-            try {
-                await vscode.commands.executeCommand('github.copilot.interactiveEditor.explain', {
-                    prompt: prompt
-                });
-            } catch (copilotError) {
-                // Fallback: Copy prompt to clipboard and show instructions
-                await vscode.env.clipboard.writeText(prompt);
+            // Always copy to clipboard first
+            await vscode.env.clipboard.writeText(content);
+            this.services.outputChannel.appendLine('📋 Content copied to clipboard successfully');
+            
+            // Try to open Copilot Chat
+            const opened = await this.openCopilotChat();
+            
+            if (opened) {
+                this.services.outputChannel.appendLine('🤖 Copilot Chat opened successfully');
                 
-                const choice = await vscode.window.showInformationMessage(
-                    'Copilot analysis prompt copied to clipboard. Please paste it in Copilot Chat.',
-                    'Open Copilot Chat', 'OK'
-                );
-
-                if (choice === 'Open Copilot Chat') {
-                    // Try different Copilot commands
-                    const copilotCommands = [
-                        'github.copilot.terminal.explainTerminalSelection',
-                        'github.copilot.interactiveEditor.explain',
-                        'workbench.action.chat.open',
-                        'workbench.panel.chat.view.copilot.focus'
-                    ];
-
-                    for (const command of copilotCommands) {
-                        try {
-                            await vscode.commands.executeCommand(command);
-                            break;
-                        } catch (cmdError) {
-                            continue;
-                        }
-                    }
+                // Wait for Copilot Chat to fully load
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Focus on Copilot Chat
+                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                
+                // Attempt automatic paste and submit
+                this.services.outputChannel.appendLine('🚀 Attempting fully automated paste and submit...');
+                const success = await this.tryAutomaticPaste();
+                
+                if (success) {
+                    // Success - show brief success message
+                    vscode.window.showInformationMessage(
+                        `🚀 Post-test analysis automatically sent to Copilot Chat!`,
+                        { modal: false }
+                    );
+                    return true;
+                } else {
+                    // Fallback - show instructions
+                    vscode.window.showInformationMessage(
+                        '📋 Copilot Chat ready. Content in clipboard - paste (Ctrl+V/Cmd+V) and press Enter.',
+                        { modal: false }
+                    );
+                    return true;
                 }
+                
+            } else {
+                this.services.outputChannel.appendLine('⚠️ Could not open Copilot Chat automatically');
+                // Try alternative methods
+                await this.tryAlternativeCopilotCommands();
+                vscode.window.showInformationMessage(
+                    '📋 AI context copied to clipboard. Please open Copilot Chat and paste.',
+                    { modal: false }
+                );
+                return false;
             }
-
+            
         } catch (error) {
-            // Final fallback: Copy to clipboard and show instructions
-            await vscode.env.clipboard.writeText(prompt);
-            vscode.window.showInformationMessage(
-                'Could not open Copilot Chat automatically. The analysis prompt has been copied to your clipboard. Please open Copilot Chat manually and paste it.'
+            this.services.outputChannel.appendLine(`❌ Error in automated Copilot integration: ${error}`);
+            await vscode.env.clipboard.writeText(content);
+            vscode.window.showErrorMessage(
+                '❌ Auto-integration failed. Content copied to clipboard - please paste in Copilot Chat manually.'
             );
+            return false;
         }
     }
+
+    /**
+     * Try to open Copilot Chat
+     */
+    private async openCopilotChat(): Promise<boolean> {
+        try {
+            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            return true;
+        } catch {
+            try {
+                await vscode.commands.executeCommand('github.copilot.openChat');
+                return true;
+            } catch {
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Try automatic paste and submit to Copilot Chat
+     */
+    private async tryAutomaticPaste(): Promise<boolean> {
+        try {
+            // Focus on Copilot Chat input
+            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Try paste command
+            this.services.outputChannel.appendLine('📋 Attempting automatic paste...');
+            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+            await new Promise(resolve => setTimeout(resolve, 800)); // Wait for paste to complete
+            
+            this.services.outputChannel.appendLine('✅ Content pasted successfully, attempting auto-submit...');
+            
+            // Try to submit automatically with multiple methods
+            const submitted = await this.tryAutoSubmit();
+            
+            if (submitted) {
+                this.services.outputChannel.appendLine('🚀 Content automatically submitted to Copilot Chat!');
+                return true;
+            } else {
+                this.services.outputChannel.appendLine('✅ Content pasted - please press Enter to submit');
+                return true;
+            }
+            
+        } catch (error) {
+            this.services.outputChannel.appendLine(`⚠️ Auto-paste failed: ${error}`);
+            return false;
+        }
+    }
+
+    /**
+     * Try different methods to automatically submit content to Copilot Chat
+     */
+    private async tryAutoSubmit(): Promise<boolean> {
+        const submitMethods = [
+            // Method 1: Standard Enter key simulation
+            async () => {
+                await vscode.commands.executeCommand('type', { text: '\n' });
+                return true;
+            },
+            
+            // Method 2: Workbench submit action
+            async () => {
+                await vscode.commands.executeCommand('workbench.action.chat.submit');
+                return true;
+            },
+            
+            // Method 3: Chat specific submit
+            async () => {
+                await vscode.commands.executeCommand('chat.action.submit');
+                return true;
+            },
+            
+            // Method 4: Generic submit/accept commands
+            async () => {
+                await vscode.commands.executeCommand('workbench.action.acceptSelectedSuggestion');
+                return true;
+            },
+            
+            // Method 5: Chat send message command
+            async () => {
+                await vscode.commands.executeCommand('workbench.action.chat.sendMessage');
+                return true;
+            },
+            
+            // Method 6: Copilot specific submit
+            async () => {
+                await vscode.commands.executeCommand('github.copilot.chat.submit');
+                return true;
+            },
+            
+            // Method 7: Editor action submit
+            async () => {
+                await vscode.commands.executeCommand('editor.action.submitComment');
+                return true;
+            },
+            
+            // Method 8: Simulate Ctrl+Enter or Cmd+Enter
+            async () => {
+                await vscode.commands.executeCommand('type', { text: '\r' });
+                return true;
+            }
+        ];
+        
+        for (let i = 0; i < submitMethods.length; i++) {
+            try {
+                this.services.outputChannel.appendLine(`🔄 Trying submit method ${i + 1}...`);
+                await submitMethods[i]();
+                await new Promise(resolve => setTimeout(resolve, 200)); // Wait for command to process
+                this.services.outputChannel.appendLine(`✅ Submit method ${i + 1} executed successfully`);
+                return true;
+            } catch (error) {
+                this.services.outputChannel.appendLine(`⚠️ Submit method ${i + 1} failed: ${error}`);
+                continue;
+            }
+        }
+        
+        this.services.outputChannel.appendLine('⚠️ All auto-submit methods failed - manual submission required');
+        return false;
+    }
+
+    /**
+     * Try alternative Copilot Chat commands
+     */
+    private async tryAlternativeCopilotCommands(): Promise<void> {
+        const commands = [
+            'github.copilot.openChat',
+            'workbench.action.chat.open', 
+            'github.copilot.terminal.explainTerminalSelection',
+            'workbench.action.chat.newChat'
+        ];
+        
+        for (const command of commands) {
+            try {
+                await vscode.commands.executeCommand(command);
+                this.services.outputChannel.appendLine(`✅ Opened Copilot Chat using: ${command}`);
+                vscode.window.showInformationMessage(
+                    '🤖 Copilot Chat opened! Please paste the content from clipboard.',
+                    { modal: false }
+                );
+                return;
+            } catch (error) {
+                this.services.outputChannel.appendLine(`⚠️ Command ${command} failed: ${error}`);
+                continue;
+            }
+        }
+        
+        vscode.window.showWarningMessage(
+            '⚠️ Could not open Copilot Chat. Please open it manually and paste the content.',
+            { modal: false }
+        );
+    }
+
 
     /**
      * Run git affected tests
@@ -404,16 +570,8 @@ Please be specific and actionable in your suggestions. Include code examples whe
                 verbose: true
             };
 
-            this.services.updateStatusBar('📝 Testing updated files...', 'yellow');
-            
             const result = await this.testExecution.executeTest(request);
-
-            const statusText = result.success 
-                ? `✅ Updated files tested (${result.duration}s)`
-                : `❌ Updated files failed (${result.duration}s)`;
-            
-            const statusColor = result.success ? 'green' : 'red';
-            this.services.updateStatusBar(statusText, statusColor);
+            // Status bar animation and final status are handled by TestExecutionService
 
         } catch (error) {
             this.services.updateStatusBar('❌ Git affected error', 'red');
@@ -431,7 +589,7 @@ Please be specific and actionable in your suggestions. Include code examples whe
 
             const fs = require('fs');
             const path = require('path');
-            const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai_debug_context');
+            const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
 
             if (!fs.existsSync(contextDir)) {
                 vscode.window.showInformationMessage('No post-test context files found.');
@@ -481,21 +639,16 @@ Please be specific and actionable in your suggestions. Include code examples whe
 
             // Add back button and "Open All Files" option
             items.unshift({
-                label: '$(arrow-left) Back to Main Menu',
+                label: '$(arrow-left) Back ',
                 detail: 'Return to the main test menu',
-                description: '$(arrow-left) Back'
+                description: 'to Main Menu'
             } as any);
             
-            items.push({
-                label: '$(files) Open All Files',
-                detail: `Open all ${files.length} context files`,
-                description: '$(folder-opened) View all'
-            } as any);
             
             // Add Debug Tests with Copilot integration if ai_context.txt exists
             const hasAiContext = files.some((file: string) => file.includes('context') || file.includes('ai_context'));
             if (hasAiContext) {
-                items.push({
+                items.unshift({
                     label: '$(bug) Debug Tests with Copilot',
                     detail: 'Analyze context with Copilot Chat for test fixes and suggestions',
                     description: '$(copilot) AI Debug'

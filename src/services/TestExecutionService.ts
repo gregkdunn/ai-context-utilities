@@ -117,6 +117,9 @@ export class TestExecutionService {
                 this.testOutputCapture.startCapture(command, request.project);
             }
             
+            // Start animated status bar
+            this.services.startStatusBarAnimation(`Testing ${projectName}...`);
+            
             // Execute command with streaming progress
             const result = await this.executeCommand(command, onProgress);
             
@@ -164,10 +167,17 @@ export class TestExecutionService {
                 );
             }
             
-            // Phase 2.0.3: Analyze failures with AI assistance
-            if (this.enablePhase2Features && !testResult.success && testSummary.failures.length > 0) {
-                await this.analyzeFailuresWithAI(testSummary.failures);
-            }
+            // Phase 2.0.3: Analyze failures with AI assistance (DISABLED - unhelpful generic output)
+            // if (this.enablePhase2Features && !testResult.success && testSummary.failures.length > 0) {
+            //     await this.analyzeFailuresWithAI(testSummary.failures);
+            // }
+            
+            // Update status bar with final result
+            const statusText = testResult.success 
+                ? `✅ ${projectName} passed (${duration}s)`
+                : `❌ ${projectName} failed (${duration}s)`;
+            const statusColor = testResult.success ? 'green' : 'red';
+            this.services.updateStatusBar(statusText, statusColor);
             
             // Phase 2.0: Show post-test actions
             if (this.enablePhase2Features) {

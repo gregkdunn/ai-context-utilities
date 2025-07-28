@@ -100,4 +100,6 @@ benchmarks/
 # Shell history files
 .bash_history
 .zsh_history
-.fish_history
+.fish_history*.vsix
+coverage/
+out/

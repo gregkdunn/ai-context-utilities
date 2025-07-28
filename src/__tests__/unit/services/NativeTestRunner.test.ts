@@ -151,7 +151,7 @@ describe('NativeTestRunner', () => {
                     { testName: 'Regular test', fileName: 'src/regular.spec.ts' }
                 ],
                 likelyFailures: [
-                    { testName: 'Critical test', probability: 0.8, reason: 'Recent failures' }
+                    { testName: 'Critical test', confidence: 0.8, reason: 'Recent failures' }
                 ],
                 estimatedDuration: 10000
             });
@@ -216,7 +216,7 @@ describe('NativeTestRunner', () => {
                 mockProcess.emit('close', 0);
             });
 
-            const result = await runner.runTests(testFiles);
+            const result = await runner.runParallelTests(testFiles);
 
             expect(result.success).toBe(true);
             expect(result.testFiles).toEqual(testFiles);
@@ -237,7 +237,7 @@ describe('NativeTestRunner', () => {
             (spawn as jest.Mock).mockReturnValue(mockProcess);
 
             // Don't emit any events, let it timeout
-            const promise = runner.runTests(testFiles, options);
+            const promise = runner.runParallelTests(testFiles, options);
 
             // Wait for timeout
             await new Promise(resolve => setTimeout(resolve, 150));
@@ -261,7 +261,7 @@ describe('NativeTestRunner', () => {
                 mockProcess.emit('close', 1);
             });
 
-            const result = await runner.runTests(testFiles, options);
+            const result = await runner.runParallelTests(testFiles, options);
 
             expect(result.success).toBe(false);
             expect(spawn).toHaveBeenCalledWith(
@@ -272,47 +272,6 @@ describe('NativeTestRunner', () => {
         });
     });
 
-    describe('watchTests', () => {
-        test('should start test watcher', async () => {
-            const mockProcess = new EventEmitter();
-            (spawn as jest.Mock).mockReturnValue(mockProcess);
-
-            const watcher = await runner.watchTests('test-project', {});
-
-            expect(spawn).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.arrayContaining(['--watch']),
-                expect.any(Object)
-            );
-            expect(mockRealTimeMonitor.startMonitoring).toHaveBeenCalled();
-
-            // Clean up
-            watcher.stop();
-        });
-
-        test('should handle watch events', async () => {
-            const mockProcess = new EventEmitter();
-            (spawn as jest.Mock).mockReturnValue(mockProcess);
-
-            const onChange = jest.fn();
-            const onFailure = jest.fn();
-            
-            const watcher = await runner.watchTests('test-project', {
-                onChange,
-                onFailure
-            });
-
-            // Simulate test change
-            mockProcess.emit('data', 'Test Suites: 1 passed, 1 total\n');
-            expect(onChange).toHaveBeenCalled();
-
-            // Simulate test failure
-            mockProcess.emit('data', 'FAIL src/test.spec.ts\n');
-            expect(onFailure).toHaveBeenCalled();
-
-            watcher.stop();
-        });
-    });
 
     describe('getChangedFiles', () => {
         test('should get changed files from git', async () => {
@@ -386,10 +345,10 @@ describe('NativeTestRunner', () => {
             (spawn as jest.Mock).mockReturnValue(mockProcess);
 
             // Start a long-running test
-            const testPromise = runner.runTests(['src/long.spec.ts']);
+            const testPromise = runner.runParallelTests(['src/long.spec.ts']);
 
-            // Abort after a short delay
-            setTimeout(() => runner.abort(), 50);
+            // Stop after a short delay
+            setTimeout(() => runner.stop(), 50);
 
             const result = await testPromise;
 

@@ -27,7 +27,7 @@ export class TestOutputCapture {
             this.options.workspaceRoot,
             '.github',
             'instructions',
-            'ai_debug_context'
+            'ai-utilities-context'
         );
         this.outputFilePath = path.join(this.instructionsPath, 'test-output.txt');
     }

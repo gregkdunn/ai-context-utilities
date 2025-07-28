@@ -440,7 +440,7 @@ index yza567..bcd890 100644`;
                 '/test/workspace',
                 '.github',
                 'instructions',
-                'ai_debug_context',
+                'ai-utilities-context',
                 'diff.txt'
             );
             

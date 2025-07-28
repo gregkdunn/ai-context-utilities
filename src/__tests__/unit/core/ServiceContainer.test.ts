@@ -189,6 +189,99 @@ describe('ServiceContainer', () => {
         });
     });
 
+    describe('Status Bar Animation', () => {
+        beforeEach(() => {
+            serviceContainer = new ServiceContainer(mockConfig);
+            jest.useFakeTimers();
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        it('should start status bar animation with spinner', () => {
+            serviceContainer.startStatusBarAnimation('Running tests');
+
+            // Check initial state
+            expect(mockStatusBarItem.text).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Running tests/);
+            expect(mockStatusBarItem.tooltip).toBe('AI Debug Context: Running tests (Tests in progress...)');
+            expect(vscode.ThemeColor).toHaveBeenCalledWith('charts.yellow');
+            expect(vscode.ThemeColor).toHaveBeenCalledWith('statusBarItem.warningBackground');
+        });
+
+        it('should cycle through animation frames', () => {
+            serviceContainer.startStatusBarAnimation('Testing');
+
+            // Check initial frame
+            const initialText = mockStatusBarItem.text;
+            expect(initialText).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Testing/);
+
+            // Advance timer and check that text changed
+            jest.advanceTimersByTime(100);
+            const nextText = mockStatusBarItem.text;
+            expect(nextText).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Testing/);
+            expect(nextText).not.toBe(initialText);
+        });
+
+        it('should cycle back to first frame after completing sequence', () => {
+            serviceContainer.startStatusBarAnimation('Testing');
+
+            // Advance through all 10 animation frames (10 * 100ms = 1000ms)
+            jest.advanceTimersByTime(1000);
+            
+            // Should be back to first frame (⠋)
+            expect(mockStatusBarItem.text).toBe('⠋ AI Debug Context: Testing');
+        });
+
+        it('should stop existing animation when starting new one', () => {
+            serviceContainer.startStatusBarAnimation('First test');
+            const firstAnimation = (serviceContainer as any)._statusBarAnimation;
+
+            serviceContainer.startStatusBarAnimation('Second test');
+            const secondAnimation = (serviceContainer as any)._statusBarAnimation;
+
+            expect(firstAnimation).not.toBe(secondAnimation);
+            expect(mockStatusBarItem.text).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Second test/);
+        });
+
+        it('should stop status bar animation', () => {
+            serviceContainer.startStatusBarAnimation('Testing');
+            expect((serviceContainer as any)._statusBarAnimation).toBeDefined();
+
+            serviceContainer.stopStatusBarAnimation();
+            
+            expect((serviceContainer as any)._statusBarAnimation).toBeUndefined();
+            expect(mockStatusBarItem.backgroundColor).toBeUndefined();
+        });
+
+        it('should stop animation when updating status bar normally', () => {
+            serviceContainer.startStatusBarAnimation('Testing');
+            const animation = (serviceContainer as any)._statusBarAnimation;
+            expect(animation).toBeDefined();
+
+            serviceContainer.updateStatusBar('Test complete', 'green');
+
+            expect((serviceContainer as any)._statusBarAnimation).toBeUndefined();
+            expect(mockStatusBarItem.text).toBe('⚡ AI Debug Context: Test complete');
+            expect(mockStatusBarItem.backgroundColor).toBeUndefined();
+        });
+
+        it('should handle stop animation when no animation is running', () => {
+            expect(() => {
+                serviceContainer.stopStatusBarAnimation();
+            }).not.toThrow();
+        });
+
+        it('should clean up animation on disposal', () => {
+            serviceContainer.startStatusBarAnimation('Testing');
+            expect((serviceContainer as any)._statusBarAnimation).toBeDefined();
+
+            serviceContainer.dispose();
+
+            expect((serviceContainer as any)._statusBarAnimation).toBeUndefined();
+        });
+    });
+
     describe('Health Check', () => {
         beforeEach(() => {
             serviceContainer = new ServiceContainer(mockConfig);

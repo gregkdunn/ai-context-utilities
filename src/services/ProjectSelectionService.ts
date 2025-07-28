@@ -33,7 +33,7 @@ export class ProjectSelectionService {
         try {
             const fs = require('fs');
             const path = require('path');
-            const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai_debug_context');
+            const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
             
             if (!fs.existsSync(contextDir)) {
                 return false;
@@ -206,40 +206,11 @@ export class ProjectSelectionService {
      * Build main menu items
      */
     private async buildMenuItems(recentProjects: RecentProject[]): Promise<vscode.QuickPickItem[]> {
-        const items: vscode.QuickPickItem[] = [
-            {
-                label: '$(zap) Test Affected Projects',
-                detail: 'Test all files in affected projects',
-                description: '$(sparkle) Smart'
-            },
-            {
-                label: '$(git-pull-request) Test Updated Files',
-                detail: 'Test only updated files',
-                description: '$(target) Focused'
-            },
-            {
-                label: '$(folder-library) Select Project',
-                detail: 'Select a specific project to test',
-                description: '$(list-tree) Browse'
-            },
-        ];
-
-        // Add post-test panel option if context files exist
-        const hasPostTestFiles = await this.hasPostTestFiles();
-        if (hasPostTestFiles) {
-            items.push({
-                label: '$(notebook) View Post-Test Context',
-                detail: 'Open saved test context and AI insights',
-                description: '$(file-text) Available'
-            });
-        }
+        const items: vscode.QuickPickItem[] = [];
 
         // Add recent projects if available
         if (recentProjects.length > 0) {
-            items.push({
-                label: '',
-                kind: vscode.QuickPickItemKind.Separator
-            } as any);
+
             
             // Add most recent with special formatting
             items.push({
@@ -247,16 +218,49 @@ export class ProjectSelectionService {
                 detail: `Last tested: ${recentProjects[0].lastUsed || 'Recently'} $(check)`,
                 description: '$(star-full) Most Recent'
             });
+
+            items.push({
+                label: '',
+                kind: vscode.QuickPickItemKind.Separator
+            } as any);
             
-            // Add additional recent projects (2-5)
-            for (let i = 1; i < Math.min(5, recentProjects.length); i++) {
-                items.push({
-                    label: `$(history) ${recentProjects[i].name}`,
-                    detail: `Last tested: ${recentProjects[i].lastUsed || 'Recently'}`,
-                    description: recentProjects[i].name
-                });
-            }
         }
+
+
+        items.push({
+                label: '$(zap) Test Affected Projects',
+                detail: 'Test all files in affected projects ⭐ RECOMMENDED',
+                description: '$(star-full) Default'
+            });
+         items.push({
+                label: '$(folder-library) Select Project',
+                detail: 'Select a specific project to test',
+                description: '$(list-tree) Browse'
+            });
+       items.push({
+                label: '$(git-pull-request) Test Updated Files',
+                detail: 'Test only updated files ⚡ FAST',
+                description: '$(target) Focused'
+            });
+    
+
+        // Add post-test panel option if context files exist
+        const hasPostTestFiles = await this.hasPostTestFiles();
+        if (hasPostTestFiles) {
+
+            items.push({
+                label: '',
+                kind: vscode.QuickPickItemKind.Separator
+            } as any);
+
+            items.push({
+                label: '$(notebook) View Post-Test Context',
+                detail: 'Open saved test context and AI insights',
+                description: '$(file-text) Available'
+            });
+        }
+
+
 
         return items;
     }

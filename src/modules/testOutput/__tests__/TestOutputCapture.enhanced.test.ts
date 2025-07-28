@@ -262,7 +262,7 @@ describe('TestOutputCapture - Enhanced Phase 2.1 Testing', () => {
                 '/test/workspace',
                 '.github',
                 'instructions',
-                'ai_debug_context',
+                'ai-utilities-context',
                 'test-output.txt'
             );
             

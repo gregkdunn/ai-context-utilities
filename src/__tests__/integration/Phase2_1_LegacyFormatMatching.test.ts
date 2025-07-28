@@ -140,11 +140,11 @@ Test Suites: 4 passed, 2 failed
 
             // Verify the complete workflow generates proper context
             expect(result).not.toBeNull();
-            expect(fs.promises.writeFile).toHaveBeenCalledTimes(2); // test-output.txt + ai_debug_context.txt
+            expect(fs.promises.writeFile).toHaveBeenCalledTimes(2); // test-output.txt + ai-debug-context.txt
             
             // Get the final context content
             const contextCalls = (fs.promises.writeFile as jest.Mock).mock.calls.find(
-                call => call[0].includes('ai_debug_context.txt')
+                call => call[0].includes('ai-debug-context.txt')
             );
             
             expect(contextCalls).toBeDefined();
@@ -227,7 +227,7 @@ Total files changed: 1
             expect(result).not.toBeNull();
             
             const contextCalls = (fs.promises.writeFile as jest.Mock).mock.calls.find(
-                call => call[0].includes('ai_debug_context.txt')
+                call => call[0].includes('ai-debug-context.txt')
             );
             
             const finalContext = contextCalls[1];
@@ -393,7 +393,7 @@ Time: 30.5s`
             testCapture.startCapture('yarn nx test dir-test', 'dir-test');
             await testCapture.stopCapture(0);
 
-            const expectedPath = path.join(workspaceRoot, '.github', 'instructions', 'ai_debug_context');
+            const expectedPath = path.join(workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
             
             expect(fs.promises.mkdir).toHaveBeenCalledWith(expectedPath, { recursive: true });
         });
@@ -412,7 +412,7 @@ Time: 30.5s`
             const filePaths = writeCalls.map(call => call[0]);
 
             expect(filePaths.some(path => path.includes('test-output.txt'))).toBe(true);
-            expect(filePaths.some(path => path.includes('ai_debug_context.txt'))).toBe(true);
+            expect(filePaths.some(path => path.includes('ai-debug-context.txt'))).toBe(true);
         });
     });
 });

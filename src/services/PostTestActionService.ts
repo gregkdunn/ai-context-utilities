@@ -128,19 +128,20 @@ export class PostTestActionService {
                 return;
             }
 
-            await this.contextCompiler.copyToClipboard(context);
+            // Automatically send context to Copilot Chat
+            const contextWithInstruction = `Analyze the pasted document.\n\n${context}`;
+            const sent = await this.sendToCopilotChat(contextWithInstruction);
             
-            // Try to open Copilot Chat
-            const opened = await this.openCopilotChat();
-            
-            if (opened) {
+            if (sent) {
                 vscode.window.showInformationMessage(
-                    'Debug context copied! Paste it in Copilot Chat for AI assistance.',
+                    'Debug context automatically sent to Copilot Chat for AI assistance!',
                     'OK'
                 );
             } else {
+                // Fallback: copy to clipboard and show instructions
+                await this.contextCompiler.copyToClipboard(context);
                 const choice = await vscode.window.showInformationMessage(
-                    'Debug context copied to clipboard! Open Copilot Chat to paste and get AI assistance.',
+                    'Could not automatically send to Copilot. Debug context copied to clipboard! Open Copilot Chat to paste and get AI assistance.',
                     'Open Copilot Chat',
                     'OK'
                 );
@@ -238,6 +239,70 @@ export class PostTestActionService {
             this.services.updateStatusBar('PR description context ready');
         } catch (error) {
             this.services.errorHandler.handleError(error as Error, { operation: 'handlePRDescription' });
+        }
+    }
+
+    /**
+     * Send content directly to Copilot Chat
+     */
+    private async sendToCopilotChat(content: string): Promise<boolean> {
+        try {
+            // Try to use Copilot Chat API to send content directly
+            const copilotCommands = [
+                // Try the VS Code chat integration first
+                'workbench.action.chat.newChat',
+                // Then try GitHub Copilot specific commands
+                'github.copilot.openChat',
+                'github.copilot.terminal.explainTerminalSelection',
+                'workbench.panel.chat.view.copilot.focus'
+            ];
+
+            for (const command of copilotCommands) {
+                try {
+                    await vscode.commands.executeCommand(command);
+                    
+                    // Wait a moment for the chat to open
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Try to send the content using various methods
+                    try {
+                        // Method 1: Try to use VS Code's chat API
+                        await vscode.commands.executeCommand('workbench.action.chat.submit', {
+                            text: content
+                        });
+                        return true;
+                    } catch {
+                        // Method 2: Try GitHub Copilot specific API
+                        try {
+                            await vscode.commands.executeCommand('github.copilot.interactiveEditor.explain', {
+                                prompt: content
+                            });
+                            return true;
+                        } catch {
+                            // Method 3: Try workbench chat submit
+                            try {
+                                await vscode.commands.executeCommand('workbench.action.chat.sendToNewChat', content);
+                                return true;
+                            } catch {
+                                // Method 4: Copy to clipboard and try to paste
+                                await vscode.env.clipboard.writeText(content);
+                                
+                                // Try to paste into the chat
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+                                return true;
+                            }
+                        }
+                    }
+                } catch {
+                    continue;
+                }
+            }
+            
+            return false;
+        } catch (error) {
+            this.services.outputChannel.appendLine(`❌ Failed to send to Copilot Chat: ${error}`);
+            return false;
         }
     }
 

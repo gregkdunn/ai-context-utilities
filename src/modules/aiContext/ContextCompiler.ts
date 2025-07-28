@@ -23,17 +23,19 @@ export class ContextCompiler {
     private readonly contextFilePath: string;
     private readonly diffFilePath: string;
     private readonly testOutputPath: string;
+    private readonly prDescriptionPath: string;
 
     constructor(private options: ContextCompilerOptions) {
         this.instructionsPath = path.join(
             this.options.workspaceRoot,
             '.github',
-            'instructions', 
-            'ai_debug_context'
+            'instructions',
+            'ai-utilities-context'
         );
-        this.contextFilePath = path.join(this.instructionsPath, 'ai_debug_context.txt');
+        this.contextFilePath = path.join(this.instructionsPath, 'ai-debug-context.txt');
         this.diffFilePath = path.join(this.instructionsPath, 'diff.txt');
         this.testOutputPath = path.join(this.instructionsPath, 'test-output.txt');
+        this.prDescriptionPath = path.join(this.instructionsPath, 'pr-description.txt');
     }
 
     /**
@@ -53,13 +55,16 @@ export class ContextCompiler {
             }
 
             // Generate context based on type
-            const context = this.generateContext(type, testPassed, diff, testOutput);
+            const context = await this.generateContext(type, testPassed, diff, testOutput);
+            
+            // Determine output file path based on context type
+            const outputFilePath = type === 'pr-description' ? this.prDescriptionPath : this.contextFilePath;
             
             // Save context to file
-            await fs.promises.writeFile(this.contextFilePath, context);
+            await fs.promises.writeFile(outputFilePath, context);
             
             this.options.outputChannel.appendLine(
-                `✅ AI context compiled to ${this.getRelativePath(this.contextFilePath)}`
+                `✅ AI context compiled to ${this.getRelativePath(outputFilePath)}`
             );
 
             return context;
@@ -91,20 +96,33 @@ export class ContextCompiler {
      * @param testOutput - Test execution output (null if no tests run)
      * @returns Formatted context string matching legacy aiDebug.zsh format
      */
-    private generateContext(
+    private async generateContext(
         type: ContextType, 
         testPassed: boolean,
         diff: string | null,
         testOutput: string | null
-    ): string {
+    ): Promise<string> {
         const timestamp = new Date().toLocaleString();
         const workspace = path.basename(this.options.workspaceRoot);
 
         // Legacy aiDebug.zsh format with exact structure and emojis
         // This header format is critical for AI recognition and processing
+        // Customize header based on context type
+        const headerTitle = type === 'pr-description' 
+            ? '📝 PR DESCRIPTION CONTEXT - READY FOR GENERATION'
+            : '🤖 AI DEBUG CONTEXT - OPTIMIZED FOR ANALYSIS';
+        
+        const analysisHeader = type === 'pr-description'
+            ? '📝 PR GENERATION REQUEST'
+            : '🎯 ANALYSIS REQUEST';
+            
+        const analysisIntro = type === 'pr-description'
+            ? 'Please generate a pull request description using the context below:'
+            : 'Please analyze this context and provide:';
+        
         const sections = [
             '=================================================================',
-            '🤖 AI DEBUG CONTEXT - OPTIMIZED FOR ANALYSIS',
+            headerTitle,
             '=================================================================',
             '',
             'PROJECT: Angular NX Monorepo',
@@ -114,15 +132,19 @@ export class ContextCompiler {
             `TIMESTAMP: ${timestamp}`,
             '',
             '=================================================================',
-            '🎯 ANALYSIS REQUEST',
+            analysisHeader,
             '=================================================================',
             '',
-            'Please analyze this context and provide:',
+            analysisIntro,
             ''
         ];
 
-        // Add conditional analysis requests based on test status (exact legacy format)
-        if (testPassed) {
+        // Add specific analysis requests based on context type
+        if (type === 'pr-description') {
+            // Special handling for PR description generation
+            const prPrompt = await this.getPRDescriptionPrompt();
+            sections.push(prPrompt);
+        } else if (testPassed) {
             sections.push(
                 '1. 🔍 CODE QUALITY ANALYSIS',
                 '   • Review code changes for potential improvements',
@@ -305,9 +327,33 @@ export class ContextCompiler {
     }
 
     /**
-     * Get PR description prompt
+     * Get PR description prompt with template if available
      */
-    private getPRDescriptionPrompt(): string {
+    private async getPRDescriptionPrompt(): Promise<string> {
+        const prTemplate = await this.readPRTemplate();
+        
+        if (prTemplate) {
+            return [
+                '## 📝 Pull Request Description Request',
+                '',
+                'Please generate a PR description using the project\'s PR template format below:',
+                '',
+                '### PR Template Format:',
+                '```',
+                prTemplate,
+                '```',
+                '',
+                'Instructions:',
+                '1. Fill in the template with information from the git diff and test results',
+                '2. Replace template placeholders with actual changes and details',
+                '3. Reference the passing tests in the testing section',
+                '4. Include any breaking changes or important considerations',
+                '5. Complete any checklists with appropriate checkmarks',
+                ''
+            ].join('\n');
+        }
+        
+        // Fallback to default format if no template found
         return [
             '## 📝 Pull Request Description Request',
             '',
@@ -319,6 +365,20 @@ export class ContextCompiler {
             '5. Checklist items if applicable',
             ''
         ].join('\n');
+    }
+
+    /**
+     * Read PR template from .github/PULL_REQUEST_TEMPLATE.md
+     */
+    private async readPRTemplate(): Promise<string | null> {
+        try {
+            const templatePath = path.join(this.options.workspaceRoot, '.github', 'PULL_REQUEST_TEMPLATE.md');
+            const content = await fs.promises.readFile(templatePath, 'utf8');
+            return content.trim();
+        } catch {
+            // Template doesn't exist, return null
+            return null;
+        }
     }
 
     /**
@@ -369,8 +429,10 @@ export class ContextCompiler {
      */
     async copyToClipboard(context: string): Promise<boolean> {
         try {
-            await vscode.env.clipboard.writeText(context);
-            this.options.outputChannel.appendLine('📋 AI context copied to clipboard');
+            // Add instruction for Copilot to analyze the document
+            const contextWithInstruction = `Analyze the pasted document.\n\n${context}`;
+            await vscode.env.clipboard.writeText(contextWithInstruction);
+            this.options.outputChannel.appendLine('📋 AI context copied to clipboard with analysis instruction');
             return true;
         } catch (error) {
             this.options.outputChannel.appendLine(`❌ Failed to copy to clipboard: ${error}`);
@@ -382,7 +444,7 @@ export class ContextCompiler {
      * Clear all context files
      */
     async clearContext(): Promise<void> {
-        const files = [this.contextFilePath, this.diffFilePath, this.testOutputPath];
+        const files = [this.contextFilePath, this.diffFilePath, this.testOutputPath, this.prDescriptionPath];
         
         for (const file of files) {
             try {

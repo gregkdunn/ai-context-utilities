@@ -252,6 +252,52 @@ BRANCH: main`;
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
             expect(content).toContain('FOCUS: PR description generation');
+            expect(content).toContain('📝 PR DESCRIPTION CONTEXT - READY FOR GENERATION');
+            expect(content).toContain('📝 PR GENERATION REQUEST');
+        });
+        
+        test('should use PR template when available', async () => {
+            const mockTemplate = '# Pull Request\n\n## Summary\n<!-- Brief description -->\n\n## Changes Made\n- Change 1\n- Change 2';
+            
+            (fs.promises.readFile as jest.Mock)
+                .mockResolvedValueOnce('diff')
+                .mockResolvedValueOnce('test output')
+                .mockResolvedValueOnce(mockTemplate); // PR template read
+
+            await compiler.compileContext('pr-description', true);
+
+            const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
+
+            expect(content).toContain('Please generate a PR description using the project\'s PR template format');
+            expect(content).toContain('### PR Template Format:');
+            expect(content).toContain(mockTemplate);
+        });
+        
+        test('should fallback to default format when no PR template exists', async () => {
+            (fs.promises.readFile as jest.Mock)
+                .mockResolvedValueOnce('diff')
+                .mockResolvedValueOnce('test output')
+                .mockRejectedValueOnce(new Error('Template not found')); // PR template read fails
+
+            await compiler.compileContext('pr-description', true);
+
+            const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
+
+            expect(content).toContain('Please generate a comprehensive PR description that includes:');
+            expect(content).toContain('1. Clear summary of the changes made');
+            expect(content).not.toContain('### PR Template Format:');
+        });
+        
+        test('should save pr-description to separate file', async () => {
+            (fs.promises.readFile as jest.Mock)
+                .mockResolvedValueOnce('diff')
+                .mockResolvedValueOnce('test output');
+
+            await compiler.compileContext('pr-description', true);
+
+            const [filePath] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
+            expect(filePath).toContain('pr-description.txt');
+            expect(filePath).not.toContain('ai-debug-context.txt');
         });
     });
 
@@ -284,7 +330,7 @@ BRANCH: main`;
             await compiler.compileContext('debug', false);
 
             expect(fs.promises.writeFile).toHaveBeenCalledWith(
-                path.join('/test/workspace', '.github', 'instructions', 'ai_debug_context', 'ai_debug_context.txt'),
+                path.join('/test/workspace', '.github', 'instructions', 'ai-utilities-context', 'ai-debug-context.txt'),
                 expect.any(String)
             );
         });

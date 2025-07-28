@@ -190,12 +190,27 @@ export class TestResultCache {
 
         for (const file of files) {
             try {
+                // Skip glob patterns - they're not actual files
+                if (file.includes('*') || file.includes('?') || file.includes('[')) {
+                    continue;
+                }
+                
                 const fullPath = path.isAbsolute(file) ? file : path.join(this.workspaceRoot, file);
+                
+                // Check if file exists before trying to read it
+                const stat = await fs.promises.stat(fullPath);
+                if (!stat.isFile()) {
+                    continue;
+                }
+                
                 const content = await fs.promises.readFile(fullPath, 'utf8');
                 hashes[file] = crypto.createHash('md5').update(content).digest('hex');
             } catch (error) {
-                // File might not exist or be readable, skip it
-                console.warn(`Could not hash file ${file}:`, error);
+                // File might not exist or be readable, skip it silently
+                // Only log if it's not a glob pattern
+                if (!file.includes('*') && !file.includes('?') && !file.includes('[')) {
+                    console.warn(`Could not hash file ${file}:`, error);
+                }
             }
         }
 

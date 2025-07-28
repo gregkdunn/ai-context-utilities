@@ -147,7 +147,7 @@ describe('TestOutputCapture - Phase 2.1 Legacy Format Matching', () => {
             await testCapture.stopCapture(0);
             
             expect(fs.promises.mkdir).toHaveBeenCalledWith(
-                path.join('/test/workspace', '.github', 'instructions', 'ai_debug_context'),
+                path.join('/test/workspace', '.github', 'instructions', 'ai-utilities-context'),
                 { recursive: true }
             );
         });
@@ -160,7 +160,7 @@ describe('TestOutputCapture - Phase 2.1 Legacy Format Matching', () => {
             await testCapture.stopCapture(0);
             
             expect(fs.promises.writeFile).toHaveBeenCalledWith(
-                path.join('/test/workspace', '.github', 'instructions', 'ai_debug_context', 'test-output.txt'),
+                path.join('/test/workspace', '.github', 'instructions', 'ai-utilities-context', 'test-output.txt'),
                 expect.any(String)
             );
         });
@@ -193,7 +193,7 @@ describe('TestOutputCapture - Phase 2.1 Legacy Format Matching', () => {
         test('should return correct file path', () => {
             const filePath = testCapture.getOutputFilePath();
             expect(filePath).toBe(
-                path.join('/test/workspace', '.github', 'instructions', 'ai_debug_context', 'test-output.txt')
+                path.join('/test/workspace', '.github', 'instructions', 'ai-utilities-context', 'test-output.txt')
             );
         });
     });

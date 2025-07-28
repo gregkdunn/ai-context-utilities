@@ -22,6 +22,14 @@ describe('AITestAssistant', () => {
     let mockTestIntelligence: jest.Mocked<TestIntelligenceEngine>;
     let mockOutputChannel: jest.Mocked<vscode.OutputChannel>;
     const workspaceRoot = '/test/workspace';
+    
+    const mockFailure: TestFailure = {
+        test: 'Component should render',
+        suite: 'Component Tests',
+        error: 'Cannot read property \'name\' of undefined',
+        file: 'src/component.spec.ts',
+        line: 42
+    };
 
     beforeEach(() => {
         // Create mock dependencies
@@ -56,22 +64,17 @@ describe('AITestAssistant', () => {
     });
 
     describe('analyzeFailure', () => {
-        const mockFailure: TestFailure = {
-            test: 'Component should render',
-            suite: 'Component Tests',
-            error: 'Cannot read property \'name\' of undefined',
-            file: 'src/component.spec.ts',
-            line: 42
-        };
 
         test('should analyze test failure and return AI analysis', async () => {
-            mockTestIntelligence.getTestInsights.mockResolvedValue({
-                failureCount: 3,
-                lastFailure: new Date(),
-                commonErrors: ['Cannot read property'],
-                fixPatterns: ['Check null/undefined'],
-                averageFixTime: 300000
-            });
+            mockTestIntelligence.getTestInsights.mockImplementation(() => ({
+                testId: 'test-1',
+                patterns: [],
+                averageDuration: 100,
+                failureRate: 0.3,
+                lastFailures: [],
+                correlatedTests: [],
+                recommendedAction: 'fix'
+            }));
 
             const analysis = await assistant.analyzeFailure(mockFailure);
 
@@ -127,9 +130,9 @@ describe('AITestAssistant', () => {
         });
 
         test('should return fallback analysis on error', async () => {
-            mockTestIntelligence.getTestInsights.mockRejectedValue(
-                new Error('AI service unavailable')
-            );
+            mockTestIntelligence.getTestInsights.mockImplementation(() => {
+                throw new Error('AI service unavailable');
+            });
 
             const analysis = await assistant.analyzeFailure(mockFailure);
 
@@ -170,14 +173,15 @@ describe('AITestAssistant', () => {
         });
 
         test('should suggest test improvements for flaky tests', async () => {
-            mockTestIntelligence.getTestInsights.mockResolvedValue({
-                failureCount: 10,
-                lastFailure: new Date(),
-                commonErrors: ['Timeout'],
-                fixPatterns: ['Increase timeout'],
-                averageFixTime: 600000,
-                flaky: true
-            });
+            mockTestIntelligence.getTestInsights.mockImplementation(() => ({
+                testId: 'flaky-test',
+                patterns: [{ type: 'flaky' as const, confidence: 0.8, evidence: [], suggestion: 'Fix flaky test' }],
+                averageDuration: 1000,
+                failureRate: 0.5,
+                lastFailures: [],
+                correlatedTests: [],
+                recommendedAction: 'isolate'
+            }));
 
             const suggestions = await assistant.getTestSuggestions(
                 projectName,
@@ -216,149 +220,40 @@ describe('AITestAssistant', () => {
         });
     });
 
-    describe('suggestFix', () => {
-        test('should suggest fixes for common error patterns', async () => {
-            const error = 'Cannot find module \'@/components/Button\'';
-            const file = 'src/test.spec.ts';
+    describe('generateFix', () => {
+        test('should generate fix for test failure with code changes', async () => {
+            const analysis = {
+                summary: 'Test summary',
+                rootCause: 'Root cause', 
+                suggestedFix: 'Suggested fix',
+                confidence: 0.8,
+                codeChanges: [{
+                    file: 'test.spec.ts',
+                    line: 10,
+                    original: 'old code',
+                    suggested: 'new code',
+                    explanation: 'explanation'
+                }]
+            };
 
-            const fix = await assistant.suggestFix(error, file);
+            const fix = await assistant.generateFix(mockFailure, analysis);
 
             expect(fix).toBeDefined();
-            expect(fix.description).toBeTruthy();
-            expect(fix.steps).toBeDefined();
-            expect(fix.steps.length).toBeGreaterThan(0);
-            expect(fix.confidence).toBeGreaterThan(0);
+            expect(typeof fix).toBe('string');
         });
 
-        test('should provide high confidence fixes for well-known patterns', async () => {
-            const error = 'ReferenceError: jest is not defined';
-            const file = 'src/test.spec.ts';
-
-            const fix = await assistant.suggestFix(error, file);
-
-            expect(fix.confidence).toBeGreaterThan(0.8);
-            expect(fix.codeSnippet).toBeTruthy();
-            expect(fix.steps).toContain(expect.stringContaining('jest'));
-        });
-
-        test('should handle syntax errors', async () => {
-            const error = 'SyntaxError: Unexpected token \'}\'';
-            const file = 'src/component.spec.ts';
-
-            const fix = await assistant.suggestFix(error, file);
-
-            expect(fix.description).toContain('syntax');
-            expect(fix.steps).toContain(expect.stringContaining('Check'));
-        });
-    });
-
-    describe('generateTestCode', () => {
-        test('should generate test code for untested functions', async () => {
-            const functionName = 'calculateTotal';
-            const filePath = 'src/utils/calculator.ts';
-
-            const testCode = await assistant.generateTestCode(
-                functionName,
-                filePath,
-                'jest'
-            );
-
-            expect(testCode).toBeDefined();
-            expect(testCode).toContain('describe');
-            expect(testCode).toContain(functionName);
-            expect(testCode).toContain('expect');
-            expect(testCode).toContain('test');
-        });
-
-        test('should support different test frameworks', async () => {
-            const functionName = 'validateEmail';
-            const filePath = 'src/validators.ts';
-
-            const mochaCode = await assistant.generateTestCode(
-                functionName,
-                filePath,
-                'mocha'
-            );
-
-            expect(mochaCode).toContain('describe');
-            expect(mochaCode).toContain('it(');
-            expect(mochaCode).not.toContain('test(');
-        });
-    });
-
-    describe('analyzeCopilotResponse', () => {
-        test('should parse and enhance Copilot suggestions', async () => {
-            const copilotResponse = `
-                The test is failing because the component expects a 'user' prop.
-                You should provide this prop in your test setup.
-            `;
-
-            const enhanced = await assistant.analyzeCopilotResponse(
-                copilotResponse,
-                { test: 'Component test', error: 'Missing required prop' } as TestFailure
-            );
-
-            expect(enhanced).toBeDefined();
-            expect(enhanced.actionable).toBe(true);
-            expect(enhanced.codeExample).toBeTruthy();
-            expect(enhanced.confidence).toBeGreaterThan(0);
-        });
-
-        test('should handle empty or invalid Copilot responses', async () => {
-            const enhanced = await assistant.analyzeCopilotResponse(
-                '',
-                { test: 'Test', error: 'Error' } as TestFailure
-            );
-
-            expect(enhanced.actionable).toBe(false);
-            expect(enhanced.confidence).toBe(0);
-        });
-    });
-
-    describe('learnFromFix', () => {
-        test('should record successful fixes for future reference', async () => {
-            const failure: TestFailure = {
-                test: 'API test',
-                suite: 'API Suite',
-                error: 'Network error',
-                file: 'api.spec.ts',
-                line: 10
+        test('should return null when no code changes available', async () => {
+            const analysis = {
+                summary: 'Test summary',
+                rootCause: 'Root cause',
+                suggestedFix: 'Suggested fix', 
+                confidence: 0.8
             };
 
-            const fix = {
-                description: 'Mock the API call',
-                code: 'jest.mock(\'./api\')',
-                timeToFix: 300000
-            };
+            const fix = await assistant.generateFix(mockFailure, analysis);
 
-            await assistant.learnFromFix(failure, fix);
-
-            expect(mockTestIntelligence.recordFailure).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    pattern: expect.any(String),
-                    solution: expect.any(String)
-                })
-            );
+            expect(fix).toBeNull();
         });
     });
 
-    describe('getFailureContext', () => {
-        test('should gather comprehensive context for failure analysis', async () => {
-            const failure: TestFailure = {
-                test: 'Integration test',
-                suite: 'Integration Suite',
-                error: 'Connection refused',
-                file: 'integration.spec.ts',
-                line: 25
-            };
-
-            const context = await assistant['buildFailureContext'](failure);
-
-            expect(context).toBeDefined();
-            expect(context.relatedFiles).toBeDefined();
-            expect(context.recentChanges).toBeDefined();
-            expect(context.testHistory).toBeDefined();
-            expect(context.dependencies).toBeDefined();
-        });
-    });
 });

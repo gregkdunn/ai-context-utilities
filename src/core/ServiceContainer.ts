@@ -65,6 +65,11 @@ export class ServiceContainer {
     private _aiTestAssistant!: AITestAssistant;
     private _nativeTestRunner!: NativeTestRunner;
     private _fileWatcherActive: boolean = false;
+    
+    // Status bar animation
+    private _statusBarAnimation?: NodeJS.Timeout;
+    private _animationFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    private _animationIndex = 0;
 
     constructor(private config: ServiceConfiguration) {
         this.initializeServices();
@@ -294,6 +299,9 @@ export class ServiceContainer {
      * Status bar helper methods
      */
     updateStatusBar(text: string, color?: 'green' | 'yellow' | 'red'): void {
+        // Stop any existing animation
+        this.stopStatusBarAnimation();
+        
         // Get performance info for tooltip
         const performanceInfo = this.getPerformanceTooltip();
         
@@ -310,6 +318,44 @@ export class ServiceContainer {
         } else {
             this._statusBarItem.color = undefined;
         }
+    }
+    
+    /**
+     * Start animated status bar for running tests
+     */
+    startStatusBarAnimation(text: string): void {
+        // Stop any existing animation
+        this.stopStatusBarAnimation();
+        
+        // Reset animation
+        this._animationIndex = 0;
+        
+        // Start animation timer
+        this._statusBarAnimation = setInterval(() => {
+            const spinner = this._animationFrames[this._animationIndex];
+            this._statusBarItem.text = `${spinner} AI Debug Context: ${text}`;
+            this._statusBarItem.tooltip = `AI Debug Context: ${text} (Tests in progress...)`;
+            
+            // Cycle through animation frames
+            this._animationIndex = (this._animationIndex + 1) % this._animationFrames.length;
+        }, 100); // Update every 100ms for smooth animation
+        
+        // Set yellow color during testing
+        this._statusBarItem.color = new vscode.ThemeColor('charts.yellow');
+        this._statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    }
+    
+    /**
+     * Stop status bar animation
+     */
+    stopStatusBarAnimation(): void {
+        if (this._statusBarAnimation) {
+            clearInterval(this._statusBarAnimation);
+            this._statusBarAnimation = undefined;
+        }
+        
+        // Reset background color
+        this._statusBarItem.backgroundColor = undefined;
     }
 
     /**
@@ -372,6 +418,9 @@ export class ServiceContainer {
         // Services are automatically disposed via extensionContext.subscriptions
         // but we can add custom cleanup here if needed
         this._fileWatcherActive = false;
+        
+        // Stop status bar animation
+        this.stopStatusBarAnimation();
         this._backgroundDiscovery?.dispose();
         this._performanceTracker?.dispose();
         this._realPerformanceTracker?.dispose();
