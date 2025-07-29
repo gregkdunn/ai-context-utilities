@@ -8,10 +8,12 @@ import * as vscode from 'vscode';
 import { ServiceContainer } from '../core/ServiceContainer';
 import { TestExecutionService, TestExecutionRequest } from './TestExecutionService';
 import { ProjectSelectionService, ProjectSelectionResult } from './ProjectSelectionService';
-import { UIService } from './UIService';
 import { UserFriendlyErrors } from '../utils/userFriendlyErrors';
 import { UserFriendlyErrorHandler } from '../utils/UserFriendlyErrorHandler';
 import { ContextCompiler } from '../modules/aiContext/ContextCompiler';
+import { QuickPickUtils } from '../utils/QuickPickUtils';
+import { CopilotUtils } from '../utils/CopilotUtils';
+import { MessageUtils } from '../utils/MessageUtils';
 
 /**
  * Main orchestrator for test menu and execution flow
@@ -19,12 +21,10 @@ import { ContextCompiler } from '../modules/aiContext/ContextCompiler';
 export class TestMenuOrchestrator {
     private testExecution: TestExecutionService;
     private projectSelection: ProjectSelectionService;
-    private ui: UIService;
 
     constructor(private services: ServiceContainer) {
         this.testExecution = new TestExecutionService(services);
         this.projectSelection = new ProjectSelectionService(services);
-        this.ui = new UIService(services);
     }
 
     /**
@@ -51,7 +51,7 @@ export class TestMenuOrchestrator {
                     await this.runGitAffected();
                     break;
                     
-                case 'post-test-context':
+                case 'current-context':
                     await this.openPostTestContext();
                     break;
                     
@@ -71,7 +71,7 @@ export class TestMenuOrchestrator {
         try {
             const selectedProject = await this.projectSelection.showProjectBrowser();
             if (selectedProject) {
-                await this.executeProjectTest(selectedProject);
+                await this.executeProjectTest(selectedProject, { previousMenu: 'project-browser' });
             }
         } catch (error) {
             await this.handleError(error, 'showProjectBrowser');
@@ -81,12 +81,13 @@ export class TestMenuOrchestrator {
     /**
      * Execute test for specific project
      */
-    async executeProjectTest(project: string): Promise<void> {
+    async executeProjectTest(project: string, navigationContext?: { previousMenu?: 'main' | 'project-browser' | 'context-browser' | 'custom'; customCommand?: string }): Promise<void> {
         try {
             const request: TestExecutionRequest = {
                 project,
                 mode: 'default',
-                verbose: true
+                verbose: true,
+                navigationContext
             };
 
             const result = await this.testExecution.executeTest(request, (progress) => {
@@ -342,222 +343,57 @@ Please be specific and actionable in your suggestions. Include code examples whe
 
 
     /**
-     * Send content directly to Copilot Chat
+     * Send content to Copilot Chat - simplified reliable approach
      */
     private async sendToCopilotChat(content: string): Promise<boolean> {
         try {
-            this.services.outputChannel.appendLine(`🚀 Fully automated Copilot integration for post-test analysis`);
-            this.services.outputChannel.appendLine(`📋 Preparing to send ${Math.round(content.length / 1024)}KB of context to Copilot Chat...`);
+            this.services.outputChannel.appendLine(`📋 Preparing context for Copilot Chat (${Math.round(content.length / 1024)}KB)`);
             
-            // Always copy to clipboard first
+            // Copy to clipboard
             await vscode.env.clipboard.writeText(content);
-            this.services.outputChannel.appendLine('📋 Content copied to clipboard successfully');
+            this.services.outputChannel.appendLine('✅ Content copied to clipboard');
             
             // Try to open Copilot Chat
             const opened = await this.openCopilotChat();
             
             if (opened) {
-                this.services.outputChannel.appendLine('🤖 Copilot Chat opened successfully');
-                
-                // Wait for Copilot Chat to fully load
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // Focus on Copilot Chat
-                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-                
-                // Attempt automatic paste and submit
-                this.services.outputChannel.appendLine('🚀 Attempting fully automated paste and submit...');
-                const success = await this.tryAutomaticPaste();
-                
-                if (success) {
-                    // Success - show brief success message
-                    vscode.window.showInformationMessage(
-                        `🚀 Post-test analysis automatically sent to Copilot Chat!`,
-                        { modal: false }
-                    );
-                    return true;
-                } else {
-                    // Fallback - show instructions
-                    vscode.window.showInformationMessage(
-                        '📋 Copilot Chat ready. Content in clipboard - paste (Ctrl+V/Cmd+V) and press Enter.',
-                        { modal: false }
-                    );
-                    return true;
-                }
-                
+                this.services.outputChannel.appendLine('🤖 Copilot Chat opened');
+                MessageUtils.showInfo('📋 Context ready! Paste with Ctrl+V/Cmd+V and press Enter in Copilot Chat.');
+                return true;
             } else {
-                this.services.outputChannel.appendLine('⚠️ Could not open Copilot Chat automatically');
-                // Try alternative methods
-                await this.tryAlternativeCopilotCommands();
-                vscode.window.showInformationMessage(
-                    '📋 AI context copied to clipboard. Please open Copilot Chat and paste.',
-                    { modal: false }
-                );
+                this.services.outputChannel.appendLine('⚠️ Could not open Copilot Chat - showing instructions');
+                MessageUtils.showInfo('📋 Context copied to clipboard. Please open Copilot Chat and paste manually.');
                 return false;
             }
             
         } catch (error) {
-            this.services.outputChannel.appendLine(`❌ Error in automated Copilot integration: ${error}`);
+            this.services.outputChannel.appendLine(`❌ Error sending to Copilot: ${error}`);
             await vscode.env.clipboard.writeText(content);
-            vscode.window.showErrorMessage(
-                '❌ Auto-integration failed. Content copied to clipboard - please paste in Copilot Chat manually.'
-            );
+            MessageUtils.showError('❌ Context copied to clipboard. Please paste in Copilot Chat manually.');
             return false;
         }
     }
 
     /**
-     * Try to open Copilot Chat
+     * Try to open Copilot Chat - simplified approach
      */
     private async openCopilotChat(): Promise<boolean> {
-        try {
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-            return true;
-        } catch {
-            try {
-                await vscode.commands.executeCommand('github.copilot.openChat');
-                return true;
-            } catch {
-                return false;
-            }
-        }
-    }
-
-    /**
-     * Try automatic paste and submit to Copilot Chat
-     */
-    private async tryAutomaticPaste(): Promise<boolean> {
-        try {
-            // Focus on Copilot Chat input
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Try paste command
-            this.services.outputChannel.appendLine('📋 Attempting automatic paste...');
-            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-            await new Promise(resolve => setTimeout(resolve, 800)); // Wait for paste to complete
-            
-            this.services.outputChannel.appendLine('✅ Content pasted successfully, attempting auto-submit...');
-            
-            // Try to submit automatically with multiple methods
-            const submitted = await this.tryAutoSubmit();
-            
-            if (submitted) {
-                this.services.outputChannel.appendLine('🚀 Content automatically submitted to Copilot Chat!');
-                return true;
-            } else {
-                this.services.outputChannel.appendLine('✅ Content pasted - please press Enter to submit');
-                return true;
-            }
-            
-        } catch (error) {
-            this.services.outputChannel.appendLine(`⚠️ Auto-paste failed: ${error}`);
-            return false;
-        }
-    }
-
-    /**
-     * Try different methods to automatically submit content to Copilot Chat
-     */
-    private async tryAutoSubmit(): Promise<boolean> {
-        const submitMethods = [
-            // Method 1: Standard Enter key simulation
-            async () => {
-                await vscode.commands.executeCommand('type', { text: '\n' });
-                return true;
-            },
-            
-            // Method 2: Workbench submit action
-            async () => {
-                await vscode.commands.executeCommand('workbench.action.chat.submit');
-                return true;
-            },
-            
-            // Method 3: Chat specific submit
-            async () => {
-                await vscode.commands.executeCommand('chat.action.submit');
-                return true;
-            },
-            
-            // Method 4: Generic submit/accept commands
-            async () => {
-                await vscode.commands.executeCommand('workbench.action.acceptSelectedSuggestion');
-                return true;
-            },
-            
-            // Method 5: Chat send message command
-            async () => {
-                await vscode.commands.executeCommand('workbench.action.chat.sendMessage');
-                return true;
-            },
-            
-            // Method 6: Copilot specific submit
-            async () => {
-                await vscode.commands.executeCommand('github.copilot.chat.submit');
-                return true;
-            },
-            
-            // Method 7: Editor action submit
-            async () => {
-                await vscode.commands.executeCommand('editor.action.submitComment');
-                return true;
-            },
-            
-            // Method 8: Simulate Ctrl+Enter or Cmd+Enter
-            async () => {
-                await vscode.commands.executeCommand('type', { text: '\r' });
-                return true;
-            }
-        ];
-        
-        for (let i = 0; i < submitMethods.length; i++) {
-            try {
-                this.services.outputChannel.appendLine(`🔄 Trying submit method ${i + 1}...`);
-                await submitMethods[i]();
-                await new Promise(resolve => setTimeout(resolve, 200)); // Wait for command to process
-                this.services.outputChannel.appendLine(`✅ Submit method ${i + 1} executed successfully`);
-                return true;
-            } catch (error) {
-                this.services.outputChannel.appendLine(`⚠️ Submit method ${i + 1} failed: ${error}`);
-                continue;
-            }
-        }
-        
-        this.services.outputChannel.appendLine('⚠️ All auto-submit methods failed - manual submission required');
-        return false;
-    }
-
-    /**
-     * Try alternative Copilot Chat commands
-     */
-    private async tryAlternativeCopilotCommands(): Promise<void> {
         const commands = [
-            'github.copilot.openChat',
-            'workbench.action.chat.open', 
-            'github.copilot.terminal.explainTerminalSelection',
-            'workbench.action.chat.newChat'
+            'workbench.panel.chat.view.copilot.focus',
+            'github.copilot.openChat'
         ];
         
         for (const command of commands) {
             try {
                 await vscode.commands.executeCommand(command);
-                this.services.outputChannel.appendLine(`✅ Opened Copilot Chat using: ${command}`);
-                vscode.window.showInformationMessage(
-                    '🤖 Copilot Chat opened! Please paste the content from clipboard.',
-                    { modal: false }
-                );
-                return;
-            } catch (error) {
-                this.services.outputChannel.appendLine(`⚠️ Command ${command} failed: ${error}`);
+                return true;
+            } catch {
                 continue;
             }
         }
-        
-        vscode.window.showWarningMessage(
-            '⚠️ Could not open Copilot Chat. Please open it manually and paste the content.',
-            { modal: false }
-        );
+        return false;
     }
+
 
 
     /**
@@ -585,14 +421,14 @@ Please be specific and actionable in your suggestions. Include code examples whe
      */
     async openPostTestContext(): Promise<void> {
         try {
-            this.services.updateStatusBar('📖 Opening post-test context...', 'yellow');
+            this.services.updateStatusBar('📖 Opening current context...', 'yellow');
 
             const fs = require('fs');
             const path = require('path');
             const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
 
             if (!fs.existsSync(contextDir)) {
-                vscode.window.showInformationMessage('No post-test context files found.');
+                vscode.window.showInformationMessage('No current context files found.');
                 this.services.updateStatusBar('Ready');
                 return;
             }
@@ -607,19 +443,27 @@ Please be specific and actionable in your suggestions. Include code examples whe
                 .sort();
 
             if (files.length === 0) {
-                vscode.window.showInformationMessage('No post-test context files available.');
+                vscode.window.showInformationMessage('No current context files available.');
                 this.services.updateStatusBar('Ready');
                 return;
             }
 
-            // Create QuickPick for file selection
-            const quickPick = vscode.window.createQuickPick();
-            quickPick.title = '📖 Post-Test Context Files';
-            quickPick.placeholder = 'Select a context file to view';
-            quickPick.ignoreFocusOut = true;
+            // Create menu items starting with navigation and actions
+            const items: any[] = [];
 
-            // Build file items with details
-            const items = files.map((file: string) => {
+            // Add navigation and actions first as specified
+            // Back button
+            items.push(QuickPickUtils.createBackButton());
+
+            // Re-Submit Current Context
+            items.push({
+                label: 'Re-Submit Current Context',
+                detail: 'Apply your context files',
+                description: '✅❌'
+            });
+
+            // Build file items with details and add to the list
+            const fileItems = files.map((file: string) => {
                 const filePath = path.join(contextDir, file);
                 const stats = fs.statSync(filePath);
                 const sizeKB = (stats.size / 1024).toFixed(1);
@@ -637,44 +481,29 @@ Please be specific and actionable in your suggestions. Include code examples whe
                 };
             });
 
-            // Add back button and "Open All Files" option
-            items.unshift({
-                label: '$(arrow-left) Back ',
-                detail: 'Return to the main test menu',
-                description: 'to Main Menu'
-            } as any);
-            
-            
-            // Add Debug Tests with Copilot integration if ai_context.txt exists
-            const hasAiContext = files.some((file: string) => file.includes('context') || file.includes('ai_context'));
-            if (hasAiContext) {
-                items.unshift({
-                    label: '$(bug) Debug Tests with Copilot',
-                    detail: 'Analyze context with Copilot Chat for test fixes and suggestions',
-                    description: '$(copilot) AI Debug'
-                } as any);
-            }
-
-            quickPick.items = items;
+            // Add file items after navigation and actions
+            items.push(...fileItems);
+          
+            const quickPick = QuickPickUtils.showManualQuickPick(
+                items,
+                {
+                    title: '📖 Current Context Files',
+                    placeholder: 'Select a context file to view'
+                },
+                (text: string) => this.services.updateStatusBar(text)
+            );
 
             quickPick.onDidAccept(async () => {
                 const selection = quickPick.activeItems[0];
                 quickPick.hide();
 
-                if (selection.label.includes('Back to Main Menu')) {
+                if (QuickPickUtils.isBackButton(selection)) {
                     // Return to main menu
                     this.services.updateStatusBar('Ready');
                     this.showMainMenu();
-                } else if (selection.label.includes('Debug Tests with Copilot')) {
-                    // Start Copilot analysis session
-                    await this.startCopilotAnalysis(contextDir);
-                } else if (selection.label.includes('Open All Files')) {
-                    // Open all files
-                    files.forEach((file: string) => {
-                        const filePath = vscode.Uri.file(path.join(contextDir, file));
-                        vscode.window.showTextDocument(filePath);
-                    });
-                    this.services.updateStatusBar('📖 Context opened', 'green');
+                } else if (selection.label.includes('Re-Submit Current Context')) {
+                    // Analyze context files and show appropriate test menu
+                    await this.showTestResultActions(contextDir);
                 } else {
                     // Open selected file
                     const fileName = selection.label.replace(/^\$\([^)]+\)\s*/, '');
@@ -684,17 +513,101 @@ Please be specific and actionable in your suggestions. Include code examples whe
                 }
             });
 
-            quickPick.onDidHide(() => {
-                this.services.updateStatusBar('Ready');
-                quickPick.dispose();
-            });
-
-            quickPick.show();
-
         } catch (error) {
             this.services.updateStatusBar('❌ Context error', 'red');
             await this.handleError(error, 'openPostTestContext');
         }
+    }
+
+    /**
+     * Show test result actions based on context analysis
+     */
+    private async showTestResultActions(contextDir: string): Promise<void> {
+        try {
+            this.services.updateStatusBar('📊 Analyzing test results...', 'yellow');
+            
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Look for test output files to analyze
+            const testOutputPath = path.join(contextDir, 'test-output.txt');
+            const contextPath = path.join(contextDir, 'ai-debug-context.txt');
+            
+            let hasFailures = false;
+            let testSummary: any = null;
+            
+            // First, try to read test-output.txt
+            if (fs.existsSync(testOutputPath)) {
+                const testOutput = fs.readFileSync(testOutputPath, 'utf8');
+                testSummary = this.parseTestOutput(testOutput);
+                hasFailures = !testSummary.success;
+            }
+            // Fallback to checking ai-debug-context.txt
+            else if (fs.existsSync(contextPath)) {
+                const contextContent = fs.readFileSync(contextPath, 'utf8');
+                hasFailures = this.detectFailuresInContext(contextContent);
+                // Create a basic test summary for the context
+                testSummary = {
+                    project: 'Current Project',
+                    success: !hasFailures,
+                    failed: hasFailures ? 1 : 0,
+                    passed: hasFailures ? 0 : 1,
+                    total: 1,
+                    duration: 0,
+                    failures: []
+                };
+            }
+            else {
+                vscode.window.showWarningMessage('No test context files found to analyze.');
+                this.services.updateStatusBar('Ready');
+                return;
+            }
+            
+            // Show appropriate menu based on test results using the public interface
+            // Set navigation context to return to context browser
+            this.services.testActions.setNavigationContext({ previousMenu: 'context-browser' });
+            await this.services.testActions.showTestResult(testSummary);
+            
+        } catch (error) {
+            this.services.updateStatusBar('❌ Analysis error', 'red');
+            await this.handleError(error, 'showTestResultActions');
+        }
+    }
+    
+    /**
+     * Parse test output to determine success/failure
+     */
+    private parseTestOutput(output: string): any {
+        // Use the existing TestResultParser
+        const { TestResultParser } = require('../utils/testResultParser');
+        return TestResultParser.parseNxOutput(output, 'Context Analysis');
+    }
+    
+    /**
+     * Detect failures in AI context content
+     */
+    private detectFailuresInContext(contextContent: string): boolean {
+        const failureIndicators = [
+            'FAIL ',
+            'Test suite failed to run',
+            'tests failed',
+            'error TS',
+            'Cannot find module',
+            'SyntaxError',
+            'TypeError',
+            'AssertionError',
+            'Test run failed',
+            'failing tests',
+            'failed with',
+            '❌',
+            'failures:',
+            'test failures'
+        ];
+        
+        const lowerContent = contextContent.toLowerCase();
+        return failureIndicators.some(indicator => 
+            lowerContent.includes(indicator.toLowerCase())
+        );
     }
 
     /**
@@ -812,6 +725,104 @@ Please be specific and actionable in your suggestions. Include code examples whe
             this.services.updateStatusBar('❌ Config error', 'red');
             await this.handleError(error, 'createConfig');
         }
+    }
+
+    /**
+     * Re-run project tests based on current context documents
+     */
+    async rerunProjectTestsFromContext(): Promise<void> {
+        try {
+            this.services.updateStatusBar('🔄 Analyzing context for re-run...', 'yellow');
+            
+            const fs = require('fs');
+            const path = require('path');
+            const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
+            
+            // Check if context directory exists
+            if (!fs.existsSync(contextDir)) {
+                vscode.window.showInformationMessage('No test context found. Run tests first to generate context.');
+                this.services.updateStatusBar('Ready');
+                return;
+            }
+            
+            // Try to extract project information from context files
+            let projectName: string | null = null;
+            
+            // Look for test output files that might contain project info
+            const testOutputPath = path.join(contextDir, 'test-output.txt');
+            const contextPath = path.join(contextDir, 'ai-debug-context.txt');
+            
+            if (fs.existsSync(testOutputPath)) {
+                const testOutput = fs.readFileSync(testOutputPath, 'utf8');
+                projectName = this.extractProjectFromTestOutput(testOutput);
+            }
+            
+            if (!projectName && fs.existsSync(contextPath)) {
+                const contextContent = fs.readFileSync(contextPath, 'utf8');
+                projectName = this.extractProjectFromContext(contextContent);
+            }
+            
+            if (!projectName) {
+                // Fallback: run affected tests if no specific project found
+                this.services.outputChannel.appendLine('🔄 No specific project found in context, running affected tests...');
+                await this.runGitAffected();
+                return;
+            }
+            
+            this.services.outputChannel.appendLine(`🔄 Re-running tests for project: ${projectName}`);
+            await this.executeProjectTest(projectName, { previousMenu: 'context-browser' });
+            
+        } catch (error) {
+            this.services.updateStatusBar('❌ Re-run error', 'red');
+            await this.handleError(error, 'rerunProjectTestsFromContext');
+        }
+    }
+
+    /**
+     * Extract project name from test output
+     */
+    private extractProjectFromTestOutput(testOutput: string): string | null {
+        // Look for common patterns that indicate project name
+        const patterns = [
+            /yarn nx test (\w+[\w-]*)/,
+            /npm run test (\w+[\w-]*)/,
+            /nx test (\w+[\w-]*)/,
+            /Testing (\w+[\w-]*)/i,
+            /Project: (\w+[\w-]*)/i,
+            /\[(\w+[\w-]*)\] tests/i
+        ];
+        
+        for (const pattern of patterns) {
+            const match = testOutput.match(pattern);
+            if (match && match[1] && match[1] !== 'test') {
+                return match[1];
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Extract project name from AI context content
+     */
+    private extractProjectFromContext(contextContent: string): string | null {
+        // Look for project references in context
+        const patterns = [
+            /Project: (\w+[\w-]*)/i,
+            /Testing (\w+[\w-]*) project/i,
+            /## Project: (\w+[\w-]*)/,
+            /\*\*Project:\*\* (\w+[\w-]*)/,
+            /Running tests for (\w+[\w-]*)/i
+        ];
+        
+        for (const pattern of patterns) {
+            const match = contextContent.match(pattern);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+        
+        return null;
     }
 
     /**

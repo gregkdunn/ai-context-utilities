@@ -53,7 +53,9 @@ describe('CommandRegistry', () => {
             clearTestCache: jest.fn(),
             runSetup: jest.fn(),
             showWorkspaceInfo: jest.fn(),
-            createConfig: jest.fn()
+            createConfig: jest.fn(),
+            openPostTestContext: jest.fn(),
+            rerunProjectTestsFromContext: jest.fn()
         } as any;
 
         // Make TestMenuOrchestrator constructor return our mock
@@ -79,7 +81,10 @@ describe('CommandRegistry', () => {
             expect(registeredCommands).toContain('aiDebugContext.runSetup');
             expect(registeredCommands).toContain('aiDebugContext.showWorkspaceInfo');
             expect(registeredCommands).toContain('aiDebugContext.runGitAffected');
+            expect(registeredCommands).toContain('aiDebugContext.runCopilotInstructionContexts');
             expect(registeredCommands).toContain('aiDebugContext.createConfig');
+            expect(registeredCommands).toContain('aiDebugContext.openContextBrowser');
+            expect(registeredCommands).toContain('aiDebugContext.rerunProjectTests');
         });
 
         test('should return array of disposables', () => {
@@ -155,6 +160,20 @@ describe('CommandRegistry', () => {
             await handler();
 
             expect(mockOrchestrator.toggleFileWatcher).toHaveBeenCalled();
+        });
+
+        test('rerunProjectTests should delegate to orchestrator.rerunProjectTestsFromContext', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            const rerunCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.rerunProjectTests'
+            );
+            expect(rerunCall).toBeDefined();
+            
+            const handler = rerunCall![1];
+            await handler();
+
+            expect(mockOrchestrator.rerunProjectTestsFromContext).toHaveBeenCalled();
         });
     });
 

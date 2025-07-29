@@ -1,11 +1,14 @@
 {
-  "name": "ai-debug-context-v3",
-  "displayName": "AI Debug Context V3",
-  "version": "3.0.0",
-  "description": "Transform your testing workflow from minutes to seconds. Auto-detect changed tests, real-time watching, and smart project discovery with clean Phase 1.8 architecture.",
+  "name": "ai-context-util",
+  "displayName": "AI Context Util",
+  "version": "3.1.0",
+  "description": "Transform your testing workflow with AI-powered context utilities. Auto-detect changed tests, real-time watching, and smart project discovery with Copilot integration.",
   "main": "./out/extension.js",
-  "publisher": "ai-debug-context",
-  "categories": ["Testing", "Other"],
+  "publisher": "ai-context-util",
+  "categories": [
+    "Testing",
+    "Other"
+  ],
   "icon": "icon/icon.png",
   "galleryBanner": {
     "color": "#000000",
@@ -16,65 +19,36 @@
   ],
   "contributes": {
     "commands": [
-      {
-        "command": "aiDebugContext.runAffectedTests",
-        "title": "⚡ Run My Changed Tests",
-        "category": "AI Debug",
-        "icon": "$(zap)"
-      },
-      {
-        "command": "aiDebugContext.startFileWatcher",
-        "title": "👀 Toggle Test Watcher",
-        "category": "AI Debug", 
-        "icon": "$(eye)"
-      },
-      {
-        "command": "aiDebugContext.clearTestCache",
-        "title": "🗑️ Clear Test Cache",
-        "category": "AI Debug",
-        "icon": "$(trash)"
-      },
+
       {
         "command": "aiDebugContext.runSetup",
-        "title": "🍎 Run Setup",
-        "category": "AI Debug",
+        "title": "🍎 Run Setup Wizard",
+        "category": "AI Context Util",
         "icon": "$(settings-gear)"
-      },
-      {
-        "command": "aiDebugContext.selectProject",
-        "title": "🎯 Test Specific Project",
-        "category": "AI Debug",
-        "icon": "$(target)"
       },
       {
         "command": "aiDebugContext.showWorkspaceInfo",
         "title": "📊 Show Workspace Info",
-        "category": "AI Debug",
+        "category": "AI Context Util",
         "icon": "$(info)"
       },
       {
-        "command": "aiDebugContext.runAffectedTestsQuick",
-        "title": "⚡ Run Tests (Skip Analysis)",
-        "category": "AI Debug",
-        "icon": "$(rocket)"
+        "command": "aiDebugContext.runCopilotInstructionContexts",
+        "title": "🤖 Add Copilot Instruction Contexts",
+        "category": "AI Context Util",
+        "icon": "$(copilot)"
       },
       {
         "command": "aiDebugContext.runGitAffected",
-        "title": "🚀 Auto-Detect Projects",
-        "category": "AI Debug",
-        "icon": "$(search)"
+        "title": "⚡ Test Updated Files",
+        "category": "AI Context Util",
+        "icon": "$(git-pull-request)"
       },
       {
-        "command": "aiDebugContext.runManualProject",
-        "title": "🎯 Type Project Name",
-        "category": "AI Debug",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "aiDebugContext.createConfig",
-        "title": "📝 Create Configuration File",
-        "category": "AI Debug",
-        "icon": "$(file-code)"
+        "command": "aiDebugContext.rerunProjectTests",
+        "title": "🔄 Re-Run Project Tests",
+        "category": "AI Context Util",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -92,22 +66,22 @@
           "command": "aiDebugContext.runSetup"
         },
         {
+          "command": "aiDebugContext.runCopilotInstructionContexts"
+        },
+        {
           "command": "aiDebugContext.selectProject"
         },
         {
           "command": "aiDebugContext.showWorkspaceInfo"
         },
         {
-          "command": "aiDebugContext.runAffectedTestsQuick"
-        },
-        {
           "command": "aiDebugContext.runGitAffected"
         },
         {
-          "command": "aiDebugContext.runManualProject"
+          "command": "aiDebugContext.createConfig"
         },
         {
-          "command": "aiDebugContext.createConfig"
+          "command": "aiDebugContext.rerunProjectTests"
         }
       ]
     },
@@ -119,7 +93,7 @@
         "when": "editorTextFocus"
       },
       {
-        "command": "aiDebugContext.startFileWatcher", 
+        "command": "aiDebugContext.startFileWatcher",
         "key": "ctrl+shift+w",
         "mac": "cmd+shift+w"
       },
@@ -135,9 +109,10 @@
         "when": "!terminalFocus"
       },
       {
-        "command": "aiDebugContext.runManualProject",
-        "key": "ctrl+shift+m",
-        "mac": "cmd+shift+m"
+        "command": "aiDebugContext.rerunProjectTests",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "!terminalFocus"
       }
     ],
     "configuration": {
@@ -190,7 +165,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "jest",
-    "test:watch": "jest --watch", 
+    "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --coverage --coverageReporters=text-lcov --passWithNoTests",
     "test:unit": "jest --testPathPattern='__tests__/unit'",
@@ -213,9 +188,6 @@
     "ts-jest": "^29.1.0",
     "typescript": "^5.4.0"
   },
-  "dependencies": {
-    "js-yaml": "^4.1.0"
-  },
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=18.0.0"
@@ -223,7 +195,7 @@
   "keywords": [
     "testing",
     "tdd",
-    "test-driven-development", 
+    "test-driven-development",
     "affected-tests",
     "file-watching",
     "git-integration",
@@ -246,5 +218,11 @@
   "bugs": {
     "url": "https://github.com/ai-debug-context/vscode-extension/issues"
   },
-  "homepage": "https://github.com/ai-debug-context/vscode-extension#readme"
+  "homepage": "https://github.com/ai-debug-context/vscode-extension#readme",
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "bundledDependencies": [
+    "js-yaml"
+  ]
 }

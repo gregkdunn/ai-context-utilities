@@ -8,12 +8,21 @@ import { TestSummary, TestFailure, TestResultParser } from './testResultParser';
 import { UserFriendlyErrors } from './userFriendlyErrors';
 import { LegacyStyleFormatter } from './legacyStyleFormatter';
 import { ContextCompiler } from '../modules/aiContext/ContextCompiler';
+import { TestResult } from '../services/TestExecutionService';
+import { QuickPickUtils } from './QuickPickUtils';
+import { CopilotUtils } from './CopilotUtils';
+import { MessageUtils } from './MessageUtils';
 
 export interface TestActionOptions {
     outputChannel: vscode.OutputChannel;
     workspaceRoot: string;
     testCommand?: string; // Default: 'npx nx test'
     rawOutput?: string; // For detecting Nx cloud URLs
+}
+
+export interface NavigationContext {
+    previousMenu?: 'main' | 'project-browser' | 'context-browser' | 'custom';
+    customCommand?: string;
 }
 
 export class TestActions {
@@ -23,6 +32,8 @@ export class TestActions {
     private currentPopupPromise: Thenable<string | undefined> | null = null;
     private lastPopupTime: number = 0;
     private currentRawOutput: string = '';
+    private currentTestResult: TestResult | null = null;
+    private navigationContext: NavigationContext = { previousMenu: 'main' };
     
     constructor(options: TestActionOptions) {
         this.outputChannel = options.outputChannel;
@@ -68,6 +79,51 @@ export class TestActions {
     updateRawOutput(rawOutput: string): void {
         this.currentRawOutput = rawOutput;
     }
+
+    /**
+     * Set the current test result for access to additional data like nxCloudUrl
+     */
+    setCurrentTestResult(testResult: TestResult): void {
+        this.currentTestResult = testResult;
+    }
+
+    /**
+     * Set the navigation context for back button behavior
+     */
+    setNavigationContext(context: NavigationContext): void {
+        this.navigationContext = context;
+    }
+
+    /**
+     * Navigate back to the previous menu based on navigation context
+     */
+    private async navigateBack(): Promise<void> {
+        switch (this.navigationContext.previousMenu) {
+            case 'main':
+                await vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
+                break;
+            case 'project-browser':
+                await vscode.commands.executeCommand('aiDebugContext.selectProject');
+                break;
+            case 'context-browser':
+                // Return to context browser
+                await vscode.commands.executeCommand('aiDebugContext.openContextBrowser');
+                break;
+            case 'custom':
+                if (this.navigationContext.customCommand) {
+                    await vscode.commands.executeCommand(this.navigationContext.customCommand);
+                } else {
+                    // Fallback to main menu
+                    await vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
+                }
+                break;
+            default:
+                // Default to main menu
+                await vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
+                break;
+        }
+    }
+
     
     /**
      * Show test result with actionable options
@@ -84,7 +140,7 @@ export class TestActions {
     }
     
     /**
-     * Show successful test result with 3-button workflow
+     * Show successful test result with menu-based workflow
      */
     private async showSuccessResult(result: TestSummary): Promise<void> {
         if (!this.shouldShowPopup()) {
@@ -93,44 +149,83 @@ export class TestActions {
             return;
         }
         
-        const message = `✅ ${result.project}: All tests passed! Ready for next steps.`;
-        const actions = ['New Tests', 'Lint Code', 'PR Description', 'View Output'];
+        // Automatically trigger Copilot analysis for successful tests
+        await this.copilotDebugTests(result);
         
-        try {
-            this.currentPopupPromise = vscode.window.showInformationMessage(message, ...actions);
-            const selection = await this.currentPopupPromise;
-            this.currentPopupPromise = null;
-            
-            // Handle button clicks with error handling
-            if (selection) {
-                try {
-                    switch (selection) {
-                        case 'New Tests':
-                            await this.generateNewTestRecommendations(result);
-                            break;
-                        case 'Lint Code':
-                            await this.runPrepareToPush(result);
-                            break;
-                        case 'PR Description':
-                            await this.generatePRDescription(result);
-                            break;
-                        case 'View Output':
-                            this.outputChannel.show();
-                            break;
-                    }
-                } catch (error) {
-                    // Log error but don't let it crash the extension
-                    this.outputChannel.appendLine(`⚠️ Error handling action '${selection}': ${error}`);
-                    // Show user-friendly message if network error
-                    if (error instanceof Error && error.message.includes('ENOTFOUND')) {
-                        vscode.window.showWarningMessage('Network issue detected. Please check your internet connection.');
+        // Show test success menu
+        await this.showTestSuccessMenu(result);
+    }
+
+    /**
+     * Show test success menu with QuickPick
+     */
+    private async showTestSuccessMenu(result: TestSummary): Promise<void> {
+        const items = [
+            { ...QuickPickUtils.createBackButton() },
+            {
+                label: '$(rocket) Prepare to Push',
+                detail: 'Run prepare-to-push workflow (lint & format)',
+                description: 'Lint & Format',
+                id: 'prepare-push'
+            },
+            {
+                label: '$(git-pull-request) PR Description',
+                detail: 'Generate PR description via Copilot',
+                description: 'Generate PR',
+                id: 'pr-description'
+            }
+        ];
+        
+        const quickPick = QuickPickUtils.showManualQuickPick(
+            items,
+            {
+                title: `✅ ${result.project} tests passed!`,
+                placeholder: 'What would you like to do next?'
+            }
+        );
+        
+        return new Promise((resolve) => {
+            quickPick.onDidAccept(async () => {
+                const selection = quickPick.activeItems[0];
+                quickPick.hide();
+                
+                if (selection) {
+                    try {
+                        switch ((selection as any).id) {
+                            case 'back':
+                                // Return to the previous menu based on navigation context
+                                await this.navigateBack();
+                                break;
+                            case 'prepare-push':
+                                await this.runPrepareToPush(result);
+                                break;
+                            case 'pr-description':
+                                await this.generatePRDescription(result);
+                                break;
+                            case 'view-results':
+                                this.outputChannel.show();
+                                break;
+                            case 'view-analysis':
+                                await CopilotUtils.focusCopilotChat();
+                                break;
+                        }
+                    } catch (error) {
+                        this.outputChannel.appendLine(`⚠️ Error handling action: ${error}`);
+                        if (error instanceof Error && error.message.includes('ENOTFOUND')) {
+                            vscode.window.showWarningMessage('Network issue detected. Please check your internet connection.');
+                        }
                     }
                 }
-            }
-        } catch (error) {
-            // If showing the popup fails, just log it
-            this.outputChannel.appendLine(`⚠️ Error showing success popup: ${error}`);
-        }
+                resolve();
+            });
+            
+            quickPick.onDidHide(() => {
+                quickPick.dispose();
+                resolve();
+            });
+            
+            quickPick.show();
+        });
     }
     
     /**
@@ -154,40 +249,97 @@ export class TestActions {
             return;
         }
         
-        // Show brief notification about automatic AI analysis
-        const message = `${result.project}: ${result.failed} tests failed (${result.failed} of ${result.total}). Automatically analyzing with AI...`;
-        
-        // Show non-modal notification about automatic analysis
-        vscode.window.showErrorMessage(message, { modal: false });
-        
         // Automatically trigger Copilot debug without waiting for user input
         await this.copilotDebugTests(result);
         
-        // Show additional action options after AI analysis is triggered
-        setTimeout(async () => {
-            const followUpActions = ['Rerun Tests', 'View Test Results', 'View AI Analysis'];
-            const selection = await vscode.window.showErrorMessage(
-                `${result.project}: AI analysis sent to Copilot Chat. Additional options:`,
-                ...followUpActions
-            );
-            
-            switch (selection) {
-                case 'Rerun Tests':
-                    await this.rerunAllTests(result.project);
-                    break;
-                case 'View Test Results':
-                    this.outputChannel.show();
-                    break;
-                case 'View AI Analysis':
-                    // Try to focus on Copilot Chat
-                    try {
-                        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-                    } catch (error) {
-                        vscode.window.showInformationMessage('Please check Copilot Chat for AI analysis');
-                    }
-                    break;
+        // Show test failure menu immediately
+        await this.showTestFailureMenu(result);
+    }
+
+    /**
+     * Show test failure menu with QuickPick
+     */
+    private async showTestFailureMenu(result: TestSummary): Promise<void> {
+        const items = [
+            { ...QuickPickUtils.createBackButton() },
+            {
+                label: '$(refresh) Test Again',
+                detail: 'Test run with last configuration',
+                description: 'Rerun project tests',
+                id: 'test-again'
             }
-        }, 2000); // Show follow-up actions after 2 seconds
+        ];
+
+        // Add Nx Test Results option only if URL is available
+        if (this.currentTestResult?.nxCloudUrl) {
+            items.splice(2, 0, {
+                label: '$(link-external) Nx Test Results',
+                detail: 'Opens browser link to Nx Cloud results from test run',
+                description: 'Nx Cloud',
+                id: 'nx-results'
+            });
+        }
+        
+        const quickPick = QuickPickUtils.showManualQuickPick(
+            items,
+            {
+                title: `❌ ${result.project} tests failed (${result.failed} failures)`,
+                placeholder: 'What would you like to do next?'
+            }
+        );
+        
+        return new Promise((resolve) => {
+            quickPick.onDidAccept(async () => {
+                const selection = quickPick.activeItems[0];
+                quickPick.hide();
+                
+                if (selection) {
+                    try {
+                        switch ((selection as any).id) {
+                            case 'back':
+                                // Return to the previous menu based on navigation context
+                                await this.navigateBack();
+                                break;
+                            case 'test-again':
+                                await this.rerunAllTests(result.project);
+                                break;
+                            case 'nx-results':
+                                if (this.currentTestResult?.nxCloudUrl) {
+                                    try {
+                                        await vscode.env.openExternal(vscode.Uri.parse(this.currentTestResult.nxCloudUrl));
+                                        this.outputChannel.appendLine(`🔗 Opened Nx Cloud results: ${this.currentTestResult.nxCloudUrl}`);
+                                    } catch (error) {
+                                        this.outputChannel.appendLine(`❌ Failed to open Nx Cloud URL: ${error}`);
+                                        vscode.window.showErrorMessage('Failed to open Nx Cloud results in browser');
+                                    }
+                                } else {
+                                    vscode.window.showWarningMessage('No Nx Cloud results URL available');
+                                }
+                                break;
+                            case 'view-results':
+                                this.outputChannel.show();
+                                break;
+                            case 'view-analysis':
+                                await CopilotUtils.focusCopilotChat();
+                                break;
+                        }
+                    } catch (error) {
+                        this.outputChannel.appendLine(`⚠️ Error handling action: ${error}`);
+                        if (error instanceof Error && error.message.includes('ENOTFOUND')) {
+                            vscode.window.showWarningMessage('Network issue detected. Please check your internet connection.');
+                        }
+                    }
+                }
+                resolve();
+            });
+            
+            quickPick.onDidHide(() => {
+                quickPick.dispose();
+                resolve();
+            });
+            
+            quickPick.show();
+        });
     }
     
     /**
@@ -206,18 +358,6 @@ export class TestActions {
         
         this.lastPopupTime = now;
         return true;
-    }
-    
-    /**
-     * Dismiss any currently showing popup to prevent multiple popups
-     */
-    private dismissCurrentPopup(): void {
-        if (this.currentPopupPromise) {
-            // Note: VSCode doesn't provide a direct way to dismiss modal dialogs,
-            // but tracking the promise helps us avoid showing multiple popups
-            // The user can still interact with the previous one, but new ones won't stack
-            this.currentPopupPromise = null;
-        }
     }
     
     /**
@@ -436,202 +576,17 @@ export class TestActions {
             this.outputChannel.appendLine(`🚀 Fully automated Copilot integration for ${result.project} test failures`);
             this.outputChannel.appendLine(`📋 Preparing to send ${Math.round(content.length / 1024)}KB of context to Copilot Chat...`);
             
-            // Always copy to clipboard first
-            await vscode.env.clipboard.writeText(content);
-            this.outputChannel.appendLine('📋 Content copied to clipboard successfully');
+            const integrationResult = await CopilotUtils.integrateWithCopilot(
+                content,
+                this.outputChannel
+            );
             
-            // Try to open Copilot Chat
-            const opened = await this.openCopilotChat();
-            
-            if (opened) {
-                this.outputChannel.appendLine('🤖 Copilot Chat opened successfully');
-                
-                // Wait for Copilot Chat to fully load
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // Focus on Copilot Chat
-                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-                
-                // Attempt automatic paste and submit
-                this.outputChannel.appendLine('🚀 Attempting fully automated paste and submit...');
-                const success = await this.tryAutomaticPaste();
-                
-                if (success) {
-                    // Success - show brief success message
-                    vscode.window.showInformationMessage(
-                        `🚀 ${result.project} test analysis automatically sent to Copilot Chat!`,
-                        { modal: false }
-                    );
-                } else {
-                    // Fallback - show instructions
-                    vscode.window.showInformationMessage(
-                        '📋 Copilot Chat ready. Content in clipboard - paste (Ctrl+V/Cmd+V) and press Enter.',
-                        { modal: false }
-                    );
-                }
-                
-            } else {
-                this.outputChannel.appendLine('⚠️ Could not open Copilot Chat automatically');
-                // Try alternative methods
-                await this.tryAlternativeCopilotCommands();
-                vscode.window.showInformationMessage(
-                    '📋 AI context copied to clipboard. Please open Copilot Chat and paste.',
-                    { modal: false }
-                );
-            }
+            this.outputChannel.appendLine(`✅ Copilot integration completed: ${integrationResult.method}`);
             
         } catch (error) {
             this.outputChannel.appendLine(`❌ Error in automated Copilot integration: ${error}`);
-            await vscode.env.clipboard.writeText(content);
-            vscode.window.showErrorMessage(
-                '❌ Auto-integration failed. Content copied to clipboard - please paste in Copilot Chat manually.'
-            );
+            MessageUtils.showError('❌ Auto-integration failed. Content copied to clipboard - please paste in Copilot Chat manually.');
         }
-    }
-
-
-    /**
-     * Try automatic paste and submit to Copilot Chat
-     */
-    private async tryAutomaticPaste(): Promise<boolean> {
-        try {
-            // Focus on Copilot Chat input
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Try paste command
-            this.outputChannel.appendLine('📋 Attempting automatic paste...');
-            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-            await new Promise(resolve => setTimeout(resolve, 800)); // Wait for paste to complete
-            
-            this.outputChannel.appendLine('✅ Content pasted successfully, attempting auto-submit...');
-            
-            // Try to submit automatically with multiple methods
-            const submitted = await this.tryAutoSubmit();
-            
-            if (submitted) {
-                this.outputChannel.appendLine('🚀 Content automatically submitted to Copilot Chat!');
-                vscode.window.showInformationMessage(
-                    '🚀 Content pasted and submitted to Copilot Chat automatically!',
-                    { modal: false }
-                );
-                return true;
-            } else {
-                this.outputChannel.appendLine('✅ Content pasted - please press Enter to submit');
-                vscode.window.showInformationMessage(
-                    '✅ Content pasted! Press Enter to submit to Copilot Chat.',
-                    { modal: false }
-                );
-                return true;
-            }
-            
-        } catch (error) {
-            this.outputChannel.appendLine(`⚠️ Auto-paste failed: ${error}`);
-            return false;
-        }
-    }
-
-    /**
-     * Try different methods to automatically submit content to Copilot Chat
-     */
-    private async tryAutoSubmit(): Promise<boolean> {
-        const submitMethods = [
-            // Method 1: Standard Enter key simulation
-            async () => {
-                await vscode.commands.executeCommand('type', { text: '\n' });
-                return true;
-            },
-            
-            // Method 2: Workbench submit action
-            async () => {
-                await vscode.commands.executeCommand('workbench.action.chat.submit');
-                return true;
-            },
-            
-            // Method 3: Chat specific submit
-            async () => {
-                await vscode.commands.executeCommand('chat.action.submit');
-                return true;
-            },
-            
-            // Method 4: Generic submit/accept commands
-            async () => {
-                await vscode.commands.executeCommand('workbench.action.acceptSelectedSuggestion');
-                return true;
-            },
-            
-            // Method 5: Chat send message command
-            async () => {
-                await vscode.commands.executeCommand('workbench.action.chat.sendMessage');
-                return true;
-            },
-            
-            // Method 6: Copilot specific submit
-            async () => {
-                await vscode.commands.executeCommand('github.copilot.chat.submit');
-                return true;
-            },
-            
-            // Method 7: Editor action submit
-            async () => {
-                await vscode.commands.executeCommand('editor.action.submitComment');
-                return true;
-            },
-            
-            // Method 8: Simulate Ctrl+Enter or Cmd+Enter
-            async () => {
-                await vscode.commands.executeCommand('type', { text: '\r' });
-                return true;
-            }
-        ];
-        
-        for (let i = 0; i < submitMethods.length; i++) {
-            try {
-                this.outputChannel.appendLine(`🔄 Trying submit method ${i + 1}...`);
-                await submitMethods[i]();
-                await new Promise(resolve => setTimeout(resolve, 200)); // Wait for command to process
-                this.outputChannel.appendLine(`✅ Submit method ${i + 1} executed successfully`);
-                return true;
-            } catch (error) {
-                this.outputChannel.appendLine(`⚠️ Submit method ${i + 1} failed: ${error}`);
-                continue;
-            }
-        }
-        
-        this.outputChannel.appendLine('⚠️ All auto-submit methods failed - manual submission required');
-        return false;
-    }
-
-    /**
-     * Try alternative Copilot Chat commands
-     */
-    private async tryAlternativeCopilotCommands(): Promise<void> {
-        const commands = [
-            'github.copilot.openChat',
-            'workbench.action.chat.open', 
-            'github.copilot.terminal.explainTerminalSelection',
-            'workbench.action.chat.newChat'
-        ];
-        
-        for (const command of commands) {
-            try {
-                await vscode.commands.executeCommand(command);
-                this.outputChannel.appendLine(`✅ Opened Copilot Chat using: ${command}`);
-                vscode.window.showInformationMessage(
-                    '🤖 Copilot Chat opened! Please paste the content from clipboard.',
-                    { modal: false }
-                );
-                return;
-            } catch (error) {
-                this.outputChannel.appendLine(`⚠️ Command ${command} failed: ${error}`);
-                continue;
-            }
-        }
-        
-        vscode.window.showWarningMessage(
-            '⚠️ Could not open Copilot Chat. Please open it manually and paste the content.',
-            { modal: false }
-        );
     }
 
     /**
@@ -674,23 +629,6 @@ ${failure.line ? `**Line**: ${failure.line}` : ''}`
 Please provide specific, actionable suggestions with code examples where helpful.`;
 
         return prompt;
-    }
-
-    /**
-     * Try to open Copilot Chat
-     */
-    private async openCopilotChat(): Promise<boolean> {
-        try {
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-            return true;
-        } catch {
-            try {
-                await vscode.commands.executeCommand('github.copilot.openChat');
-                return true;
-            } catch {
-                return false;
-            }
-        }
     }
 
     /**
@@ -1009,7 +947,7 @@ Please provide specific, actionable test recommendations with code examples.
 ${context}`;
                 
                 await this.sendToCopilotChatAutomatic(testRecommendationPrompt, result);
-                this.outputChannel.appendLine('🧪 New test recommendations automatically sent to Copilot Chat');
+                this.outputChannel.appendLine('🧪 New test recommendations sent to Copilot Chat');
             } else {
                 this.outputChannel.appendLine('⚠️ Could not compile context, trying existing files...');
                 // Fallback: try reading existing context file
@@ -1023,13 +961,13 @@ Based on the current codebase, please analyze the pasted document and provide sp
 ${existingContext}`;
                     
                     await this.sendToCopilotChatAutomatic(testRecommendationPrompt, result);
-                    this.outputChannel.appendLine('🧪 New test recommendations automatically sent to Copilot Chat');
+                    this.outputChannel.appendLine('🧪 New test recommendations sent to Copilot Chat');
                 } else {
                     // Final fallback to generated prompt
                     const prompt = this.buildNewTestPrompt(result);
                     const promptWithInstruction = `Analyze the pasted document and provide new test recommendations.\n\n${prompt}`;
                     await this.sendToCopilotChatAutomatic(promptWithInstruction, result);
-                    this.outputChannel.appendLine('🧪 Generated new test prompt automatically sent to Copilot Chat');
+                    this.outputChannel.appendLine('🧪 Generated new test prompt sent to Copilot Chat');
                 }
             }
             
@@ -1142,7 +1080,7 @@ Format the description professionally for GitHub PR submission.
 ${cleanContext}`;
                 
                 await this.sendToCopilotChatAutomatic(prDescriptionPrompt, result);
-                this.outputChannel.appendLine('📝 PR description automatically sent to Copilot Chat');
+                this.outputChannel.appendLine('📝 PR description sent to Copilot Chat');
             } else {
                 this.outputChannel.appendLine('⚠️ Could not compile context, trying existing files...');
                 // Fallback: try reading existing context file
@@ -1159,13 +1097,13 @@ Based on the current changes, please analyze the pasted document and generate a 
 ${cleanContext}`;
                     
                     await this.sendToCopilotChatAutomatic(prDescriptionPrompt, result);
-                    this.outputChannel.appendLine('📝 PR description automatically sent to Copilot Chat');
+                    this.outputChannel.appendLine('📝 PR description sent to Copilot Chat');
                 } else {
                     // Final fallback to generated prompt
                     const prompt = this.buildPRDescriptionPrompt(result);
                     const promptWithInstruction = `Analyze the pasted document and generate a comprehensive PR description.\n\n${prompt}`;
                     await this.sendToCopilotChatAutomatic(promptWithInstruction, result);
-                    this.outputChannel.appendLine('📝 Generated PR description prompt automatically sent to Copilot Chat');
+                    this.outputChannel.appendLine('📝 Generated PR description prompt sent to Copilot Chat');
                 }
             }
             

@@ -1,4 +1,4 @@
-# AI Debug Context V3 - Intelligent Test Runner for VSCode
+# AI Context Utilities - Intelligent Test Runner for VSCode
 
 ## ⚠️ IMPORTANT: Codebase Cleanup Required ⚠️
 
@@ -8,10 +8,11 @@
 
 ## 🎯 **Mission**: Transform your testing workflow from minutes to seconds
 
-**Current Phase:** 2.2 - Enhanced User Experience ✅  
-**Status:** Production Ready with Enhanced AI Features and User Experience  
+**Current Version:** 3.1.0 - Enhanced Command Palette Integration ✅  
+**Status:** Production Ready with Context-Aware Testing and Keyboard Shortcuts  
 **Architecture:** Native TypeScript with machine learning-inspired test intelligence  
-**Test Coverage:** 55%+ with comprehensive E2E tests
+**Test Coverage:** 60%+ with comprehensive E2E tests and utility class coverage  
+**Code Quality:** DRY principles applied - eliminated 150+ lines of duplicate code
 
 ---
 
@@ -44,7 +45,18 @@
 
 ---
 
-## ✨ **What's New in Phase 2.0.3**
+## ✨ **What's New in Version 3.1.0**
+
+### 🔄 **Enhanced Command Palette Integration**
+- **Re-Run Project Tests** - `Ctrl+Shift+R` keyboard shortcut to re-run tests based on current context
+- **Test Updated Files** - Moved from main menu to command palette for better accessibility
+- **Context-Aware Navigation** - Back button intelligently returns to the menu that opened current view
+
+### 🛠️ **Code Quality & Architecture**
+- **Utility Classes** - Centralized UI patterns with `QuickPickUtils`, `CopilotUtils`, and `MessageUtils`
+- **DRY Implementation** - Eliminated 150+ lines of duplicate code across 8 files
+- **Consistent UI** - Standardized QuickPick creation, Copilot integration, and message patterns
+- **Enhanced Reliability** - Copilot integration with 6 fallback methods for maximum compatibility
 
 ### 🧠 **Real Test Intelligence**
 - **Test Intelligence Engine** - Machine learning-inspired system that learns from every test execution
@@ -126,16 +138,19 @@ ServiceContainer
 ### **Installation**
 1. Install from VSCode Marketplace or package manually
 2. Open a workspace with `project.json` files (Nx, Angular, etc.)
-3. Press `Cmd+Shift+P` and run `AI Debug Context: Run Tests`
+3. Press `Cmd+Shift+P` and run `AI Context Util: Run Affected Tests`
 
 ### **Basic Usage**
-1. **Quick Test**: `Cmd+Shift+P` → "AI Debug Context: Run Tests"
+1. **Quick Test**: `Cmd+Shift+P` → "AI Context Util: Run Affected Tests"
 2. **Select from Menu**: Choose "Test Affected Projects" for smart detection
 3. **Browse Projects**: Choose "Select Project" to see all available projects
 
 ### **Keyboard Shortcuts**
-- `Cmd+Shift+T` - Quick affected tests
-- `Cmd+Shift+P` → "AI Debug" - Main menu
+- `Ctrl+Shift+T` / `Cmd+Shift+T` - Run Affected Tests (main menu)
+- `Ctrl+Shift+R` / `Cmd+Shift+R` - **NEW!** Re-Run Project Tests (from context)
+- `Ctrl+Shift+G` / `Cmd+Shift+G` - Test Updated Files (git affected)
+- `Ctrl+Shift+W` / `Cmd+Shift+W` - Toggle File Watcher
+- `Ctrl+Shift+C` / `Cmd+Shift+C` - Clear Test Cache
 
 ---
 
@@ -186,6 +201,7 @@ src/
 │   └── SmartFrameworkDetector.ts # Framework detection
 └── __tests__/          # Comprehensive test suite
     ├── unit/           # Unit tests for individual services
+    │   └── utils/      # Tests for utility classes (QuickPickUtils, CopilotUtils, MessageUtils)
     └── integration/    # Integration tests for service interactions
 ```
 
@@ -268,8 +284,8 @@ Create `.aiDebugContext.yml` in your workspace root for custom test commands and
 
 ### **Getting Help**
 1. Check extension output logs for detailed information
-2. View VSCode Output → "AI Debug Context" for detailed logs
-3. Clear cache: `Cmd+Shift+P` → "AI Debug Context: Clear Cache"
+2. View VSCode Output → "AI Context Utilities" for detailed logs
+3. Clear cache: `Cmd+Shift+P` → "AI Context Util: Clear Test Cache"
 4. Reset configuration: Delete `.aiDebugContext.yml` and restart
 
 ---

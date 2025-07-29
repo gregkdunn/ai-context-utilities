@@ -9,7 +9,7 @@ import { ServiceContainer } from '../core/ServiceContainer';
 import { ProjectInfo } from '../utils/simpleProjectDiscovery';
 
 export interface ProjectSelectionResult {
-    type: 'project' | 'auto-detect' | 'git-affected' | 'post-test-context' | 'cancelled';
+    type: 'project' | 'auto-detect' | 'git-affected' | 'current-context' | 'cancelled';
     project?: string;
 }
 
@@ -27,9 +27,9 @@ export class ProjectSelectionService {
     constructor(private services: ServiceContainer) {}
 
     /**
-     * Check if post-test context files exist
+     * Check if current context files exist
      */
-    private async hasPostTestFiles(): Promise<boolean> {
+    private async hasCurrentContextFiles(): Promise<boolean> {
         try {
             const fs = require('fs');
             const path = require('path');
@@ -64,7 +64,7 @@ export class ProjectSelectionService {
         
         // Create quickpick with unified interface
         const quickPick = vscode.window.createQuickPick();
-        quickPick.title = '🧪 AI Debug Context - Test Runner';
+        quickPick.title = '🧪 AI Context Util - Test Runner';
         quickPick.placeholder = 'Type project name or select an option below';
         quickPick.ignoreFocusOut = true;
         
@@ -237,16 +237,11 @@ export class ProjectSelectionService {
                 detail: 'Select a specific project to test',
                 description: '$(list-tree) Browse'
             });
-       items.push({
-                label: '$(git-pull-request) Test Updated Files',
-                detail: 'Test only updated files ⚡ FAST',
-                description: '$(target) Focused'
-            });
     
 
-        // Add post-test panel option if context files exist
-        const hasPostTestFiles = await this.hasPostTestFiles();
-        if (hasPostTestFiles) {
+        // Add current context panel option if context files exist
+        const hasCurrentContextFiles = await this.hasCurrentContextFiles();
+        if (hasCurrentContextFiles) {
 
             items.push({
                 label: '',
@@ -254,9 +249,9 @@ export class ProjectSelectionService {
             } as any);
 
             items.push({
-                label: '$(notebook) View Post-Test Context',
-                detail: 'Open saved test context and AI insights',
-                description: '$(file-text) Available'
+                label: '📖 Current Context',
+                detail: 'View generated AI context files',
+                description: 'Browse files'
             });
         }
 
@@ -393,8 +388,8 @@ export class ProjectSelectionService {
             return { type: 'auto-detect' };
         } else if (selection.label.includes('Test Updated Files')) {
             return { type: 'git-affected' };
-        } else if (selection.label.includes('View Post-Test Context')) {
-            return { type: 'post-test-context' };
+        } else if (selection.label.includes('Current Context')) {
+            return { type: 'current-context' };
         } else if (selection.label.includes('Select Project')) {
             // This will trigger the project browser
             return { type: 'project', project: 'SHOW_BROWSER' };

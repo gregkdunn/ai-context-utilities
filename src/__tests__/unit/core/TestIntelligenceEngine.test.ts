@@ -41,22 +41,14 @@ describe('TestIntelligenceEngine', () => {
 
     describe('Test Learning', () => {
         test('should learn from test execution', async () => {
-            const execution: TestExecution = {
-                id: 'exec-1',
-                testId: 'test-1',
-                result: 'fail',
-                duration: 1500,
-                errorMessage: 'TypeError: Cannot read property',
-                timestamp: Date.now(),
-                gitCommit: 'abc123',
-                changedFiles: ['src/component.ts']
-            };
-
             await engine.learnFromExecution('test-1', 'test.spec.ts', 'fail', 1500, { message: 'TypeError: Cannot read property', stack: '' }, ['src/component.ts']);
 
             const insights = await engine.getTestInsights('test-1', 'test.spec.ts');
             expect(insights).toBeDefined();
-            expect(insights!.lastFailures).toContain(execution);
+            expect(insights!.lastFailures).toHaveLength(1);
+            expect(insights!.lastFailures[0].result).toBe('fail');
+            expect(insights!.lastFailures[0].duration).toBe(1500);
+            expect(insights!.lastFailures[0].errorMessage).toBe('TypeError: Cannot read property');
         });
 
         test('should maintain execution history', async () => {
@@ -81,20 +73,16 @@ describe('TestIntelligenceEngine', () => {
         });
 
         test('should limit history per test', async () => {
-            const testId = 'test-with-long-history';
+            const testName = 'test-with-long-history';
+            const fileName = 'test.spec.ts';
             
             // Add more executions than the limit
             for (let i = 0; i < 150; i++) {
-                const execution: TestExecution = {
-                    id: `exec-${i}`,
-                    testId,
-                    result: 'pass',
-                    duration: 100,
-                    timestamp: Date.now() + i
-                };
-                await engine.learnFromExecution(testId, 'test.spec.ts', 'pass', 100);
+                await engine.learnFromExecution(testName, fileName, 'pass', 100);
             }
 
+            // Generate the same testId that the engine uses internally
+            const testId = engine['generateTestId'](fileName, testName);
             const history = engine['testHistory'].get(testId);
             expect(history!.length).toBeLessThanOrEqual(100); // maxHistoryPerTest
         });
@@ -156,6 +144,9 @@ describe('TestIntelligenceEngine', () => {
             for (const testId of testIds) {
                 await engine.learnFromExecution(testId, 'test.spec.ts', 'fail', 100, { message: 'Database connection failed', stack: '' });
             }
+            
+            // Update correlations after all tests have been recorded
+            engine.updateAllCorrelations();
 
             const insightsA = await engine.getTestInsights('test-a', 'test.spec.ts');
             expect(insightsA!.correlatedTests).toContain('test-b');
@@ -232,6 +223,9 @@ describe('TestIntelligenceEngine', () => {
                 for (const testId of correlatedTests) {
                     await engine.learnFromExecution(testId, 'test.spec.ts', 'fail', 100, { message: 'Authentication service down', stack: '' });
                 }
+                
+                // Update correlations after each session
+                engine.updateAllCorrelations();
             }
 
             const authInsights = await engine.getTestInsights('auth-test', 'test.spec.ts');
@@ -294,9 +288,14 @@ describe('TestIntelligenceEngine', () => {
         });
 
         test('should handle corrupted data gracefully', async () => {
+            // Mock file exists and contains invalid JSON
+            (fs.existsSync as jest.Mock).mockReturnValue(true);
             (fs.promises.readFile as jest.Mock).mockResolvedValue('invalid json');
 
-            expect(() => engine['loadHistoricalData']()).not.toThrow();
+            // Clear any previous calls
+            jest.clearAllMocks();
+
+            await expect(engine['loadHistoricalData']()).resolves.not.toThrow();
             expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
                 expect.stringContaining('Failed to load historical data')
             );

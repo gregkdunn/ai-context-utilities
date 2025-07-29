@@ -80,7 +80,7 @@ export class ServiceContainer {
      */
     private initializeServices(): void {
         // Core services first
-        this._outputChannel = vscode.window.createOutputChannel('AI Debug Context');
+        this._outputChannel = vscode.window.createOutputChannel('AI Context Utilities');
         this._statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
         
         // Configure status bar to be clickable
@@ -305,8 +305,8 @@ export class ServiceContainer {
         // Get performance info for tooltip
         const performanceInfo = this.getPerformanceTooltip();
         
-        this._statusBarItem.text = `⚡ AI Debug Context: ${text}`;
-        this._statusBarItem.tooltip = `AI Debug Context: ${text} (Click to run auto-detect tests)\n\n${performanceInfo}`;
+        this._statusBarItem.text = `⚡ AI Context Util: ${text}`;
+        this._statusBarItem.tooltip = `AI Context Util: ${text} (Click to run auto-detect tests)\n\n${performanceInfo}`;
         
         // Set color based on status
         if (color === 'green') {
@@ -333,8 +333,8 @@ export class ServiceContainer {
         // Start animation timer
         this._statusBarAnimation = setInterval(() => {
             const spinner = this._animationFrames[this._animationIndex];
-            this._statusBarItem.text = `${spinner} AI Debug Context: ${text}`;
-            this._statusBarItem.tooltip = `AI Debug Context: ${text} (Tests in progress...)`;
+            this._statusBarItem.text = `${spinner} AI Context Util: ${text}`;
+            this._statusBarItem.tooltip = `AI Context Util: ${text} (Tests in progress...)`;
             
             // Cycle through animation frames
             this._animationIndex = (this._animationIndex + 1) % this._animationFrames.length;
@@ -354,8 +354,10 @@ export class ServiceContainer {
             this._statusBarAnimation = undefined;
         }
         
-        // Reset background color
-        this._statusBarItem.backgroundColor = undefined;
+        // Reset background color if status bar item exists
+        if (this._statusBarItem) {
+            this._statusBarItem.backgroundColor = undefined;
+        }
     }
 
     /**

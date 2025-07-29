@@ -17,7 +17,7 @@ jest.mock('vscode', () => ({
             clear: jest.fn(),
             replace: jest.fn(),
             append: jest.fn(),
-            name: 'AI Debug Context'
+            name: 'AI Context Utilities'
         })),
         createStatusBarItem: jest.fn(() => ({
             text: '',
@@ -182,7 +182,7 @@ describe('End-to-End User Workflows', () => {
             ]);
 
             // Verify status updates throughout the workflow
-            expect(serviceContainer.statusBarItem.text).toContain('AI Debug Context');
+            expect(serviceContainer.statusBarItem.text).toContain('AI Context Util');
         });
 
         test('should handle no changes gracefully', async () => {
@@ -338,7 +338,7 @@ index 123..456 100644
                 stderr: {
                     on: jest.fn((event, callback) => {
                         if (event === 'data') {
-                            callback('Test failed\n');
+                            callback('FAIL src/test.spec.ts\nTest failed\n');
                         }
                     })
                 },
@@ -347,24 +347,44 @@ index 123..456 100644
                 })
             });
 
-            // Mock quick pick for post-test actions
-            (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
-                label: '$(hubot) AI Debug',
-                action: jest.fn()
-            });
+            // Mock createQuickPick for current test menu structure
+            const mockQuickPick = {
+                title: '',
+                placeholder: '',
+                ignoreFocusOut: false,
+                items: [],
+                onDidAccept: jest.fn(),
+                onDidHide: jest.fn(),
+                show: jest.fn(),
+                hide: jest.fn(),
+                dispose: jest.fn()
+            };
+            (vscode.window.createQuickPick as jest.Mock).mockReturnValue(mockQuickPick);
 
             await orchestrator.executeProjectTest('failing-project');
 
-            // Verify post-test actions are shown
-            expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
+            // Verify post-test actions menu is created with correct structure
+            expect(vscode.window.createQuickPick).toHaveBeenCalled();
+            expect(mockQuickPick.title).toContain('❌');
+            expect(mockQuickPick.title).toContain('tests failed');
+            expect(mockQuickPick.placeholder).toBe('What would you like to do next?');
+            
+            // Verify menu items include Back button and Test Again
+            expect(mockQuickPick.items).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
-                        label: expect.stringContaining('AI Debug')
+                        label: '$(arrow-left) Back',
+                        id: 'back'
+                    }),
+                    expect.objectContaining({
+                        label: '$(refresh) Test Again',
+                        id: 'test-again'
+                    }),
+                    expect.objectContaining({
+                        label: '🤖 Send to Copilot Chat',
+                        id: 'copilot'
                     })
-                ]),
-                expect.objectContaining({
-                    placeHolder: expect.stringContaining('Tests failed')
-                })
+                ])
             );
         });
     });
@@ -405,7 +425,7 @@ index 123..456 100644
             await orchestrator.executeProjectTest('slow-project');
 
             // Verify status updates
-            expect(serviceContainer.statusBarItem.text).toContain('AI Debug Context');
+            expect(serviceContainer.statusBarItem.text).toContain('AI Context Util');
         });
     });
 
@@ -457,6 +477,29 @@ index 123..456 100644
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 expect.stringContaining('Projects found: 2')
             );
+        });
+
+        test('should re-run project tests based on context documents', async () => {
+            const fs = require('fs');
+            
+            // Mock context directory exists
+            (fs.existsSync as jest.Mock).mockImplementation((path: string) => {
+                if (path.includes('ai-utilities-context')) return true;
+                if (path.includes('test-output.txt')) return true;
+                return false;
+            });
+            
+            // Mock test output file with project information
+            (fs.readFileSync as jest.Mock).mockReturnValue('yarn nx test user-service\nTests completed');
+            
+            // Mock executeProjectTest method
+            const executeProjectTestSpy = jest.spyOn(orchestrator, 'executeProjectTest')
+                .mockResolvedValue(undefined);
+            
+            await orchestrator.rerunProjectTestsFromContext();
+            
+            // Verify project extraction and test execution
+            expect(executeProjectTestSpy).toHaveBeenCalledWith('user-service', { previousMenu: 'context-browser' });
         });
     });
 });

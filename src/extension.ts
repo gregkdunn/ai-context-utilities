@@ -12,7 +12,7 @@
  * - Guided setup for new users
  * - Clear test cache when needed
  * 
- * @version 3.0.0
+ * @version 3.1.0
  */
 
 import * as vscode from 'vscode';
@@ -30,7 +30,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Get workspace root
         const workspaceRoot = getWorkspaceRoot();
         if (!workspaceRoot) {
-            vscode.window.showErrorMessage('AI Debug Context requires an open workspace folder');
+            vscode.window.showErrorMessage('AI Context Utilities requires an open workspace folder');
             return;
         }
 
@@ -49,10 +49,10 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(...commands);
 
         // Extension is ready
-        services.outputChannel.appendLine('🚀 AI Debug Context V3 activated successfully');
+        services.outputChannel.appendLine('🚀 AI Context Utilities V3.1.0 activated successfully');
         
     } catch (error) {
-        const errorMessage = `Failed to activate AI Debug Context: ${error}`;
+        const errorMessage = `Failed to activate AI Context Utilities: ${error}`;
         vscode.window.showErrorMessage(errorMessage);
         console.error(errorMessage);
     }

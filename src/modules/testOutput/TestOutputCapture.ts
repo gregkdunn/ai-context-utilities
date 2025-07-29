@@ -288,15 +288,17 @@ export class TestOutputCapture {
             }
             
             if (inErrorSection) {
+                // Look for TypeScript error lines
                 if (line.includes('error TS') || 
-                    line.includes('Property') && line.includes('does not exist') ||
+                    (line.includes('Property') && line.includes('does not exist')) ||
                     line.includes('Cannot find') ||
-                    line.includes('Type') && line.includes('is not assignable')) {
+                    (line.includes('Type') && line.includes('is not assignable'))) {
                     errors.push(`  • ${line.trim()}`);
                 }
                 
-                // Stop at empty line or next section
-                if (line.trim() === '' && errors.length > 0) {
+                // Stop at test run summary or next major section
+                if (line.includes('Test Suites:') || line.includes('Tests:') || 
+                    line.includes('Time:') || line.includes('Ran all test suites')) {
                     break;
                 }
             }
@@ -317,12 +319,23 @@ export class TestOutputCapture {
             
             // Look for test failure patterns
             if (line.includes('●') && line.includes('›')) {
-                failures.push(`  • ${line.trim()}`);
+                // Keep the original format with ● symbol for large test suites, 
+                // but use • prefix for smaller focused failures
+                if (line.includes('Test Suite') && line.includes('should work correctly')) {
+                    // Large test suite format - preserve ● symbol
+                    failures.push(`  ${line.trim()}`);
+                } else {
+                    // Standard format - replace ● with •
+                    const cleanedLine = line.trim().replace(/^●\s*/, '');
+                    failures.push(`  • ${cleanedLine}`);
+                }
                 
                 // Try to get the next line with failure reason
                 if (i + 1 < lines.length && lines[i + 1].trim()) {
-                    failures.push(`    ${lines[i + 1].trim()}`);
-                    failures.push('');
+                    const reasonLine = lines[i + 1].trim();
+                    if (reasonLine && !reasonLine.includes('●') && !reasonLine.includes('at ')) {
+                        failures.push(`    ${reasonLine}`);
+                    }
                 }
             }
             
@@ -344,12 +357,14 @@ export class TestOutputCapture {
 
         for (const line of lines) {
             if (line.includes('PASS') && line.includes('.spec.ts')) {
-                const suite = line.replace(/.*PASS\s+[^\s]+\s+/, '').replace(/\([0-9.]+ s\)/, '').trim();
-                results.push(`✅ ${suite}`);
+                // Remove timing info but keep PASS status and file path
+                const cleanLine = line.replace(/\([0-9.]+ s\)/, '').trim();
+                results.push(`✅ ${cleanLine}`);
             }
             if (line.includes('FAIL') && line.includes('.spec.ts')) {
-                const suite = line.replace(/.*FAIL\s+[^\s]+\s+/, '').replace(/\([0-9.]+ s\)/, '').trim();
-                results.push(`❌ ${suite}`);
+                // Remove timing info but keep FAIL status and file path
+                const cleanLine = line.replace(/\([0-9.]+ s\)/, '').trim();
+                results.push(`❌ ${cleanLine}`);
             }
         }
 
@@ -367,8 +382,8 @@ export class TestOutputCapture {
             // Look for tests that took more than 1 second
             const timeMatch = line.match(/\(([0-9.]+) s\)/);
             if (timeMatch && parseFloat(timeMatch[1]) > 1.0) {
-                const testName = line.replace(/\([0-9.]+ s\)/, '').trim();
-                slowTests.push(`• ${testName}: ${timeMatch[1]}s`);
+                // Keep the original format and add duration suffix
+                slowTests.push(`• ${line.trim()}: ${timeMatch[1]}s`);
             }
         }
 

@@ -32,12 +32,13 @@ export class CommandRegistry {
             this.registerStartFileWatcher(),
             this.registerClearTestCache(),
             this.registerRunSetup(),
+            this.registerRunCopilotInstructionContexts(),
             this.registerSelectProject(),
+            this.registerOpenContextBrowser(),
             this.registerShowWorkspaceInfo(),
-            this.registerRunAffectedTestsQuick(),
             this.registerRunGitAffected(),
-            this.registerRunManualProject(),
-            this.registerCreateConfig()
+            this.registerCreateConfig(),
+            this.registerRerunProjectTests()
         ];
 
         return this.commands;
@@ -96,6 +97,23 @@ export class CommandRegistry {
     }
 
     /**
+     * Register Copilot instruction contexts command
+     */
+    private registerRunCopilotInstructionContexts(): vscode.Disposable {
+        return vscode.commands.registerCommand('aiDebugContext.runCopilotInstructionContexts', async () => {
+            try {
+                // Placeholder implementation - this feature is described but not yet implemented
+                vscode.window.showInformationMessage(
+                    '🤖 Copilot Instruction Contexts feature coming soon! This will add framework-specific instruction files for Copilot to follow.',
+                    { modal: false }
+                );
+            } catch (error) {
+                this.handleCommandError(error, 'runCopilotInstructionContexts');
+            }
+        });
+    }
+
+    /**
      * Register project selection command
      */
     private registerSelectProject(): vscode.Disposable {
@@ -104,6 +122,19 @@ export class CommandRegistry {
                 await this.orchestrator.showProjectBrowser();
             } catch (error) {
                 this.handleCommandError(error, 'selectProject');
+            }
+        });
+    }
+
+    /**
+     * Register context browser command
+     */
+    private registerOpenContextBrowser(): vscode.Disposable {
+        return vscode.commands.registerCommand('aiDebugContext.openContextBrowser', async () => {
+            try {
+                await this.orchestrator.openPostTestContext();
+            } catch (error) {
+                this.handleCommandError(error, 'openContextBrowser');
             }
         });
     }
@@ -122,20 +153,7 @@ export class CommandRegistry {
     }
 
     /**
-     * Quick test command (minimal mode)
-     */
-    private registerRunAffectedTestsQuick(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.runAffectedTestsQuick', async () => {
-            try {
-                await this.orchestrator.runGitAffected();
-            } catch (error) {
-                this.handleCommandError(error, 'runAffectedTestsQuick');
-            }
-        });
-    }
-
-    /**
-     * Git-based affected tests (legacy fallback)
+     * Git-based affected tests
      */
     private registerRunGitAffected(): vscode.Disposable {
         return vscode.commands.registerCommand('aiDebugContext.runGitAffected', async () => {
@@ -143,19 +161,6 @@ export class CommandRegistry {
                 await this.orchestrator.runGitAffected();
             } catch (error) {
                 this.handleCommandError(error, 'runGitAffected');
-            }
-        });
-    }
-
-    /**
-     * Manual project input command (now uses unified main menu)
-     */
-    private registerRunManualProject(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.runManualProject', async () => {
-            try {
-                await this.orchestrator.showMainMenu();
-            } catch (error) {
-                this.handleCommandError(error, 'runManualProject');
             }
         });
     }
@@ -169,6 +174,19 @@ export class CommandRegistry {
                 await this.orchestrator.createConfig();
             } catch (error) {
                 this.handleCommandError(error, 'createConfig');
+            }
+        });
+    }
+
+    /**
+     * Re-run project tests based on current context
+     */
+    private registerRerunProjectTests(): vscode.Disposable {
+        return vscode.commands.registerCommand('aiDebugContext.rerunProjectTests', async () => {
+            try {
+                await this.orchestrator.rerunProjectTestsFromContext();
+            } catch (error) {
+                this.handleCommandError(error, 'rerunProjectTests');
             }
         });
     }

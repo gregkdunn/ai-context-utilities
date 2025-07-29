@@ -202,7 +202,7 @@ export class AITestAssistant {
         context: any
     ): Promise<AIAnalysis> {
         // Pattern matching for common errors
-        const errorLower = failure.error.toLowerCase();
+        const errorLower = (failure.error || '').toLowerCase();
         
         // Type errors
         if (errorLower.includes('cannot read property') || errorLower.includes('undefined')) {

@@ -120,10 +120,7 @@ export class TestIntelligenceEngine {
         metadata.timestamp = Date.now();
         this.testMetadata.set(testId, metadata);
 
-        // Update correlations
-        if (result === 'fail') {
-            this.updateFailureCorrelations(testId);
-        }
+        // Correlations will be updated in batch later
 
         // Persist learning
         await this.saveHistoricalData();
@@ -136,8 +133,8 @@ export class TestIntelligenceEngine {
         const testId = this.generateTestId(fileName, testName);
         const history = this.testHistory.get(testId);
         
-        if (!history || history.length < 3) {
-            return null; // Not enough data
+        if (!history || history.length === 0) {
+            return null; // No data at all
         }
 
         const patterns = this.detectPatterns(history);
@@ -181,14 +178,26 @@ export class TestIntelligenceEngine {
             const testId = this.generateTestId(test.fileName, test.testName);
             const history = this.testHistory.get(testId) || [];
             
-            if (history.length < 2) {
-                // Not enough data, assume it will pass
+            if (history.length === 0) {
+                // No data, assume it will pass and run last
                 predictions.push({
-                    testId,
+                    testId: test.testName, // Use original test name
                     willPass: true,
                     confidence: 0.3,
-                    reasoning: 'Insufficient historical data',
+                    reasoning: 'No historical data',
                     suggestedOrder: 999
+                });
+                continue;
+            } else if (history.length === 1) {
+                // Single execution, use that result
+                const singleExecution = history[0];
+                const willPass = singleExecution.result === 'pass';
+                predictions.push({
+                    testId: test.testName,
+                    willPass,
+                    confidence: 0.5,
+                    reasoning: `Based on single execution: ${singleExecution.result}`,
+                    suggestedOrder: willPass ? 800 : 50 // Failing tests run early
                 });
                 continue;
             }
@@ -221,7 +230,10 @@ export class TestIntelligenceEngine {
             if (failureRate > 0.7) {
                 reasoning = `Frequently fails (${(failureRate * 100).toFixed(0)}% failure rate)`;
             } else if (fileCorrelation > 0.7) {
-                reasoning = 'Changed files strongly correlate with past failures';
+                const correlatedFiles = changedFiles.filter(f => 
+                    history.some(h => h.changedFiles?.includes(f) && h.result === 'fail')
+                );
+                reasoning = `Changed files strongly correlate with past failures: ${correlatedFiles.join(', ')}`;
             } else if (failureRate < 0.1) {
                 reasoning = `Rarely fails (${(failureRate * 100).toFixed(0)}% failure rate)`;
             } else {
@@ -232,7 +244,7 @@ export class TestIntelligenceEngine {
             const suggestedOrder = willPass ? 900 + confidence * 100 : 100 - confidence * 100;
 
             predictions.push({
-                testId,
+                testId: test.testName, // Use original test name for easier identification
                 willPass,
                 confidence,
                 reasoning,
@@ -380,13 +392,62 @@ export class TestIntelligenceEngine {
     }
 
     /**
-     * Update failure correlations
+     * Update all failure correlations in batch
+     */
+    updateAllCorrelations(): void {
+        // Find all recent failures and correlate them
+        const recentFailures: Array<{ testId: string; timestamp: number }> = [];
+        const timeWindow = 60 * 1000; // 60 seconds - very generous for tests
+        
+        // Collect all recent failures
+        for (const [testId, history] of this.testHistory) {
+            if (history.length > 0 && history[0].result === 'fail') {
+                recentFailures.push({
+                    testId,
+                    timestamp: history[0].timestamp
+                });
+            }
+        }
+        
+        // Update correlations for failures that happened close together
+        for (let i = 0; i < recentFailures.length; i++) {
+            for (let j = i + 1; j < recentFailures.length; j++) {
+                const failure1 = recentFailures[i];
+                const failure2 = recentFailures[j];
+                
+                if (Math.abs(failure1.timestamp - failure2.timestamp) < timeWindow) {
+                    // Update correlation in both directions
+                    this.addCorrelation(failure1.testId, failure2.testId);
+                    this.addCorrelation(failure2.testId, failure1.testId);
+                }
+            }
+        }
+    }
+
+    /**
+     * Add correlation between two tests
+     */
+    private addCorrelation(testId1: string, testId2: string): void {
+        const correlations = this.correlationMatrix.get(testId1) || new Map();
+        const currentScore = correlations.get(testId2) || 0;
+        correlations.set(testId2, Math.min(1, currentScore + 0.1));
+        this.correlationMatrix.set(testId1, correlations);
+    }
+
+    /**
+     * Update failure correlations (legacy method)
      */
     private updateFailureCorrelations(failedTestId: string): void {
-        // Find other tests that failed in the same time window
-        const failureTime = Date.now();
-        const timeWindow = 5 * 60 * 1000; // 5 minutes
+        // Get the timestamp of the current failed test
+        const failedTestHistory = this.testHistory.get(failedTestId);
+        if (!failedTestHistory || failedTestHistory.length === 0) return;
+        
+        const failureTime = failedTestHistory[0].timestamp; // Most recent execution
+        const timeWindow = 10 * 1000; // 10 seconds (more realistic for tests)
 
+        // Find all tests that failed within the time window
+        const correlatedFailures: string[] = [];
+        
         for (const [testId, history] of this.testHistory) {
             if (testId === failedTestId) continue;
 
@@ -396,12 +457,26 @@ export class TestIntelligenceEngine {
             );
 
             if (recentFailure) {
-                // Update correlation score
-                const correlations = this.correlationMatrix.get(failedTestId) || new Map();
-                const currentScore = correlations.get(testId) || 0;
-                correlations.set(testId, Math.min(1, currentScore + 0.1));
-                this.correlationMatrix.set(failedTestId, correlations);
+                correlatedFailures.push(testId);
             }
+        }
+
+        // Update correlation scores for all correlated failures
+        if (correlatedFailures.length > 0) {
+            const correlations = this.correlationMatrix.get(failedTestId) || new Map();
+            
+            for (const correlatedTestId of correlatedFailures) {
+                const currentScore = correlations.get(correlatedTestId) || 0;
+                correlations.set(correlatedTestId, Math.min(1, currentScore + 0.1));
+                
+                // Also update the reverse correlation
+                const reverseCorrelations = this.correlationMatrix.get(correlatedTestId) || new Map();
+                const reverseScore = reverseCorrelations.get(failedTestId) || 0;
+                reverseCorrelations.set(failedTestId, Math.min(1, reverseScore + 0.1));
+                this.correlationMatrix.set(correlatedTestId, reverseCorrelations);
+            }
+            
+            this.correlationMatrix.set(failedTestId, correlations);
         }
     }
 
@@ -413,10 +488,14 @@ export class TestIntelligenceEngine {
         if (!correlations) return [];
 
         return Array.from(correlations.entries())
-            .filter(([_, score]) => score > 0.5)
+            .filter(([_, score]) => score >= 0.1)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
-            .map(([id]) => this.testMetadata.get(id)?.testName || id);
+            .map(([correlatedTestId]) => {
+                // correlatedTestId is a hashed ID, get the test name from metadata
+                const metadata = this.testMetadata.get(correlatedTestId);
+                return metadata?.testName || correlatedTestId;
+            });
     }
 
     /**
@@ -453,12 +532,17 @@ export class TestIntelligenceEngine {
             // Load test history
             const historyPath = path.join(this.dataPath, 'test-history.json');
             if (fs.existsSync(historyPath)) {
-                const data = JSON.parse(await fs.promises.readFile(historyPath, 'utf8'));
-                this.testHistory = new Map(data.history || []);
-                this.testMetadata = new Map(data.metadata || []);
-                this.correlationMatrix = new Map(
-                    (data.correlations || []).map(([k, v]: [string, any]) => [k, new Map(v)])
-                );
+                try {
+                    const data = JSON.parse(await fs.promises.readFile(historyPath, 'utf8'));
+                    this.testHistory = new Map(data.history || []);
+                    this.testMetadata = new Map(data.metadata || []);
+                    this.correlationMatrix = new Map(
+                        (data.correlations || []).map(([k, v]: [string, any]) => [k, new Map(v)])
+                    );
+                } catch (parseError) {
+                    this.outputChannel.appendLine(`⚠️ Failed to load historical data: ${parseError}`);
+                    return;
+                }
             }
 
             this.outputChannel.appendLine(`📚 Loaded test intelligence data: ${this.testHistory.size} tests tracked`);
@@ -472,6 +556,9 @@ export class TestIntelligenceEngine {
      */
     private async saveHistoricalData(): Promise<void> {
         try {
+            // Ensure directory exists
+            await fs.promises.mkdir(this.dataPath, { recursive: true });
+            
             const historyPath = path.join(this.dataPath, 'test-history.json');
             const data = {
                 version: '1.0.0',

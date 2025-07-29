@@ -28,6 +28,7 @@ jest.mock('vscode', () => ({
         })),
         showQuickPick: jest.fn(),
         showInformationMessage: jest.fn(() => Promise.resolve(undefined)),
+        showErrorMessage: jest.fn(() => Promise.resolve(undefined)),
         createQuickPick: jest.fn(() => ({
             title: '',
             placeholder: '',
@@ -148,7 +149,7 @@ describe('Core Workflows Integration Tests', () => {
         test('should update status bar with performance data', () => {
             serviceContainer.updateStatusBar('Test status');
             
-            expect(serviceContainer.statusBarItem.text).toBe('⚡ AI Debug Context: Test status');
+            expect(serviceContainer.statusBarItem.text).toBe('⚡ AI Context Util: Test status');
             expect(serviceContainer.statusBarItem.tooltip).toContain('Test status');
             expect(serviceContainer.statusBarItem.tooltip).toContain('⚡ Performance');
         });

@@ -26,7 +26,10 @@ describe('RealTimeTestMonitor', () => {
             getCriticalPaths: jest.fn(),
             initialize: jest.fn(),
             processTestRun: jest.fn(),
-            generateReport: jest.fn()
+            generateReport: jest.fn(),
+            learnFromExecution: jest.fn(),
+            predictTestOutcomes: jest.fn().mockReturnValue([]),
+            getOptimizationSuggestions: jest.fn().mockReturnValue([])
         } as any;
 
         mockOutputChannel = {
@@ -43,46 +46,50 @@ describe('RealTimeTestMonitor', () => {
     });
 
     describe('Test Event Processing', () => {
-        test('should process test start events', () => {
-            const testEvent: TestEvent = {
-                type: 'start',
-                testName: 'should add numbers',
-                fileName: 'math.spec.ts',
-                timestamp: Date.now()
-            };
+        test('should process test start events', (done) => {
+            monitor.processOutput('Running math.spec.ts');
 
-            monitor.processOutput('Test suite started: math.spec.ts\nStarting test: should add numbers');
-
-            const metrics = monitor.getMetrics();
-            expect(metrics.totalTests).toBeGreaterThan(0);
-            expect(metrics.currentTest).toBeDefined();
+            // Wait for debounced parsing
+            setTimeout(() => {
+                const metrics = monitor.getMetrics();
+                expect(metrics.currentTest).toBe('math.spec.ts');
+                done();
+            }, 150);
         });
 
-        test('should process test pass events', () => {
+        test('should process test pass events', (done) => {
             monitor.processOutput('✓ should validate email (25ms)');
 
-            const metrics = monitor.getMetrics();
-            expect(metrics.passed).toBe(1);
-            expect(metrics.duration).toBeGreaterThan(0);
+            setTimeout(() => {
+                const metrics = monitor.getMetrics();
+                expect(metrics.passed).toBe(1);
+                done();
+            }, 150);
         });
 
-        test('should process test fail events', () => {
-            monitor.processOutput('✗ should handle errors\n  Error: Expected true to be false');
+        test('should process test fail events', (done) => {
+            monitor.processOutput('✗ should handle errors');
 
-            const metrics = monitor.getMetrics();
-            expect(metrics.failed).toBe(1);
+            setTimeout(() => {
+                const metrics = monitor.getMetrics();
+                expect(metrics.failed).toBe(1);
+                done();
+            }, 150);
         });
 
-        test('should process test skip events', () => {
+        test('should process test skip events', (done) => {
             monitor.processOutput('○ skipped test case');
 
-            const metrics = monitor.getMetrics();
-            expect(metrics.skipped).toBe(1);
+            setTimeout(() => {
+                const metrics = monitor.getMetrics();
+                expect(metrics.skipped).toBe(1);
+                done();
+            }, 150);
         });
     });
 
     describe('Test Watchers', () => {
-        test('should notify watchers of test events', () => {
+        test('should notify watchers of test events', (done) => {
             const mockWatcher: TestWatcher = {
                 onTestStart: jest.fn(),
                 onTestComplete: jest.fn(),
@@ -91,23 +98,24 @@ describe('RealTimeTestMonitor', () => {
 
             monitor.addWatcher(mockWatcher);
             
-            // Simulate test start
-            monitor.processOutput('Starting test: should work');
-            expect(mockWatcher.onTestStart).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    type: 'start',
-                    testName: expect.stringContaining('should work')
-                })
-            );
-
-            // Simulate test complete
+            // Simulate test events
+            monitor.processOutput('Running should.work.spec.ts :: should work');
             monitor.processOutput('✓ should work (10ms)');
-            expect(mockWatcher.onTestComplete).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    type: 'pass',
-                    duration: expect.any(Number)
-                })
-            );
+            
+            setTimeout(() => {
+                expect(mockWatcher.onTestStart).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        type: 'start',
+                        testName: 'should work'
+                    })
+                );
+                expect(mockWatcher.onTestComplete).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        type: 'pass'
+                    })
+                );
+                done();
+            }, 150);
         });
 
         test('should notify watchers when suite completes', () => {

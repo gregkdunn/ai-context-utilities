@@ -17,6 +17,10 @@ export interface TestExecutionRequest {
     project?: string;
     mode: 'default' | 'affected' | 'watch' | 'coverage' | 'debug';
     verbose?: boolean;
+    navigationContext?: {
+        previousMenu?: 'main' | 'project-browser' | 'context-browser' | 'custom';
+        customCommand?: string;
+    };
 }
 
 export interface TestResult {
@@ -27,6 +31,7 @@ export interface TestResult {
     stdout: string;
     stderr: string;
     summary: any; // TestSummary from testResultParser
+    nxCloudUrl?: string; // Nx Cloud results URL if available
 }
 
 export type ProgressCallback = (progress: string) => void;
@@ -41,6 +46,7 @@ export class TestExecutionService {
     private testResultCache: TestResultCache;
     private enablePhase2Features: boolean = true; // Can be configured
     private enableCaching: boolean = true; // Can be configured
+    private currentNxCloudUrl: string | undefined; // Store captured Nx Cloud URL
 
     constructor(private services: ServiceContainer) {
         this.gitDiffCapture = new GitDiffCapture({
@@ -69,6 +75,9 @@ export class TestExecutionService {
         const operationName = `test-${request.mode}${request.project ? `-${request.project}` : ''}`;
         
         return this.services.performanceTracker.trackCommand(operationName, async () => {
+            // Reset Nx Cloud URL for this test run
+            this.currentNxCloudUrl = undefined;
+            
             // Get appropriate test command
             const command = await this.getTestCommand(request);
             const projectName = request.project || 'affected';
@@ -141,9 +150,7 @@ export class TestExecutionService {
                 await this.testOutputCapture.stopCapture(result.exitCode, testSummary);
             }
             
-            // Format and display results
-            await this.displayResults(testSummary, command, result);
-            
+            // Create test result object
             const testResult: TestResult = {
                 success: result.exitCode === 0,
                 project: projectName,
@@ -151,8 +158,12 @@ export class TestExecutionService {
                 exitCode: result.exitCode,
                 stdout: result.stdout,
                 stderr: result.stderr,
-                summary: testSummary
+                summary: testSummary,
+                nxCloudUrl: this.currentNxCloudUrl
             };
+            
+            // Format and display results
+            await this.displayResults(testSummary, command, result, testResult, request);
             
             // Cache the result if enabled
             if (this.enableCaching && request.project) {
@@ -351,7 +362,7 @@ export class TestExecutionService {
     /**
      * Display formatted test results
      */
-    private async displayResults(testSummary: any, command: string, result: any): Promise<void> {
+    private async displayResults(testSummary: any, command: string, result: any, testResult: TestResult, request: TestExecutionRequest): Promise<void> {
         // Create legacy-style formatted output
         const formattedReport = LegacyStyleFormatter.formatTestReport(testSummary, {
             command: command,
@@ -377,6 +388,10 @@ export class TestExecutionService {
         
         // Show enhanced test results with actions
         this.services.testActions.updateRawOutput(result.stdout + result.stderr);
+        this.services.testActions.setCurrentTestResult(testResult);
+        // Set navigation context based on request or default to main menu
+        const navContext = request.navigationContext || { previousMenu: 'main' };
+        this.services.testActions.setNavigationContext(navContext);
         await this.services.testActions.showTestResult(testSummary);
     }
 
@@ -399,11 +414,27 @@ export class TestExecutionService {
      * Make URLs clickable in output
      */
     private makeUrlsClickable(text: string): void {
-        const nxCloudPattern = /View structured, searchable error logs at (https:\/\/cloud\.nx\.app\/runs\/[a-zA-Z0-9]+)/g;
-        const match = nxCloudPattern.exec(text);
+        // Enhanced pattern matching to catch various Nx Cloud URL formats
+        const nxCloudPatterns = [
+            /View structured, searchable error logs at (https:\/\/cloud\.nx\.app\/runs\/[a-zA-Z0-9\-]+)/g,
+            /(https:\/\/cloud\.nx\.app\/runs\/[a-zA-Z0-9\-]+)/g,
+            /View.*logs.*at.*(https:\/\/cloud\.nx\.app\/[^\s]+)/g
+        ];
         
-        if (match) {
-            const url = match[1];
+        let url: string | null = null;
+        
+        for (const pattern of nxCloudPatterns) {
+            const match = pattern.exec(text);
+            if (match) {
+                url = match[1];
+                break;
+            }
+        }
+        
+        if (url) {
+            // Store the URL for later use in the test result
+            this.currentNxCloudUrl = url;
+            
             this.services.outputChannel.appendLine(`🔗 View structured, searchable error logs: ${url}`);
             
             vscode.window.showInformationMessage(

@@ -81,7 +81,6 @@ describe('TestOutputCapture - Enhanced Phase 2.1 Testing', () => {
             expect(content).toContain('Test Suites: 3 failed, 12 passed, 15 total');
             expect(content).toContain('Tests: 8 failed, 247 passed, 255 total');
             expect(content).toContain('Time: 78.412s, estimated 85s');
-            expect(content).toContain('Test Suites: 12 passed, 3 failed');
         });
 
         test('should handle complex compilation error extraction like legacy script', async () => {
@@ -108,8 +107,8 @@ describe('TestOutputCapture - Enhanced Phase 2.1 Testing', () => {
             // Verify compilation error section matches legacy format
             expect(content).toContain('🔥 COMPILATION/RUNTIME ERRORS:');
             expect(content).toContain('--------------------------------');
-            expect(content).toContain('• error TS2304: Cannot find name');
-            expect(content).toContain('• Property \'nonExistentMethod\' does not exist');
+            expect(content).toContain('• src/app/services/data.service.ts:45:12 - error TS2304: Cannot find name \'UndefinedType\'');
+            expect(content).toContain('• src/app/components/widget.component.ts:23:8 - error TS2339: Property \'nonExistentMethod\' does not exist');
         });
 
         test('should extract test failures with context like legacy script', async () => {

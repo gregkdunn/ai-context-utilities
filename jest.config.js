@@ -8,6 +8,11 @@ module.exports = {
     '<rootDir>/src/**/*.test.ts'
   ],
   
+  // Module name mapping for VSCode extension testing
+  moduleNameMapper: {
+    '^vscode$': '<rootDir>/tests/mocks/vscode.ts'
+  },
+  
   // Coverage configuration
   collectCoverage: true,
   coverageDirectory: 'coverage',

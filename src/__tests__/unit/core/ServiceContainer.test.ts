@@ -51,7 +51,7 @@ describe('ServiceContainer', () => {
             clear: jest.fn(),
             replace: jest.fn(),
             append: jest.fn(),
-            name: 'AI Debug Context'
+            name: 'AI Context Utilities'
         };
 
         // Mock status bar item
@@ -158,8 +158,8 @@ describe('ServiceContainer', () => {
         it('should update status bar text and tooltip', () => {
             serviceContainer.updateStatusBar('Testing in progress');
 
-            expect(mockStatusBarItem.text).toBe('⚡ AI Debug Context: Testing in progress');
-            expect(mockStatusBarItem.tooltip).toContain('AI Debug Context: Testing in progress (Click to run auto-detect tests)');
+            expect(mockStatusBarItem.text).toBe('⚡ AI Context Util: Testing in progress');
+            expect(mockStatusBarItem.tooltip).toContain('AI Context Util: Testing in progress (Click to run auto-detect tests)');
             // Performance info should be present (either performance data or fallback message)
             expect(mockStatusBarItem.tooltip).toMatch(/⚡ (Performance|Ready to test)/);
         });
@@ -202,9 +202,12 @@ describe('ServiceContainer', () => {
         it('should start status bar animation with spinner', () => {
             serviceContainer.startStatusBarAnimation('Running tests');
 
+            // Run the first timer tick to trigger initial animation frame
+            jest.advanceTimersByTime(100);
+
             // Check initial state
-            expect(mockStatusBarItem.text).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Running tests/);
-            expect(mockStatusBarItem.tooltip).toBe('AI Debug Context: Running tests (Tests in progress...)');
+            expect(mockStatusBarItem.text).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Context Util: Running tests/);
+            expect(mockStatusBarItem.tooltip).toBe('AI Context Util: Running tests (Tests in progress...)');
             expect(vscode.ThemeColor).toHaveBeenCalledWith('charts.yellow');
             expect(vscode.ThemeColor).toHaveBeenCalledWith('statusBarItem.warningBackground');
         });
@@ -212,25 +215,28 @@ describe('ServiceContainer', () => {
         it('should cycle through animation frames', () => {
             serviceContainer.startStatusBarAnimation('Testing');
 
+            // Run the first timer tick to get initial frame
+            jest.advanceTimersByTime(100);
+
             // Check initial frame
             const initialText = mockStatusBarItem.text;
-            expect(initialText).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Testing/);
+            expect(initialText).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Context Util: Testing/);
 
             // Advance timer and check that text changed
             jest.advanceTimersByTime(100);
             const nextText = mockStatusBarItem.text;
-            expect(nextText).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Testing/);
+            expect(nextText).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Context Util: Testing/);
             expect(nextText).not.toBe(initialText);
         });
 
         it('should cycle back to first frame after completing sequence', () => {
             serviceContainer.startStatusBarAnimation('Testing');
 
-            // Advance through all 10 animation frames (10 * 100ms = 1000ms)
-            jest.advanceTimersByTime(1000);
+            // Advance through all 10 animation frames plus one more to cycle back (11 * 100ms = 1100ms)
+            jest.advanceTimersByTime(1100);
             
             // Should be back to first frame (⠋)
-            expect(mockStatusBarItem.text).toBe('⠋ AI Debug Context: Testing');
+            expect(mockStatusBarItem.text).toBe('⠋ AI Context Util: Testing');
         });
 
         it('should stop existing animation when starting new one', () => {
@@ -240,8 +246,11 @@ describe('ServiceContainer', () => {
             serviceContainer.startStatusBarAnimation('Second test');
             const secondAnimation = (serviceContainer as any)._statusBarAnimation;
 
+            // Advance timer to trigger animation frame
+            jest.advanceTimersByTime(100);
+
             expect(firstAnimation).not.toBe(secondAnimation);
-            expect(mockStatusBarItem.text).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Debug Context: Second test/);
+            expect(mockStatusBarItem.text).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] AI Context Util: Second test/);
         });
 
         it('should stop status bar animation', () => {
@@ -262,7 +271,7 @@ describe('ServiceContainer', () => {
             serviceContainer.updateStatusBar('Test complete', 'green');
 
             expect((serviceContainer as any)._statusBarAnimation).toBeUndefined();
-            expect(mockStatusBarItem.text).toBe('⚡ AI Debug Context: Test complete');
+            expect(mockStatusBarItem.text).toBe('⚡ AI Context Util: Test complete');
             expect(mockStatusBarItem.backgroundColor).toBeUndefined();
         });
 
@@ -434,7 +443,7 @@ describe('ServiceContainer', () => {
             );
 
             // Verify status was set (exact call depends on health check result)
-            expect(mockStatusBarItem.text).toContain('AI Debug Context');
+            expect(mockStatusBarItem.text).toContain('AI Context Util');
 
             container.dispose();
         });

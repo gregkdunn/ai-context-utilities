@@ -1,8 +1,8 @@
-# AI Debug Context V3 - Architecture Documentation
+# AI Context Utilities - Architecture Documentation
 
 ## 🏗️ **Overview**
 
-AI Debug Context V3 follows a **service-oriented architecture** with **dependency injection**, providing a clean, maintainable, and testable codebase. The architecture emphasizes separation of concerns, loose coupling, and high cohesion.
+AI Context Utilities follows a **service-oriented architecture** with **dependency injection**, providing a clean, maintainable, and testable codebase. The architecture emphasizes separation of concerns, loose coupling, and high cohesion.
 
 ---
 

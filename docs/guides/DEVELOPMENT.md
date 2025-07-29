@@ -36,7 +36,7 @@ src/
 │   ├── TestExecutionService.ts    # Test execution with streaming
 │   ├── ProjectSelectionService.ts # Project discovery & UI
 │   ├── TestMenuOrchestrator.ts    # Coordinates services
-│   └── UIService.ts               # Consistent UI operations
+│   └── PostTestActionService.ts   # Post-test actions & integrations
 ├── utils/                         # Utilities & performance
 │   ├── SmartFrameworkDetector.ts  # Universal framework detection
 │   ├── BackgroundProjectDiscovery.ts # Background discovery

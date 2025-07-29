@@ -7,8 +7,65 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
+// import * as yaml from 'js-yaml';
 import { SmartFrameworkDetector, FrameworkInfo } from '../utils/SmartFrameworkDetector';
+
+// Minimal YAML loader fallback for VSCode extension compatibility
+function loadYaml(content: string): any {
+    try {
+        // Try to load js-yaml dynamically if available
+        const yaml = require('js-yaml');
+        return yaml.load(content);
+    } catch (error) {
+        // Fallback to JSON if yaml file looks like JSON
+        try {
+            return JSON.parse(content);
+        } catch {
+            // Basic YAML parsing for simple cases
+            return parseBasicYaml(content);
+        }
+    }
+}
+
+function dumpYaml(data: any): string {
+    try {
+        // Try to use js-yaml if available
+        const yaml = require('js-yaml');
+        return yaml.dump(data, {
+            indent: 2,
+            lineWidth: 120,
+            noRefs: true
+        });
+    } catch (error) {
+        // Fallback to JSON
+        return JSON.stringify(data, null, 2);
+    }
+}
+
+function parseBasicYaml(content: string): any {
+    // Very basic YAML parser for simple key-value pairs
+    const result: any = {};
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+            const colonIndex = trimmed.indexOf(':');
+            if (colonIndex > 0) {
+                const key = trimmed.substring(0, colonIndex).trim();
+                const value = trimmed.substring(colonIndex + 1).trim();
+                
+                // Simple value parsing
+                if (value === 'true') result[key] = true;
+                else if (value === 'false') result[key] = false;
+                else if (!isNaN(Number(value))) result[key] = Number(value);
+                else result[key] = value.replace(/^['"]|['"]$/g, ''); // Remove quotes
+            }
+        }
+    }
+    
+    return result;
+}
 
 export interface AIDebugConfig {
     // Test framework - defaults to nx
@@ -127,7 +184,7 @@ export class ConfigurationManager {
         try {
             if (fs.existsSync(this.configPath)) {
                 const fileContent = fs.readFileSync(this.configPath, 'utf8');
-                const userConfig = yaml.load(fileContent) as Partial<AIDebugConfig>;
+                const userConfig = loadYaml(fileContent) as Partial<AIDebugConfig>;
                 
                 // Merge with defaults
                 return this.mergeConfigs(DEFAULT_CONFIG, userConfig);
@@ -280,11 +337,7 @@ export class ConfigurationManager {
      */
     async saveConfiguration(): Promise<void> {
         try {
-            const yamlContent = yaml.dump(this.config, {
-                indent: 2,
-                lineWidth: 120,
-                noRefs: true
-            });
+            const yamlContent = dumpYaml(this.config);
             
             fs.writeFileSync(this.configPath, yamlContent, 'utf8');
             vscode.window.showInformationMessage('Configuration saved to .aiDebugContext.yml');

@@ -19,15 +19,53 @@ export const window = {
   showInformationMessage: jest.fn(),
   showErrorMessage: jest.fn(),
   showWarningMessage: jest.fn(),
+  showQuickPick: jest.fn(),
+  createQuickPick: jest.fn(() => {
+    const quickPick = {
+      title: '',
+      placeholder: '',
+      ignoreFocusOut: false,
+      items: [],
+      activeItems: [],
+      onDidAccept: jest.fn((callback) => {
+        setTimeout(() => callback(), 0);
+        return { dispose: jest.fn() };
+      }),
+      onDidHide: jest.fn(() => ({ dispose: jest.fn() })),
+      show: jest.fn(),
+      hide: jest.fn(),
+      dispose: jest.fn()
+    };
+    return quickPick;
+  }),
+  createStatusBarItem: jest.fn(() => ({
+    text: '',
+    tooltip: '',
+    command: '',
+    color: undefined,
+    show: jest.fn(),
+    hide: jest.fn(),
+    dispose: jest.fn()
+  })),
   createOutputChannel: jest.fn(() => ({
     appendLine: jest.fn(),
+    append: jest.fn(),
     show: jest.fn(),
-    clear: jest.fn()
-  }))
+    hide: jest.fn(),
+    clear: jest.fn(),
+    dispose: jest.fn(),
+    name: 'AI Context Utilities'
+  })),
+  withProgress: jest.fn((options, callback) => {
+    const progress = { report: jest.fn() };
+    const token = { isCancellationRequested: false };
+    return callback(progress, token);
+  })
 };
 
 export const commands = {
-  executeCommand: jest.fn()
+  executeCommand: jest.fn(),
+  registerCommand: jest.fn(() => ({ dispose: jest.fn() }))
 };
 
 export const env = {
@@ -50,4 +88,21 @@ export const EventEmitter = jest.fn(() => ({
 
 export const Disposable = {
   from: jest.fn()
+};
+
+export const QuickPickItemKind = {
+  Separator: -1
+};
+
+export const StatusBarAlignment = {
+  Left: 1,
+  Right: 2
+};
+
+export const ThemeColor = jest.fn();
+
+export const ProgressLocation = {
+  Notification: 15,
+  Window: 10,
+  SourceControl: 1
 };
