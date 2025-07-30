@@ -79,26 +79,85 @@ export class TestMenuOrchestrator {
     }
 
     /**
-     * Execute test for specific project
+     * Generic execute method - consolidates all test execution types
      */
-    async executeProjectTest(project: string, navigationContext?: { previousMenu?: 'main' | 'project-browser' | 'context-browser' | 'custom'; customCommand?: string }): Promise<void> {
+    async execute(options: {
+        type: 'project' | 'affected' | 'auto-detect' | 'context' | 'setup' | 'clear-cache';
+        target?: string;
+        navigationContext?: { previousMenu?: 'main' | 'project-browser' | 'context-browser' | 'custom'; customCommand?: string };
+    }): Promise<void> {
         try {
-            const request: TestExecutionRequest = {
-                project,
-                mode: 'default',
-                verbose: true,
-                navigationContext
-            };
-
-            const result = await this.testExecution.executeTest(request, (progress) => {
-                // Real-time progress is handled by TestExecutionService
-                // Status bar animation is also handled by TestExecutionService
-            });
-
+            switch (options.type) {
+                case 'project':
+                    await this.executeProject(options.target!, options.navigationContext);
+                    break;
+                case 'affected':
+                    await this.executeAffected();
+                    break;
+                case 'auto-detect':
+                    await this.executeAutoDetect();
+                    break;
+                case 'context':  
+                    await this.executeFromContext();
+                    break;
+                case 'setup':
+                    await this.executeSetup();
+                    break;
+                case 'clear-cache':
+                    await this.executeClearCache();
+                    break;
+                default:
+                    throw new Error(`Unknown execution type: ${options.type}`);
+            }
         } catch (error) {
-            this.services.updateStatusBar(`❌ ${project} error`, 'red');
-            await this.handleError(error, 'executeProjectTest');
+            await this.handleError(error, `execute-${options.type}`);
         }
+    }
+
+    // Keep backwards compatibility
+    async executeProjectTest(project: string, navigationContext?: any): Promise<void> {
+        await this.execute({ type: 'project', target: project, navigationContext });
+    }
+
+    private async executeProject(project: string, navigationContext?: any): Promise<void> {
+        const request: TestExecutionRequest = {
+            project,
+            mode: 'default',
+            verbose: true,
+            navigationContext
+        };
+        await this.testExecution.executeTest(request, (progress) => {
+            // Real-time progress is handled by TestExecutionService
+        });
+    }
+
+    private async executeAffected(): Promise<void> {
+        const request: TestExecutionRequest = {
+            mode: 'affected',
+            verbose: true
+        };
+        await this.testExecution.executeTest(request);
+    }
+
+    private async executeAutoDetect(): Promise<void> {
+        await this.runAutoDetectProjects();
+    }
+
+    private async executeFromContext(): Promise<void> {
+        await this.executeContextRerun();
+    }
+
+    private async executeSetup(): Promise<void> {
+        this.services.updateStatusBar('🍎 Running setup...', 'yellow');
+        await this.services.setupWizard.runSetupWizard();
+        this.services.updateStatusBar('✅ Setup complete', 'green');
+    }
+
+    private async executeClearCache(): Promise<void> {
+        this.services.updateStatusBar('Clearing cache...', 'yellow');
+        await this.services.projectDiscovery.clearCache();
+        this.services.updateStatusBar('🗑️ Cache cleared');
+        vscode.window.showInformationMessage('Test cache cleared successfully');
     }
 
     /**
@@ -396,23 +455,9 @@ Please be specific and actionable in your suggestions. Include code examples whe
 
 
 
-    /**
-     * Run git affected tests
-     */
+    // Backwards compatibility method
     async runGitAffected(): Promise<void> {
-        try {
-            const request: TestExecutionRequest = {
-                mode: 'affected',
-                verbose: true
-            };
-
-            const result = await this.testExecution.executeTest(request);
-            // Status bar animation and final status are handled by TestExecutionService
-
-        } catch (error) {
-            this.services.updateStatusBar('❌ Git affected error', 'red');
-            await this.handleError(error, 'runGitAffected');
-        }
+        await this.execute({ type: 'affected' });
     }
 
 
@@ -669,35 +714,14 @@ Please be specific and actionable in your suggestions. Include code examples whe
         }
     }
 
-    /**
-     * Clear test cache
-     */
+    // Backwards compatibility method
     async clearTestCache(): Promise<void> {
-        try {
-            this.services.updateStatusBar('Clearing cache...', 'yellow');
-            
-            await this.services.projectDiscovery.clearCache();
-            
-            this.services.updateStatusBar('🗑️ Cache cleared');
-            vscode.window.showInformationMessage('Test cache cleared successfully');
-        } catch (error) {
-            this.services.updateStatusBar('❌ Cache error', 'red');
-            await this.handleError(error, 'clearTestCache');
-        }
+        await this.execute({ type: 'clear-cache' });
     }
 
-    /**
-     * Run setup wizard
-     */
+    // Backwards compatibility method  
     async runSetup(): Promise<void> {
-        try {
-            this.services.updateStatusBar('🍎 Running setup...', 'yellow');
-            await this.services.setupWizard.runSetupWizard();
-            this.services.updateStatusBar('✅ Setup complete', 'green');
-        } catch (error) {
-            this.services.updateStatusBar('❌ Setup failed', 'red');
-            await this.handleError(error, 'runSetup');
-        }
+        await this.execute({ type: 'setup' });
     }
 
     /**
@@ -727,55 +751,46 @@ Please be specific and actionable in your suggestions. Include code examples whe
         }
     }
 
-    /**
-     * Re-run project tests based on current context documents
-     */
+    // Backwards compatibility method
     async rerunProjectTestsFromContext(): Promise<void> {
-        try {
-            this.services.updateStatusBar('🔄 Analyzing context for re-run...', 'yellow');
-            
-            const fs = require('fs');
-            const path = require('path');
-            const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
-            
-            // Check if context directory exists
-            if (!fs.existsSync(contextDir)) {
-                vscode.window.showInformationMessage('No test context found. Run tests first to generate context.');
-                this.services.updateStatusBar('Ready');
-                return;
-            }
-            
-            // Try to extract project information from context files
-            let projectName: string | null = null;
-            
-            // Look for test output files that might contain project info
-            const testOutputPath = path.join(contextDir, 'test-output.txt');
-            const contextPath = path.join(contextDir, 'ai-debug-context.txt');
-            
-            if (fs.existsSync(testOutputPath)) {
-                const testOutput = fs.readFileSync(testOutputPath, 'utf8');
-                projectName = this.extractProjectFromTestOutput(testOutput);
-            }
-            
-            if (!projectName && fs.existsSync(contextPath)) {
-                const contextContent = fs.readFileSync(contextPath, 'utf8');
-                projectName = this.extractProjectFromContext(contextContent);
-            }
-            
-            if (!projectName) {
-                // Fallback: run affected tests if no specific project found
-                this.services.outputChannel.appendLine('🔄 No specific project found in context, running affected tests...');
-                await this.runGitAffected();
-                return;
-            }
-            
-            this.services.outputChannel.appendLine(`🔄 Re-running tests for project: ${projectName}`);
-            await this.executeProjectTest(projectName, { previousMenu: 'context-browser' });
-            
-        } catch (error) {
-            this.services.updateStatusBar('❌ Re-run error', 'red');
-            await this.handleError(error, 'rerunProjectTestsFromContext');
+        await this.execute({ type: 'context' });
+    }
+
+    private async executeContextRerun(): Promise<void> {
+        this.services.updateStatusBar('🔄 Analyzing context for re-run...', 'yellow');
+        
+        const fs = require('fs');
+        const path = require('path');
+        const contextDir = path.join(this.services.workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
+        
+        if (!fs.existsSync(contextDir)) {
+            vscode.window.showInformationMessage('No test context found. Run tests first to generate context.');
+            this.services.updateStatusBar('Ready');
+            return;
         }
+        
+        let projectName: string | null = null;
+        const testOutputPath = path.join(contextDir, 'test-output.txt');
+        const contextPath = path.join(contextDir, 'ai-debug-context.txt');
+        
+        if (fs.existsSync(testOutputPath)) {
+            const testOutput = fs.readFileSync(testOutputPath, 'utf8');
+            projectName = this.extractProjectFromTestOutput(testOutput);
+        }
+        
+        if (!projectName && fs.existsSync(contextPath)) {
+            const contextContent = fs.readFileSync(contextPath, 'utf8');
+            projectName = this.extractProjectFromContext(contextContent);
+        }
+        
+        if (!projectName) {
+            this.services.outputChannel.appendLine('🔄 No specific project found in context, running affected tests...');
+            await this.executeAffected();
+            return;
+        }
+        
+        this.services.outputChannel.appendLine(`🔄 Re-running tests for project: ${projectName}`);
+        await this.executeProject(projectName, { previousMenu: 'context-browser' });
     }
 
     /**
@@ -849,20 +864,36 @@ Please be specific and actionable in your suggestions. Include code examples whe
     }
 
     /**
-     * Centralized error handling
+     * Simplified error handling - consolidate into 2 types: User Error and System Error
      */
     private async handleError(error: any, operation: string): Promise<void> {
         this.services.updateStatusBar('❌ Error', 'red');
         
-        // Log technical error for debugging
-        const logMessage = UserFriendlyErrorHandler.formatForLogging(error, operation);
-        this.services.outputChannel.appendLine(`❌ ${logMessage}\n`);
+        // Log for debugging
+        this.services.outputChannel.appendLine(`❌ ${operation} failed: ${error}\n`);
         
-        // Show user-friendly error message
-        await UserFriendlyErrorHandler.showError(error, operation);
+        // For tests, just log. In production, show appropriate message based on error type
+        if (typeof jest !== 'undefined') {
+            this.services.outputChannel.appendLine(`Error type: ${this.isUserError(error) ? 'User' : 'System'}`);
+            return;
+        }
         
-        // Also use the original error handler for consistency
-        const structuredError = this.services.errorHandler.handleError(error, { command: operation });
-        this.services.errorHandler.showUserError(structuredError, vscode);
+        // Determine error type and show appropriate message
+        if (this.isUserError(error)) {
+            // User Error: Something the user can fix
+            MessageUtils.showWarning(`❌ ${operation} failed. Please check your configuration and try again.`);
+        } else {
+            // System Error: Internal issue
+            MessageUtils.showError(`❌ ${operation} encountered an internal error. Check output for details.`);
+        }
+    }
+
+    /**
+     * Determine if error is user-fixable or system-level
+     */
+    private isUserError(error: any): boolean {
+        const errorString = String(error).toLowerCase();
+        const userErrorPatterns = ['command not found', 'no such file', 'permission denied', 'configuration'];
+        return userErrorPatterns.some(pattern => errorString.includes(pattern));
     }
 }

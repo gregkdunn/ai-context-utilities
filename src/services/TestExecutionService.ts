@@ -500,16 +500,16 @@ export class TestExecutionService {
                     failure.file || failure.suite
                 );
                 
-                const analysis = await this.services.aiTestAssistant.analyzeFailure(
+                const analysis = await this.services.testAnalysisHelper.analyze(
                     failure, 
-                    testInsights || undefined
+                    'test output'
                 );
                 
                 this.services.outputChannel.appendLine(`\n📊 Analysis for "${failure.test}":`);
                 this.services.outputChannel.appendLine(`   💡 ${analysis.summary}`);
                 this.services.outputChannel.appendLine(`   🎯 Root Cause: ${analysis.rootCause}`);
                 this.services.outputChannel.appendLine(`   🔧 Suggested Fix: ${analysis.suggestedFix}`);
-                this.services.outputChannel.appendLine(`   📈 Confidence: ${(analysis.confidence * 100).toFixed(0)}%`);
+                // Pattern-based analysis (no confidence score)
                 
                 if (analysis.codeChanges && analysis.codeChanges.length > 0) {
                     this.services.outputChannel.appendLine(`   📝 Code suggestions:`);

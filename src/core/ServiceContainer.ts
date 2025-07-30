@@ -27,7 +27,7 @@ import { TestOutputIntelligence } from '../utils/TestOutputIntelligence';
 import { IntelligentContextFilter } from '../modules/aiContext/IntelligentContextFilter';
 import { TestIntelligenceEngine } from './TestIntelligenceEngine';
 import { RealTimeTestMonitor } from '../services/RealTimeTestMonitor';
-import { AITestAssistant } from '../services/AITestAssistant';
+import { TestAnalysisHelper } from '../services/TestAnalysisHelper';
 import { NativeTestRunner } from '../services/NativeTestRunner';
 
 export interface ServiceConfiguration {
@@ -62,7 +62,7 @@ export class ServiceContainer {
     private _contextFilter!: IntelligentContextFilter;
     private _testIntelligenceEngine!: TestIntelligenceEngine;
     private _realTimeTestMonitor!: RealTimeTestMonitor;
-    private _aiTestAssistant!: AITestAssistant;
+    private _testAnalysisHelper!: TestAnalysisHelper;
     private _nativeTestRunner!: NativeTestRunner;
     private _fileWatcherActive: boolean = false;
     
@@ -106,14 +106,14 @@ export class ServiceContainer {
 
         // Phase 2.0.3 - Real Test Intelligence
         this._testIntelligenceEngine = new TestIntelligenceEngine(this.config.workspaceRoot, this._outputChannel);
-        this._realTimeTestMonitor = new RealTimeTestMonitor(this._testIntelligenceEngine, this._outputChannel);
-        this._aiTestAssistant = new AITestAssistant(this._testIntelligenceEngine, this.config.workspaceRoot, this._outputChannel);
+        this._realTimeTestMonitor = new RealTimeTestMonitor(this._outputChannel);
+        this._testAnalysisHelper = new TestAnalysisHelper(this._testIntelligenceEngine, this.config.workspaceRoot, this._outputChannel);
         this._nativeTestRunner = new NativeTestRunner(
             this.config.workspaceRoot,
             this._outputChannel,
             this._testIntelligenceEngine,
             this._realTimeTestMonitor,
-            this._aiTestAssistant
+            this._testAnalysisHelper
         );
 
         // Configuration services (Phase 1.9)
@@ -265,8 +265,8 @@ export class ServiceContainer {
         return this._realTimeTestMonitor;
     }
 
-    get aiTestAssistant(): AITestAssistant {
-        return this._aiTestAssistant;
+    get testAnalysisHelper(): TestAnalysisHelper {
+        return this._testAnalysisHelper;
     }
 
     get nativeTestRunner(): NativeTestRunner {
@@ -434,7 +434,7 @@ export class ServiceContainer {
         this._realTimeTestMonitor?.stopMonitoring();
         this._nativeTestRunner?.stop();
         
-        // Note: TestIntelligenceEngine and AITestAssistant don't have explicit dispose methods
+        // Note: TestIntelligenceEngine and TestAnalysisHelper don't have explicit dispose methods
         // as they only manage memory and file operations
     }
 

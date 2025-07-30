@@ -1,6 +1,6 @@
 /**
  * Unit tests for PostTestActionService
- * Tests post-test action handling and UI interactions
+ * Tests simplified post-test action handling - Phase 3.2.0
  */
 
 import { PostTestActionService, PostTestAction } from '../../../services/PostTestActionService';
@@ -13,13 +13,11 @@ jest.mock('vscode', () => ({
     window: {
         showQuickPick: jest.fn(),
         showErrorMessage: jest.fn(),
-        showInformationMessage: jest.fn()
+        showInformationMessage: jest.fn(),
+        showWarningMessage: jest.fn()
     },
     commands: {
         executeCommand: jest.fn()
-    },
-    QuickPickItemKind: {
-        Separator: -1
     },
     env: {
         clipboard: {
@@ -28,10 +26,16 @@ jest.mock('vscode', () => ({
     }
 }));
 
-// Mock modules
-jest.mock('../../../modules/aiContext/ContextCompiler');
-jest.mock('../../../modules/testOutput/TestOutputCapture');
-jest.mock('../../../modules/gitDiff/GitDiffCapture');
+// Mock fs module
+jest.mock('fs', () => ({
+    existsSync: jest.fn(),
+    readFileSync: jest.fn()
+}));
+
+// Mock child_process module
+jest.mock('child_process', () => ({
+    exec: jest.fn()
+}));
 
 describe('PostTestActionService', () => {
     let service: PostTestActionService;
@@ -70,7 +74,7 @@ describe('PostTestActionService', () => {
             testPath: 'src/test.spec.ts'
         };
 
-        test('should show failure actions when tests fail', async () => {
+        test('should show 3 core actions for failures', async () => {
             const failedResult: TestResult = {
                 success: false,
                 project: 'test-project',
@@ -82,7 +86,7 @@ describe('PostTestActionService', () => {
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
-                label: '$(hubot) AI Debug',
+                label: '$(output) View Output',
                 action: jest.fn()
             });
 
@@ -90,18 +94,18 @@ describe('PostTestActionService', () => {
 
             expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
                 expect.arrayContaining([
-                    expect.objectContaining({ label: expect.stringContaining('AI Debug') }),
                     expect.objectContaining({ label: expect.stringContaining('View Output') }),
-                    expect.objectContaining({ label: expect.stringContaining('Rerun Tests') })
+                    expect.objectContaining({ label: expect.stringContaining('Rerun Tests') }),
+                    expect.objectContaining({ label: expect.stringContaining('Copy Failure Analysis') })
                 ]),
                 expect.objectContaining({
-                    placeHolder: 'Tests failed. How can I help?',
+                    placeHolder: 'Tests failed. Choose an action:',
                     title: 'Test Failure Actions'
                 })
             );
         });
 
-        test('should show success actions when tests pass', async () => {
+        test('should show PR Description action for success', async () => {
             const successResult: TestResult = {
                 success: true,
                 project: 'test-project',
@@ -116,12 +120,12 @@ describe('PostTestActionService', () => {
 
             expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
                 expect.arrayContaining([
-                    expect.objectContaining({ label: expect.stringContaining('New Tests') }),
-                    expect.objectContaining({ label: expect.stringContaining('PR Description') }),
-                    expect.objectContaining({ label: expect.stringContaining('Commit Changes') })
+                    expect.objectContaining({ label: expect.stringContaining('View Output') }),
+                    expect.objectContaining({ label: expect.stringContaining('Rerun Tests') }),
+                    expect.objectContaining({ label: expect.stringContaining('PR Description') })
                 ]),
                 expect.objectContaining({
-                    placeHolder: 'Tests passed! What next?',
+                    placeHolder: 'Tests passed!',
                     title: 'Test Success Actions'
                 })
             );
@@ -140,7 +144,7 @@ describe('PostTestActionService', () => {
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockResolvedValue({
-                label: '$(hubot) AI Debug',
+                label: '$(output) View Output',
                 action: mockAction
             });
 
@@ -191,80 +195,14 @@ describe('PostTestActionService', () => {
         });
     });
 
-    describe('AI Debug action', () => {
-        test('should generate AI context for debugging', async () => {
-            const failedResult: TestResult = {
-                success: false,
-                project: 'test-project',
-                exitCode: 1,
-                stdout: 'Test output',
-                stderr: 'Error',
-                duration: 2000,
-                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
-            };
-
-            // Mock the context compiler
-            const mockCompileContext = jest.fn().mockResolvedValue('AI context');
-            const mockCopyToClipboard = jest.fn().mockResolvedValue(true);
-            
-            const contextCompiler = require('../../../modules/aiContext/ContextCompiler').ContextCompiler;
-            contextCompiler.prototype.compileContext = mockCompileContext;
-            contextCompiler.prototype.copyToClipboard = mockCopyToClipboard;
-
-            // Select AI Debug action
-            (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
-                const aiDebugItem = items.find((item: any) => 
-                    item.label.includes('AI Debug')
-                );
-                await aiDebugItem.action();
-                return aiDebugItem;
-            });
-
-            await service.showPostTestActions(failedResult, {});
-
-            expect(mockCompileContext).toHaveBeenCalledWith('debug', false);
-            expect(mockCopyToClipboard).toHaveBeenCalled();
-            expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.chat.open');
-        });
-
-        test('should handle AI context generation failure', async () => {
-            const failedResult: TestResult = {
-                success: false,
-                project: 'test-project',
-                exitCode: 1,
-                stdout: '',
-                stderr: '',
-                duration: 1000,
-                summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
-            };
-
-            const contextCompiler = require('../../../modules/aiContext/ContextCompiler').ContextCompiler;
-            contextCompiler.prototype.compileContext = jest.fn().mockResolvedValue(null);
-
-            (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
-                const aiDebugItem = items.find((item: any) => 
-                    item.label.includes('AI Debug')
-                );
-                await aiDebugItem.action();
-                return aiDebugItem;
-            });
-
-            await service.showPostTestActions(failedResult, {});
-
-            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-                'Failed to generate AI context. Please ensure test output and git diff are available.'
-            );
-        });
-    });
-
     describe('View Output action', () => {
-        test('should show test output', async () => {
-            const failedResult: TestResult = {
+        test('should show test output with results', async () => {
+            const testResult: TestResult = {
                 success: false,
                 project: 'test-project',
                 exitCode: 1,
                 stdout: 'Test output here',
-                stderr: 'Error output',
+                stderr: 'Error output here',
                 duration: 1000,
                 summary: { passed: 0, failed: 1, skipped: 0, total: 1, failures: [] }
             };
@@ -277,18 +215,46 @@ describe('PostTestActionService', () => {
                 return viewOutputItem;
             });
 
-            await service.showPostTestActions(failedResult, {});
+            await service.showPostTestActions(testResult, {});
 
             expect(mockOutputChannel.clear).toHaveBeenCalled();
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('=== Test Results ===');
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Status: FAILED');
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('=== Standard Output ===');
             expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Test output here');
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Error output');
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('=== Error Output ===');
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Error output here');
             expect(mockOutputChannel.show).toHaveBeenCalled();
+        });
+
+        test('should show no results message when no test data', async () => {
+            (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
+                const viewOutputItem = items.find((item: any) => 
+                    item.label.includes('View Output')
+                );
+                await viewOutputItem.action();
+                return viewOutputItem;
+            });
+
+            // Call showPostTestActions first to initialize, then test without test result
+            const service2 = new PostTestActionService(mockServices);
+            await service2.showPostTestActions({
+                success: true,
+                project: 'test',
+                exitCode: 0,
+                stdout: '',
+                stderr: '',
+                duration: 100,
+                summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
+            }, {});
+
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('=== Test Results ===');
         });
     });
 
     describe('Rerun Tests action', () => {
         test('should rerun tests with same parameters', async () => {
-            const failedResult: TestResult = {
+            const testResult: TestResult = {
                 success: false,
                 project: 'test-project',
                 exitCode: 1,
@@ -314,56 +280,141 @@ describe('PostTestActionService', () => {
                 return rerunItem;
             });
 
-            await service.showPostTestActions(failedResult, mockRequest);
+            await service.showPostTestActions(testResult, mockRequest);
 
             expect(vscode.commands.executeCommand).toHaveBeenCalledWith('aiDebugContext.runAffectedTests');
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Rerunning tests...');
         });
-    });
 
-    describe('Success actions', () => {
-        test('should generate new tests suggestion', async () => {
-            const successResult: TestResult = {
-                success: true,
-                project: 'test-project',
-                exitCode: 0,
-                stdout: 'All passed',
-                stderr: '',
-                duration: 1000,
-                summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
-            };
-
-            const contextCompiler = require('../../../modules/aiContext/ContextCompiler').ContextCompiler;
-            contextCompiler.prototype.compileContext = jest.fn().mockResolvedValue('AI context');
-            contextCompiler.prototype.copyToClipboard = jest.fn().mockResolvedValue(true);
-
+        test('should handle error when no previous test request', async () => {
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
-                const newTestsItem = items.find((item: any) => 
-                    item.label.includes('New Tests')
+                const rerunItem = items.find((item: any) => 
+                    item.label.includes('Rerun Tests')
                 );
-                await newTestsItem.action();
-                return newTestsItem;
+                await rerunItem.action();
+                return rerunItem;
             });
 
-            await service.showPostTestActions(successResult, {});
-
-            expect(contextCompiler.prototype.compileContext).toHaveBeenCalledWith('new-tests', true);
-            expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.chat.open');
-        });
-
-        test('should generate PR description', async () => {
-            const successResult: TestResult = {
+            // Call without storing previous request
+            const service2 = new PostTestActionService(mockServices);
+            await service2.showPostTestActions({
                 success: true,
-                project: 'test-project',
+                project: 'test',
                 exitCode: 0,
                 stdout: '',
                 stderr: '',
-                duration: 1000,
+                duration: 100,
                 summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
+            }, null);
+
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('No previous test to rerun');
+        });
+    });
+
+    describe('Copy Failure Analysis action', () => {
+        test('should copy failure analysis to clipboard', async () => {
+            const testResult: TestResult = {
+                success: false,
+                project: 'test-project',
+                exitCode: 1,
+                stdout: 'Test output',
+                stderr: 'Error output',
+                duration: 2000,
+                summary: { 
+                    passed: 0, 
+                    failed: 1, 
+                    skipped: 0, 
+                    total: 1, 
+                    failures: [{
+                        test: 'should work',
+                        suite: 'Component Tests',
+                        error: 'Expected true but got false',
+                        file: 'test.spec.ts',
+                        line: 42
+                    }] 
+                }
             };
 
-            const contextCompiler = require('../../../modules/aiContext/ContextCompiler').ContextCompiler;
-            contextCompiler.prototype.compileContext = jest.fn().mockResolvedValue('PR context');
-            contextCompiler.prototype.copyToClipboard = jest.fn().mockResolvedValue(true);
+            (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
+                const copyAnalysisItem = items.find((item: any) => 
+                    item.label.includes('Copy Failure Analysis')
+                );
+                await copyAnalysisItem.action();
+                return copyAnalysisItem;
+            });
+
+            await service.showPostTestActions(testResult, {});
+
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+                expect.stringContaining('# Test Failure Analysis')
+            );
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+                expect.stringContaining('**Status:** FAILED')
+            );
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+                expect.stringContaining('## Failure Details')
+            );
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'Test failure analysis copied to clipboard'
+            );
+        });
+
+        test('should handle copy analysis when no test results', async () => {
+            // Create a fresh service instance without setting any test result
+            const service2 = new PostTestActionService(mockServices);
+            
+            // Test the direct method since we need to test Copy Failure Analysis specifically
+            await service2['handleCopyFailureAnalysis']();
+
+            expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+                'No test results available for analysis'
+            );
+        });
+    });
+
+    describe('PR Description action', () => {
+        beforeEach(() => {
+            // Reset fs mocks
+            const fs = require('fs');
+            (fs.existsSync as jest.Mock).mockReturnValue(false);
+            (fs.readFileSync as jest.Mock).mockReturnValue('');
+            
+            // Reset child_process mocks
+            const childProcess = require('child_process');
+            (childProcess.exec as jest.Mock).mockImplementation((cmd: any, opts: any, callback: any) => {
+                if (callback) {
+                    callback(null, { stdout: '', stderr: '' });
+                }
+            });
+        });
+
+        test('should generate PR description with template', async () => {
+            const fs = require('fs');
+            fs.existsSync.mockReturnValue(true);
+            fs.readFileSync.mockReturnValue(`# Pull Request
+
+## Summary
+<!-- Brief description of what this PR does -->
+
+## Changes Made
+<!-- List the main changes in this PR -->
+- 
+- 
+- 
+
+## Testing
+<!-- Describe how this has been tested -->
+- [ ] Unit tests pass`);
+
+            const testResult: TestResult = {
+                success: true,
+                project: 'test-project',
+                exitCode: 0,
+                stdout: 'All tests passed',
+                stderr: '',
+                duration: 3000,
+                summary: { passed: 10, failed: 0, skipped: 0, total: 10, failures: [] }
+            };
 
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
                 const prItem = items.find((item: any) => 
@@ -373,36 +424,139 @@ describe('PostTestActionService', () => {
                 return prItem;
             });
 
-            await service.showPostTestActions(successResult, {});
+            await service.showPostTestActions(testResult, {});
 
-            expect(contextCompiler.prototype.compileContext).toHaveBeenCalledWith('pr-description', true);
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+                expect.stringContaining('# Pull Request')
+            );
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+                expect.stringContaining('Phase 3.2.0 service simplification')
+            );
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'PR description context copied to clipboard. Ready to paste in GitHub!'
+                'PR description copied to clipboard using project template!'
             );
         });
 
-        test('should handle commit changes action', async () => {
-            const successResult: TestResult = {
+        test('should generate PR description without template', async () => {
+            const fs = require('fs');
+            fs.existsSync.mockReturnValue(false);
+
+            const testResult: TestResult = {
                 success: true,
                 project: 'test-project',
                 exitCode: 0,
-                stdout: '',
+                stdout: 'All tests passed',
                 stderr: '',
-                duration: 1000,
-                summary: { passed: 1, failed: 0, skipped: 0, total: 1, failures: [] }
+                duration: 3000,
+                summary: { passed: 10, failed: 0, skipped: 0, total: 10, failures: [] }
             };
 
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
-                const commitItem = items.find((item: any) => 
-                    item.label.includes('Commit Changes')
+                const prItem = items.find((item: any) => 
+                    item.label.includes('PR Description')
                 );
-                await commitItem.action();
-                return commitItem;
+                await prItem.action();
+                return prItem;
             });
 
-            await service.showPostTestActions(successResult, {});
+            await service.showPostTestActions(testResult, {});
 
-            expect(vscode.commands.executeCommand).toHaveBeenCalledWith('git.commit');
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+                expect.stringContaining('Phase 3.2.0 service simplification')
+            );
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'PR description copied to clipboard using default format!'
+            );
+        });
+
+        test('should detect feature flags and add QA section', async () => {
+            const fs = require('fs');
+            fs.existsSync.mockReturnValue(false);
+            
+            // Mock git diff with feature flags
+            const childProcess = require('child_process');
+            (childProcess.exec as jest.Mock).mockImplementation((cmd: any, opts: any, callback: any) => {
+                if (cmd === 'git diff --cached') {
+                    callback(null, { 
+                        stdout: `diff --git a/src/service.ts b/src/service.ts
++    const flipper: FlipperService = new FlipperService();
++    if (flipper.flipperEnabled('new-feature-flag')) {
++        // new feature code
++    }
++    if (someService.eagerlyEnabled('eager-flag')) {
++        // eager feature
++    }`,
+                        stderr: '' 
+                    });
+                } else {
+                    callback(null, { stdout: '', stderr: '' });
+                }
+            });
+
+            const testResult: TestResult = {
+                success: true,
+                project: 'test-project',
+                exitCode: 0,
+                stdout: 'All tests passed',
+                stderr: '',
+                duration: 3000,
+                summary: { passed: 10, failed: 0, skipped: 0, total: 10, failures: [] }
+            };
+
+            (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
+                const prItem = items.find((item: any) => 
+                    item.label.includes('PR Description')
+                );
+                await prItem.action();
+                return prItem;
+            });
+
+            await service.showPostTestActions(testResult, {});
+
+            const clipboardCall = (vscode.env.clipboard.writeText as jest.Mock).mock.calls[0][0];
+            expect(clipboardCall).toContain('## QA');
+            expect(clipboardCall).toContain('**Feature Flags to Test:**');
+            expect(clipboardCall).toContain('`new-feature-flag` - Test with flag enabled');
+            expect(clipboardCall).toContain('`new-feature-flag` - Test with flag disabled');
+            expect(clipboardCall).toContain('`eager-flag` - Test with flag enabled');
+            expect(clipboardCall).toContain('`eager-flag` - Test with flag disabled');
+            
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'PR description copied to clipboard using default format (2 feature flags detected)!'
+            );
+        });
+
+        test('should handle errors in PR description generation', async () => {
+            const childProcess = require('child_process');
+            (childProcess.exec as jest.Mock).mockImplementation((cmd: any, opts: any, callback: any) => {
+                callback(new Error('Git command failed'), null);
+            });
+
+            const testResult: TestResult = {
+                success: true,
+                project: 'test-project',
+                exitCode: 0,
+                stdout: 'All tests passed',
+                stderr: '',
+                duration: 3000,
+                summary: { passed: 10, failed: 0, skipped: 0, total: 10, failures: [] }
+            };
+
+            (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
+                const prItem = items.find((item: any) => 
+                    item.label.includes('PR Description')
+                );
+                await prItem.action();
+                return prItem;
+            });
+
+            await service.showPostTestActions(testResult, {});
+
+            // Should still generate PR description without feature flags
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalled();
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'PR description copied to clipboard using default format!'
+            );
         });
     });
 });

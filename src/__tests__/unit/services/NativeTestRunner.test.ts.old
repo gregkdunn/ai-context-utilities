@@ -6,7 +6,7 @@
 import { NativeTestRunner, NativeTestResult, TestExecutionOptions } from '../../../services/NativeTestRunner';
 import { TestIntelligenceEngine } from '../../../core/TestIntelligenceEngine';
 import { RealTimeTestMonitor } from '../../../services/RealTimeTestMonitor';
-import { AITestAssistant } from '../../../services/AITestAssistant';
+import { TestAnalysisHelper } from '../../../services/TestAnalysisHelper';
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
@@ -30,7 +30,7 @@ describe('NativeTestRunner', () => {
     let mockOutputChannel: jest.Mocked<vscode.OutputChannel>;
     let mockTestIntelligence: jest.Mocked<TestIntelligenceEngine>;
     let mockRealTimeMonitor: jest.Mocked<RealTimeTestMonitor>;
-    let mockAIAssistant: jest.Mocked<AITestAssistant>;
+    let mockTestAnalysisHelper: jest.Mocked<TestAnalysisHelper>;
     const workspaceRoot = '/test/workspace';
 
     beforeEach(() => {
@@ -64,7 +64,7 @@ describe('NativeTestRunner', () => {
             getRealtimeStats: jest.fn()
         } as any;
 
-        mockAIAssistant = {
+        mockTestAnalysisHelper = {
             analyzeFailure: jest.fn(),
             getTestSuggestions: jest.fn(),
             suggestFix: jest.fn(),
@@ -78,7 +78,7 @@ describe('NativeTestRunner', () => {
             mockOutputChannel,
             mockTestIntelligence,
             mockRealTimeMonitor,
-            mockAIAssistant
+            mockTestAnalysisHelper
         );
 
         jest.clearAllMocks();

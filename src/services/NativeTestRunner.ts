@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { spawn, ChildProcess } from 'child_process';
 import { TestIntelligenceEngine } from '../core/TestIntelligenceEngine';
 import { RealTimeTestMonitor } from './RealTimeTestMonitor';
-import { AITestAssistant } from './AITestAssistant';
+import { TestAnalysisHelper } from './TestAnalysisHelper';
 import { TestResultParser, TestFailure } from '../utils/testResultParser';
 
 export interface NativeTestResult {
@@ -45,7 +45,7 @@ export class NativeTestRunner {
         private outputChannel: vscode.OutputChannel,
         private testIntelligence: TestIntelligenceEngine,
         private realTimeMonitor: RealTimeTestMonitor,
-        private aiAssistant: AITestAssistant
+        private testAnalysisHelper: TestAnalysisHelper
     ) {}
 
     /**
@@ -86,17 +86,16 @@ export class NativeTestRunner {
                     fileName: file
                 }));
                 
-                const testPredictions = await this.realTimeMonitor.getTestPredictions(testMetadata);
-                optimizedTestFiles = testPredictions.optimizedOrder.map(t => t.fileName);
+                // Use files in the order they were found (no complex prediction system)
+                optimizedTestFiles = affectedTestFiles;
                 
                 predictions = {
                     accurateFailures: 0,
-                    totalPredictions: testPredictions.likelyFailures.length,
+                    totalPredictions: 0,
                     accuracy: 0
                 };
                 
-                this.outputChannel.appendLine(`🧠 Intelligence: Optimized test order, predicting ${testPredictions.likelyFailures.length} likely failures`);
-                this.outputChannel.appendLine(`⏱️ Estimated duration: ${Math.round(testPredictions.estimatedDuration / 1000)}s`);
+                this.outputChannel.appendLine(`📋 Running ${affectedTestFiles.length} test files in standard order`);
             }
 
             // Execute tests

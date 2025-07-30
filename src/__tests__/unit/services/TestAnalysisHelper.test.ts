@@ -1,9 +1,9 @@
 /**
- * Unit tests for AITestAssistant service
- * Tests AI-powered test failure analysis and suggestion generation
+ * Unit tests for TestAnalysisHelper service
+ * Tests pattern-based test failure analysis and suggestion generation
  */
 
-import { AITestAssistant, AIAnalysis, TestSuggestion } from '../../../services/AITestAssistant';
+import { TestAnalysisHelper, PatternAnalysis, TestSuggestion } from '../../../services/TestAnalysisHelper';
 import { TestIntelligenceEngine } from '../../../core/TestIntelligenceEngine';
 import { TestFailure } from '../../../utils/testResultParser';
 import * as vscode from 'vscode';
@@ -17,8 +17,20 @@ jest.mock('fs', () => ({
     }
 }));
 
-describe('AITestAssistant', () => {
-    let assistant: AITestAssistant;
+// Mock vscode
+jest.mock('vscode', () => ({
+    window: {
+        showInformationMessage: jest.fn()
+    },
+    env: {
+        clipboard: {
+            writeText: jest.fn()
+        }
+    }
+}));
+
+describe('TestAnalysisHelper', () => {
+    let assistant: TestAnalysisHelper;
     let mockTestIntelligence: jest.Mocked<TestIntelligenceEngine>;
     let mockOutputChannel: jest.Mocked<vscode.OutputChannel>;
     const workspaceRoot = '/test/workspace';
@@ -54,7 +66,7 @@ describe('AITestAssistant', () => {
             dispose: jest.fn()
         } as any;
 
-        assistant = new AITestAssistant(
+        assistant = new TestAnalysisHelper(
             mockTestIntelligence,
             workspaceRoot,
             mockOutputChannel
@@ -63,32 +75,21 @@ describe('AITestAssistant', () => {
         jest.clearAllMocks();
     });
 
-    describe('analyzeFailure', () => {
+    describe('analyze', () => {
 
-        test('should analyze test failure and return AI analysis', async () => {
-            mockTestIntelligence.getTestInsights.mockImplementation(() => ({
-                testId: 'test-1',
-                patterns: [],
-                averageDuration: 100,
-                failureRate: 0.3,
-                lastFailures: [],
-                correlatedTests: [],
-                recommendedAction: 'fix'
-            }));
-
-            const analysis = await assistant.analyzeFailure(mockFailure);
+        test('should analyze test failure and return pattern analysis', async () => {
+            const analysis = await assistant.analyze(mockFailure, 'test output');
 
             expect(analysis).toBeDefined();
             expect(analysis.summary).toBeTruthy();
             expect(analysis.rootCause).toBeTruthy();
             expect(analysis.suggestedFix).toBeTruthy();
-            expect(analysis.confidence).toBeGreaterThan(0);
-            expect(analysis.confidence).toBeLessThanOrEqual(1);
+            expect(analysis.codeChanges).toBeDefined();
         });
 
         test('should cache analysis results', async () => {
-            const analysis1 = await assistant.analyzeFailure(mockFailure);
-            const analysis2 = await assistant.analyzeFailure(mockFailure);
+            const analysis1 = await assistant.analyze(mockFailure, 'test output');
+            const analysis2 = await assistant.analyze(mockFailure, 'test output');
 
             // Should return cached result
             expect(analysis1).toBe(analysis2);
@@ -100,10 +101,10 @@ describe('AITestAssistant', () => {
                 error: null as any
             };
 
-            const analysis = await assistant.analyzeFailure(failureWithNullError);
+            const analysis = await assistant.analyze(failureWithNullError, 'test output');
 
             expect(analysis).toBeDefined();
-            expect(analysis.summary).toContain('Test failure detected');
+            expect(analysis.summary).toContain('Standard test failure detected');
         });
 
         test('should provide code change suggestions for common patterns', async () => {
@@ -112,7 +113,7 @@ describe('AITestAssistant', () => {
                 error: 'TypeError: Cannot read property \'length\' of undefined'
             };
 
-            const analysis = await assistant.analyzeFailure(typeErrorFailure);
+            const analysis = await assistant.analyze(typeErrorFailure, 'test output');
 
             expect(analysis.codeChanges).toBeDefined();
             expect(analysis.codeChanges!.length).toBeGreaterThan(0);
@@ -125,35 +126,24 @@ describe('AITestAssistant', () => {
             });
         });
 
-        test('should return fallback analysis on error', async () => {
-            // Mock the performAnalysis method to throw an error
-            const originalMethod = assistant['performAnalysis'];
-            assistant['performAnalysis'] = jest.fn().mockRejectedValue(new Error('AI service unavailable'));
-
-            const analysis = await assistant.analyzeFailure(mockFailure);
+        test('should handle analysis gracefully', async () => {
+            const analysis = await assistant.analyze(mockFailure, 'test output');
 
             expect(analysis).toBeDefined();
             expect(analysis.summary).toBeTruthy();
-            expect(analysis.confidence).toBe(0.3);
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('❌ AI analysis failed')
-            );
-
-            // Restore original method
-            assistant['performAnalysis'] = originalMethod;
+            expect(typeof analysis.summary).toBe('string');
         });
     });
 
-    describe('getTestSuggestions', () => {
-        const projectName = 'test-project';
+    describe('generateSuggestions', () => {
         const testFiles = [
             'src/component.spec.ts',
             'src/service.spec.ts'
         ];
 
         test('should generate test suggestions for coverage gaps', async () => {
-            const suggestions = await assistant.getTestSuggestions(
-                projectName,
+            const suggestions = await assistant.generateSuggestions(
+                'test-file.spec.ts',
                 testFiles
             );
 
@@ -172,8 +162,8 @@ describe('AITestAssistant', () => {
         });
 
         test('should suggest test improvements for flaky tests', async () => {
-            const suggestions = await assistant.getTestSuggestions(
-                projectName,
+            const suggestions = await assistant.generateSuggestions(
+                'test-file.spec.ts',
                 testFiles
             );
 
@@ -182,12 +172,12 @@ describe('AITestAssistant', () => {
                 s => s.type === 'improve_test'
             );
             expect(improveTestSuggestion).toBeDefined();
-            expect(improveTestSuggestion!.priority).toBe('medium');
+            expect(improveTestSuggestion!.priority).toBe('low');
         });
 
         test('should suggest removing obsolete tests', async () => {
-            const suggestions = await assistant.getTestSuggestions(
-                projectName,
+            const suggestions = await assistant.generateSuggestions(
+                'test-file.spec.ts',
                 testFiles
             );
 
@@ -199,24 +189,49 @@ describe('AITestAssistant', () => {
         });
 
         test('should handle empty test files array', async () => {
-            const suggestions = await assistant.getTestSuggestions(
-                projectName,
+            const suggestions = await assistant.generateSuggestions(
+                'test-file.spec.ts',
                 []
             );
 
             expect(suggestions).toBeDefined();
             expect(Array.isArray(suggestions)).toBe(true);
-            // Should still provide some suggestions based on project analysis
+            // Should still provide some suggestions based on templates
         });
     });
 
-    describe('generateFix', () => {
-        test('should generate fix for test failure with code changes', async () => {
-            const analysis = {
+    describe('parseErrorMessage', () => {
+        test('should parse TypeError correctly', () => {
+            const result = assistant.parseErrorMessage('TypeError: Cannot read property');
+            expect(result.type).toBe('Type Error');
+            expect(result.details).toBe('Variable type mismatch detected');
+        });
+
+        test('should parse ReferenceError correctly', () => {
+            const result = assistant.parseErrorMessage('ReferenceError: variable is not defined');
+            expect(result.type).toBe('Reference Error');
+            expect(result.details).toBe('Undefined variable or function');
+        });
+
+        test('should parse AssertionError correctly', () => {
+            const result = assistant.parseErrorMessage('AssertionError: Expected true but got false');
+            expect(result.type).toBe('Assertion Error');
+            expect(result.details).toBe('Test expectation not met');
+        });
+
+        test('should handle unknown errors', () => {
+            const result = assistant.parseErrorMessage('Some unknown error');
+            expect(result.type).toBe('General Error');
+            expect(result.details).toBe('Standard test failure pattern');
+        });
+    });
+
+    describe('copyToClipboard', () => {
+        test('should copy analysis to clipboard', async () => {
+            const analysis: PatternAnalysis = {
                 summary: 'Test summary',
-                rootCause: 'Root cause', 
+                rootCause: 'Root cause',
                 suggestedFix: 'Suggested fix',
-                confidence: 0.8,
                 codeChanges: [{
                     file: 'test.spec.ts',
                     line: 10,
@@ -226,24 +241,14 @@ describe('AITestAssistant', () => {
                 }]
             };
 
-            const fix = await assistant.generateFix(mockFailure, analysis);
+            await assistant.copyToClipboard(analysis);
 
-            expect(fix).toBeDefined();
-            expect(typeof fix).toBe('string');
-        });
-
-        test('should return null when no code changes available', async () => {
-            const analysis = {
-                summary: 'Test summary',
-                rootCause: 'Root cause',
-                suggestedFix: 'Suggested fix', 
-                confidence: 0.8
-            };
-
-            const fix = await assistant.generateFix(mockFailure, analysis);
-
-            expect(fix).toBeNull();
+            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+                expect.stringContaining('## Test Analysis Results')
+            );
+            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+                'Analysis copied to clipboard'
+            );
         });
     });
-
 });
