@@ -1,10 +1,10 @@
-# AI Debug Context V3 - Installation Guide
+# AI Debug Context V3.4.0 - Installation Guide
 
-## 🚀 Extension Ready for Testing!
+## 🚀 Extension Ready for Production!
 
-**Package Created:** `ai-debug-context-v3-3.0.0.vsix` (215 KB)  
-**Build Date:** July 25, 2025  
-**Version:** 3.0.0 (Phase 1.8 - Clean Architecture)
+**Current Version:** 3.4.0 (Phase 3.4.0 - Enhanced AI Context Generation)  
+**Status:** Production Ready with Streamlined Context Generation  
+**Features:** Multi-System Feature Flag Detection, Pattern-Based Test Analysis
 
 ## 📦 Installation Methods
 

@@ -29,6 +29,7 @@ import { TestIntelligenceEngine } from './TestIntelligenceEngine';
 import { RealTimeTestMonitor } from '../services/RealTimeTestMonitor';
 import { TestAnalysisHelper } from '../services/TestAnalysisHelper';
 import { NativeTestRunner } from '../services/NativeTestRunner';
+import { WorkspaceAnalyzer } from '../utils/WorkspaceAnalyzer';
 
 export interface ServiceConfiguration {
     workspaceRoot: string;
@@ -64,6 +65,7 @@ export class ServiceContainer {
     private _realTimeTestMonitor!: RealTimeTestMonitor;
     private _testAnalysisHelper!: TestAnalysisHelper;
     private _nativeTestRunner!: NativeTestRunner;
+    private _workspaceAnalyzer!: WorkspaceAnalyzer;
     private _fileWatcherActive: boolean = false;
     
     // Status bar animation
@@ -118,10 +120,19 @@ export class ServiceContainer {
 
         // Configuration services (Phase 1.9)
         this._configManager = new ConfigurationManager(this.config.workspaceRoot);
+        
+        // Initialize framework detection
+        this._configManager.refreshFrameworkDetection().catch(error => {
+            this._outputChannel.appendLine(`⚠️ Framework detection failed: ${error}`);
+        });
+        
         this._projectCache = new ProjectCache(
             this.config.workspaceRoot, 
             this._configManager.get('performance')?.cacheTimeout || 30
         );
+
+        // Workspace analysis
+        this._workspaceAnalyzer = new WorkspaceAnalyzer(this.config.workspaceRoot);
 
         // Background services (Phase 1.9.1)
         this._backgroundDiscovery = new BackgroundProjectDiscovery(
@@ -162,7 +173,8 @@ export class ServiceContainer {
             this._bridge,
             this._statusBarItem,
             this._backgroundDiscovery,
-            this._performanceTracker
+            this._performanceTracker,
+            // WorkspaceAnalyzer doesn't need disposal (no watchers/subscriptions)
         );
     }
 
@@ -282,6 +294,10 @@ export class ServiceContainer {
 
     get smartRouter(): SmartCommandRouter {
         return this._smartRouter;
+    }
+
+    get workspaceAnalyzer(): WorkspaceAnalyzer {
+        return this._workspaceAnalyzer;
     }
 
     /**

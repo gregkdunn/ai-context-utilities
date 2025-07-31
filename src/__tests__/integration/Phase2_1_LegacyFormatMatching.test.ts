@@ -150,18 +150,16 @@ Test Suites: 4 passed, 2 failed
             expect(contextCalls).toBeDefined();
             const finalContext = contextCalls[1];
 
-            // Verify complete legacy format structure
+            // Verify Phase 3.4.0 focused format structure
             expect(finalContext).toContain('🤖 AI DEBUG CONTEXT - OPTIMIZED FOR ANALYSIS');
             expect(finalContext).toContain('STATUS: ❌ TESTS FAILING');
             expect(finalContext).toContain('🎯 ANALYSIS REQUEST');
-            expect(finalContext).toContain('1. 🔍 ROOT CAUSE ANALYSIS');
-            expect(finalContext).toContain('2. 🛠️ CONCRETE FIXES (PRIORITY 1)');
-            expect(finalContext).toContain('🧪 TEST RESULTS ANALYSIS');
-            expect(finalContext).toContain(mockTestOutput);
-            expect(finalContext).toContain('📋 CODE CHANGES ANALYSIS');
-            expect(finalContext).toContain(mockGitDiff);
-            expect(finalContext).toContain('⚠️  NOT READY - Issues need resolution:');
-            expect(finalContext).toContain('🚀 AI ASSISTANT GUIDANCE');
+            expect(finalContext).toContain('FAILING TESTS - IMMEDIATE FIXES NEEDED:');
+            expect(finalContext).toContain('**RESPONSE FORMAT:**');
+            expect(finalContext).toContain('## Fix #[N]: [Brief description]');
+            expect(finalContext).toContain('🧪 TEST EXECUTION DETAILS');
+            expect(finalContext).toContain('📋 SPECIFIC CHANGES MADE');
+            expect(finalContext).toContain('🎯 ANALYSIS FOCUS');
         });
     });
 
@@ -232,14 +230,13 @@ Total files changed: 1
             
             const finalContext = contextCalls[1];
 
-            // Verify passing tests format
+            // Verify Phase 3.4.0 passing tests format
             expect(finalContext).toContain('STATUS: ✅ TESTS PASSING');
-            expect(finalContext).toContain('1. 🔍 CODE QUALITY ANALYSIS');
-            expect(finalContext).toContain('2. 🎭 MOCK DATA VALIDATION (CRITICAL)');
-            expect(finalContext).toContain('3. 🧪 TEST COVERAGE ANALYSIS');
-            expect(finalContext).toContain('✅ READY TO PUSH');
-            expect(finalContext).toContain('• Tests: Passing ✅');
-            expect(finalContext).toContain('• Lint: Clean ✅');
+            expect(finalContext).toContain('PASSING TESTS - CODE REVIEW NEEDED:');
+            expect(finalContext).toContain('**RESPONSE FORMAT:**');
+            expect(finalContext).toContain('## Code Quality Review');
+            expect(finalContext).toContain('### 🔍 Issues Found:');
+            expect(finalContext).toContain('### 🧪 Missing Test Coverage:');
         });
     });
 
@@ -323,26 +320,16 @@ Time: 30.5s`
             const allCalls = (fs.promises.writeFile as jest.Mock).mock.calls;
             const allContent = allCalls.map(call => call[1]).join('\n');
 
-            // Check for exact legacy emoji patterns (only those that should appear)
-            const legacyEmojiPatterns = [
-                '🤖 TEST ANALYSIS REPORT',
-                '📊 EXECUTIVE SUMMARY', 
-                '💥 FAILURE ANALYSIS',
-                '🔥 COMPILATION/RUNTIME ERRORS:',
-                '🧪 TEST FAILURES:',
-                '⚡ PERFORMANCE INSIGHTS',
-                '🔍 AI-OPTIMIZED GIT DIFF ANALYSIS',
-                '📊 CHANGE SUMMARY',
-                '🏷️ FILE TYPE ANALYSIS',
-                '📋 DETAILED CHANGES',
-                '🤖 AI ANALYSIS CONTEXT',
+            // Check for Phase 3.4.0 focused format patterns
+            const focusedFormatPatterns = [
                 '🤖 AI DEBUG CONTEXT - OPTIMIZED FOR ANALYSIS',
                 '🎯 ANALYSIS REQUEST',
-                '🔧 CODE QUALITY RESULTS',
-                '🚀 AI ASSISTANT GUIDANCE'
+                '🧪 TEST EXECUTION DETAILS',
+                '📋 SPECIFIC CHANGES MADE',
+                '🎯 ANALYSIS FOCUS'
             ];
 
-            legacyEmojiPatterns.forEach(pattern => {
+            focusedFormatPatterns.forEach(pattern => {
                 expect(allContent).toContain(pattern);
             });
         });
@@ -360,7 +347,7 @@ Time: 30.5s`
             const allCalls = (fs.promises.writeFile as jest.Mock).mock.calls;
             const allContent = allCalls.map(call => call[1]).join('\n');
 
-            // Verify all critical legacy sections are present
+            // Verify all critical Phase 3.4.0 focused sections are present
             const criticalSections = [
                 'PROJECT: Angular NX Monorepo',
                 'TARGET:',
@@ -368,18 +355,13 @@ Time: 30.5s`
                 'FOCUS:',
                 'TIMESTAMP:',
                 'Please analyze this context and provide:',
-                'ROOT CAUSE ANALYSIS',
-                'CONCRETE FIXES (PRIORITY 1)',
-                'EXISTING TEST FIXES (PRIORITY 1)',
-                'IMPLEMENTATION GUIDANCE (PRIORITY 1)',
-                'NEW TEST SUGGESTIONS (PRIORITY 2 - AFTER FIXES)',
-                'Focus on items 1-4 first to get tests passing',
-                'TEST RESULTS ANALYSIS',
-                'CODE QUALITY RESULTS',
-                'CODE CHANGES ANALYSIS',
-                'AI ASSISTANT GUIDANCE',
-                'Context file size:',
-                'lines (optimized for AI processing)'
+                'FAILING TESTS - IMMEDIATE FIXES NEEDED:',
+                '**RESPONSE FORMAT:**',
+                '## Fix #[N]: [Brief description]',
+                '🧪 TEST EXECUTION DETAILS',
+                '📋 SPECIFIC CHANGES MADE',
+                '🎯 ANALYSIS FOCUS',
+                'Complete relevant information included - optimized for AI analysis'
             ];
 
             criticalSections.forEach(section => {

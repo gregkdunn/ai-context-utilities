@@ -1,94 +1,55 @@
-# AI Debug Context V3 Documentation
+# AI Debug Context V3.4.0 Documentation
 
-## 📚 **Documentation Structure**
+## 📚 Current Documentation
 
-### **API Documentation** (`api/`)
-Complete API reference for all classes and methods:
-- **AffectedTestDetector**: Detect which tests to run based on file changes
-- **ParallelTestRunner**: Execute tests in parallel for performance
-- **RealTimeTestWatcher**: Watch files and trigger tests automatically
-- **BasicTestFixer**: Pattern-based automatic test fixing
-- **CopilotTestFixer**: AI-powered test fixing via GitHub Copilot
-- **TestResultCache**: Cache test results for performance
+### Core Documentation
+- **[README.md](../README.md)** - Main project documentation
+- **[Context Examples](REAL_CONTEXT_EXAMPLES.md)** - Actual context file output examples
 
-### **User Guides** (`guides/`)
-Step-by-step guides for common tasks:
-- **Getting Started**: Installation and basic setup
-- **Configuration**: Customizing behavior for your project
-- **Performance Optimization**: Getting maximum speed benefits
-- **Troubleshooting**: Solutions to common problems
-- **Advanced Usage**: Power user features and customization
+### User Guides
+- **[Installation Guide](guides/INSTALLATION_GUIDE.md)** - How to install and use the extension
+- **[Quick Start Guide](guides/QUICK_START_GUIDE.md)** - Get started quickly
+- **[Development Guide](guides/DEVELOPMENT.md)** - Development setup and workflow
+- **[Contributing Guide](guides/CONTRIBUTING.md)** - How to contribute to the project
+- **[Developer Guide](guides/DEVELOPER.md)** - Advanced development topics
 
-### **Performance Documentation** (`performance/`)
-Performance metrics and analysis:
-- **Benchmarks**: Speed improvements and measurements
-- **Resource Usage**: Memory and CPU utilization
-- **Scaling Analysis**: Performance with different project sizes
-- **Optimization Guide**: How to tune for your specific needs
+## 🎯 Key Features (V3.4.0)
 
-### **Testing Documentation** (`testing/`)
-Testing strategy and results:
-- **Test Strategy**: How we ensure quality
-- **Coverage Reports**: Unit and integration test coverage
-- **Performance Tests**: Automated performance validation
-- **User Acceptance**: Real developer validation results
+### Context Generation
+- Complete relevant information without arbitrary limits
+- Context-aware prompts for failing vs passing tests
+- Output format specifications for consistent AI responses
 
-### **Examples** (`examples/`)
-Working code examples and demos:
-- **Basic Usage**: Simple examples for each feature
-- **Integration Examples**: How to integrate with different projects
-- **Configuration Examples**: Common configuration patterns
-- **Performance Examples**: Before/after speed comparisons
+### Feature Flag Detection
+- Supports 10+ feature flag systems (FlipperService, LaunchDarkly, generic patterns)
+- Automatic QA checklist generation in PR descriptions
+- Pattern-based detection in git diffs
 
-## 📋 **Documentation Standards**
+### Test Analysis
+- Specific error categorization (TypeError, AssertionError, etc.)
+- Concrete fix suggestions with file paths and line numbers
+- Context extraction from test failures
 
-### **Writing Guidelines**
-- **Clear and Concise**: Get to the point quickly
-- **Example-Driven**: Show working code for every concept
-- **Performance-Focused**: Include actual measurements and benchmarks
-- **User-Centric**: Written for busy developers who want fast results
+### PR Descriptions
+- Analysis of actual git changes instead of templates
+- Breaking change detection and migration guidance
+- Feature flag integration with testing instructions
 
-### **Update Requirements**
-- **During Development**: Update docs with each feature
-- **Before Release**: Complete documentation review
-- **Monthly**: Performance metrics refresh
-- **Quarterly**: User guide validation
+## 📋 Context Files Generated
 
-### **Quality Metrics**
-- **Completeness**: All features documented
-- **Accuracy**: Code examples work as shown
-- **Performance**: All speed claims backed by data
-- **Usability**: Validated with real users
+**Location:** `.github/instructions/ai-utilities-context/`
 
-## 🎯 **Getting Started**
+- **`ai-debug-context.txt`** - Test context for debugging or code review
+- **`pr-description.txt`** - PR descriptions based on git analysis
+- **`test-output.txt`** - Raw test execution output
+- **`diff.txt`** - Git changes
 
-1. **New Users**: Start with `guides/getting-started.md`
-2. **API Reference**: See `api/` for complete method documentation
-3. **Performance Data**: Check `performance/` for speed improvements
-4. **Examples**: Browse `examples/` for working code
+## 🚀 Quick Links
 
-## 🔄 **Contributing to Documentation**
-
-### **Adding New Documentation**
-1. Follow the established structure and naming conventions
-2. Include working code examples for all concepts
-3. Add performance measurements where relevant
-4. Update this README if adding new sections
-
-### **Updating Existing Documentation**
-1. Maintain backward compatibility in examples
-2. Update performance metrics with current measurements
-3. Validate all code examples still work
-4. Update related documentation cross-references
-
-## 📊 **Documentation Metrics**
-
-We track documentation quality through:
-- **Accuracy**: Do all examples work as shown?
-- **Completeness**: Are all features documented?
-- **Usage**: Are users finding what they need?
-- **Performance**: Are speed claims backed by data?
+- **New Users**: Start with [Installation Guide](guides/INSTALLATION_GUIDE.md)
+- **Contributors**: See [Contributing Guide](guides/CONTRIBUTING.md)
+- **Examples**: Check [Context Examples](REAL_CONTEXT_EXAMPLES.md) for output samples
 
 ---
 
-**Goal**: Provide developers with the fastest path to understanding and using AI Debug Context V3 effectively.
+**Documentation Principle:** Realistic feature-focused content without marketing fluff.

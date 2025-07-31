@@ -1,4 +1,4 @@
-# Contributing to AI Debug Context V3
+# Contributing to AI Debug Context V3.4.0
 
 Welcome to the AI Debug Context V3 project! This guide will help you get started with contributing to this VS Code extension that transforms testing workflows from minutes to seconds.
 

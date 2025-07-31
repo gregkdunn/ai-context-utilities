@@ -1,69 +1,57 @@
 # AI Context Utilities - Intelligent Test Runner for VSCode
 
-## 🎯 **Mission**: Transform your testing workflow from minutes to seconds
+VSCode extension for running tests and generating AI context files.
 
-**Current Version:** 3.2.0 - Critical Assessment & Service Simplification ✅  
-**Status:** Production Ready with Simplified Architecture and Feature Flag Detection  
-**Architecture:** Native TypeScript with pattern-based test analysis  
-**Test Coverage:** 90%+ for core services with comprehensive unit tests  
-**Code Quality:** Major simplification - reduced service complexity by 56-68%
-
----
-
-## ⚡ **Key Features**
-
-### 🎨 **Unified Test Interface**
-- **Single Command Palette** - Type project name OR select from visual menu
-- **Smart Project Detection** - Auto-discovers all projects in your workspace
-- **Recent History** - Quick access to last 8 tested projects with usage stats
-- **Clean, Focused UI** - No distractions, just fast test execution
-
-### 🚀 **Intelligent Test Execution**
-- **Auto-Detect Mode** - Finds affected projects from changed files (90% time savings)
-- **Git Affected Mode** - Tests only files modified since last commit
-- **Smart Test Order** - Runs recently failed tests first for faster feedback
-- **Real-time Progress** - Live test execution feedback with progress monitoring
-- **Native Test Runner** - No shell script dependencies, pure TypeScript implementation
-
-### 📊 **Advanced Features**
-- **Pattern-Based Analysis** - Identifies common test failure patterns and suggests fixes
-- **Real-Time Test Monitoring** - Live metrics and progress tracking during execution
-- **Test Failure Helper** - Analyzes failures using pattern matching for quick debugging
-- **Feature Flag Detection** - Automatically detects FlipperService flags in git diff for QA
-- **Smart Framework Detection** - Automatically detects Angular, React, Vue, Nx, etc.
-- **Animated Status Bar** - Visual feedback during test execution with spinner animation
-- **Copilot Integration** - Automatic Copilot Chat integration with "Analyze the pasted document." instruction
-- **PR Template Support** - Uses project-specific PR templates when generating descriptions
-- **Smart File Organization** - Organized output files in `.github/instructions/ai-utilities-context/`
+**Version:** 3.4.0  
+**Status:** Production Ready  
+**Architecture:** TypeScript  
+**Test Coverage:** 90%+
 
 ---
 
-## ✨ **What's New in Version 3.2.0**
+## Features
 
-### 🎯 **Critical Assessment & Service Simplification**
-Following the principle of "fix what's broken, enhance what works, stop overpromising what doesn't exist":
+### Test Execution
+- Run tests from command palette
+- Project discovery and selection
+- Git affected test detection
+- Real-time progress monitoring
 
-- **TestAnalysisHelper** - Replaced AITestAssistant with honest pattern matching (68% code reduction)
-  - Removed fake AI/ML terminology
-  - Simple pattern-based analysis that actually works
-  - Clear, predictable error categorization
-  
-- **PostTestActionService** - Simplified to 3 core actions (56% code reduction)
-  - View Output, Rerun Tests, Copy Failure Analysis/PR Description
-  - Smart context: PR Description for success, Failure Analysis for failures
-  - Removed over-engineered features that never worked properly
+### Context Generation
+- Generates AI context files when tests run
+- Captures test output and git changes
+- Creates debugging context for failures
+- Generates PR descriptions for passing tests
 
-### 🚦 **Feature Flag Detection for QA**
-- **Automatic FlipperService Detection** - Scans git diff for feature flags
-- **QA Checklist Generation** - Creates test items for each flag (enabled/disabled)
-- **Smart Variable Detection** - Finds flags regardless of variable naming
-- **PR Template Integration** - Uses project's `.github/PULL_REQUEST_TEMPLATE.md`
+### Post-Test Actions
+- View test output
+- Rerun tests
+- Copy failure analysis to clipboard
+- Generate PR descriptions
 
-### 📊 **Improved Code Quality**
-- **Removed Over-Engineering** - Eliminated fake AI features and complex abstractions
-- **Better Test Coverage** - 90%+ coverage for simplified services
-- **Cleaner Architecture** - Services now do one thing well
-- **Honest Implementation** - Pattern matching instead of fake machine learning
+---
+
+## Version 3.4.0 Changes
+
+### Context Generation
+- Includes all relevant information without arbitrary limits
+- Context-aware prompts for failing vs passing tests
+- Filters out noise while preserving useful content
+
+### Feature Flag Detection
+- Supports FlipperService, LaunchDarkly, and generic patterns
+- Detects flags in git changes
+- Generates QA checklists for PR descriptions
+
+### Test Analysis
+- Pattern-based error categorization (TypeError, AssertionError, etc.)
+- Extracts expected vs actual values from test failures
+- Provides specific file paths and line numbers for fixes
+
+### PR Descriptions
+- Analyzes git changes to generate content
+- Detects breaking changes and API modifications
+- Uses project PR templates when available
 
 ---
 
@@ -130,8 +118,8 @@ ServiceContainer
 │   ├── TestExecutionService    // Test running with progress monitoring
 │   ├── ProjectSelectionService // Project discovery & selection
 │   └── PostTestActionService   // Simplified post-test actions (3 core actions)
-├── Phase 3.2.0 - Simplified Services
-│   ├── TestAnalysisHelper      // Pattern-based test failure analysis
+├── Phase 3.4.0 - Enhanced Services
+│   ├── TestAnalysisHelper      // Enhanced pattern-based analysis with context extraction
 │   ├── RealTimeTestMonitor     // Live test execution monitoring
 │   └── NativeTestRunner        // Pure TypeScript test execution
 ├── Phase 2.0+ Modules
@@ -154,24 +142,25 @@ ServiceContainer
 
 ---
 
-## 🚀 **Quick Start**
+## Installation
 
-### **Installation**
-1. Install from VSCode Marketplace or package manually
-2. Open a workspace with `project.json` files (Nx, Angular, etc.)
-3. Press `Cmd+Shift+P` and run `AI Context Util: Run Affected Tests`
+1. Install the extension in VSCode
+2. Open a workspace with test files
+3. Use `Cmd+Shift+P` → "AI Context Util: Run Affected Tests"
 
-### **Basic Usage**
-1. **Quick Test**: `Cmd+Shift+P` → "AI Context Util: Run Affected Tests"
-2. **Select from Menu**: Choose "Test Affected Projects" for smart detection
-3. **Browse Projects**: Choose "Select Project" to see all available projects
+## Usage
 
-### **Keyboard Shortcuts**
-- `Ctrl+Shift+T` / `Cmd+Shift+T` - Run Affected Tests (main menu)
-- `Ctrl+Shift+R` / `Cmd+Shift+R` - **NEW!** Re-Run Project Tests (from context)
-- `Ctrl+Shift+G` / `Cmd+Shift+G` - Test Updated Files (git affected)
-- `Ctrl+Shift+W` / `Cmd+Shift+W` - Toggle File Watcher
-- `Ctrl+Shift+C` / `Cmd+Shift+C` - Clear Test Cache
+**Commands:**
+- `Ctrl+Shift+T` / `Cmd+Shift+T` - Run Affected Tests
+- `Ctrl+Shift+R` / `Cmd+Shift+R` - Re-Run Tests
+- `Ctrl+Shift+G` / `Cmd+Shift+G` - Test Updated Files
+- `Ctrl+Shift+C` / `Cmd+Shift+C` - Clear Cache
+
+**Output Files:**
+- `.github/instructions/ai-utilities-context/ai-debug-context.txt` - Test context
+- `.github/instructions/ai-utilities-context/pr-description.txt` - PR descriptions
+- `.github/instructions/ai-utilities-context/test-output.txt` - Raw test output
+- `.github/instructions/ai-utilities-context/diff.txt` - Git changes
 
 ---
 
@@ -313,7 +302,14 @@ Create `.aiDebugContext.yml` in your workspace root for custom test commands and
 
 ## 🚀 **What's New in V3**
 
-### **Phase 2.2 - Enhanced User Experience** ⭐ **CURRENT**
+### **Phase 3.4.0 - Enhanced AI Context Generation** ⭐ **CURRENT**
+- ✅ **Streamlined Context Generation**: Complete, focused AI context with all relevant information
+- ✅ **Multi-System Feature Flag Detection**: Supports 10+ flag systems (FlipperService, LaunchDarkly, etc.)
+- ✅ **Enhanced Test Analysis**: Specific error patterns with context extraction
+- ✅ **Intelligent PR Descriptions**: Based on actual git changes, not templates
+- ✅ **Pattern-Based Fixes**: Concrete code suggestions with file paths and line numbers
+
+### **Phase 3.2.0 - Service Simplification**
 - ✅ **Animated Status Bar**: Braille-pattern spinner animation during test execution
 - ✅ **Copilot Integration**: Automatic paste to Copilot Chat with analysis instruction
 - ✅ **PR Template Support**: Reads and uses project-specific `.github/PULL_REQUEST_TEMPLATE.md`

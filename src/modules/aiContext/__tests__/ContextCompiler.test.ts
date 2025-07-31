@@ -66,6 +66,8 @@ describe('ContextCompiler - Phase 2.1 Legacy Format Matching', () => {
             expect(content).toContain('STATUS: ❌ TESTS FAILING');
             expect(content).toContain('FOCUS: General debugging');
             expect(content).toContain('TIMESTAMP:');
+            // Workspace technology stack section may not appear in test environment without package.json
+            // expect(content).toContain('🔧 WORKSPACE TECHNOLOGY STACK');
         });
 
         test('should generate analysis request section for failing tests', async () => {
@@ -80,15 +82,16 @@ describe('ContextCompiler - Phase 2.1 Legacy Format Matching', () => {
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify exact legacy analysis request format for failing tests
+            // Verify new format with output specifications
             expect(content).toContain('🎯 ANALYSIS REQUEST');
-            expect(content).toContain('Please analyze this context and provide:');
-            expect(content).toContain('1. 🔍 ROOT CAUSE ANALYSIS');
-            expect(content).toContain('2. 🛠️ CONCRETE FIXES (PRIORITY 1)');
-            expect(content).toContain('3. 🧪 EXISTING TEST FIXES (PRIORITY 1)');
-            expect(content).toContain('4. 🚀 IMPLEMENTATION GUIDANCE (PRIORITY 1)');
-            expect(content).toContain('5. ✨ NEW TEST SUGGESTIONS (PRIORITY 2 - AFTER FIXES)');
-            expect(content).toContain('NOTE: Focus on items 1-4 first to get tests passing, then implement item 5');
+            expect(content).toContain('FAILING TESTS - IMMEDIATE FIXES NEEDED:');
+            expect(content).toContain('**RESPONSE FORMAT:**');
+            expect(content).toContain('## Fix #[N]: [Brief description]');
+            expect(content).toContain('**File:** src/path/to/file.ts');
+            expect(content).toContain('**Line:** [line number]');
+            expect(content).toContain('// Replace this:');
+            expect(content).toContain('// With this:');
+            expect(content).toContain('Provide fixes in this format for all errors shown below.');
         });
 
         test('should generate different analysis request for passing tests', async () => {
@@ -103,23 +106,28 @@ describe('ContextCompiler - Phase 2.1 Legacy Format Matching', () => {
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify analysis request format for passing tests
+            // Verify new format for passing tests
             expect(content).toContain('STATUS: ✅ TESTS PASSING');
-            expect(content).toContain('1. 🔍 CODE QUALITY ANALYSIS');
-            expect(content).toContain('2. 🎭 MOCK DATA VALIDATION (CRITICAL)');
-            expect(content).toContain('3. 🧪 TEST COVERAGE ANALYSIS');
-            expect(content).toContain('4. 🚀 ENHANCEMENT RECOMMENDATIONS');
-            expect(content).toContain('5. 🛡️ ROBUSTNESS IMPROVEMENTS');
+            // Workspace technology stack section may not appear in test environment without package.json
+            // expect(content).toContain('🔧 WORKSPACE TECHNOLOGY STACK');
+            expect(content).toContain('PASSING TESTS - CODE REVIEW NEEDED:');
+            expect(content).toContain('**RESPONSE FORMAT:**');
+            expect(content).toContain('## Code Quality Review');
+            expect(content).toContain('### 🔍 Issues Found:');
+            expect(content).toContain('### 🧪 Missing Test Coverage:');
+            expect(content).toContain('### 🔒 Security Concerns:');
+            expect(content).toContain('### 🔗 Integration Tests:');
+            expect(content).toContain('Use this exact structure for consistency.');
         });
 
-        test('should include test results analysis section', async () => {
-            const mockTestOutput = `=================================================================
-🤖 TEST ANALYSIS REPORT
-=================================================================
+        test('should include test execution details section', async () => {
+            const mockTestOutput = `Test Suites: 3 failed, 2 passed, 5 total
+Tests: 8 failed, 47 passed, 55 total
+Time: 12.456s
 
-COMMAND: yarn nx test my-project
-EXIT CODE: 1
-STATUS: ❌ FAILED`;
+FAIL src/user/user.service.spec.ts
+  ● UserService › should validate user email
+    TypeError: Cannot read property 'email' of undefined`;
 
             (fs.promises.readFile as jest.Mock)
                 .mockResolvedValueOnce(null) // no diff
@@ -129,32 +137,35 @@ STATUS: ❌ FAILED`;
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify test results section matches legacy format
-            expect(content).toContain('🧪 TEST RESULTS ANALYSIS');
-            expect(content).toContain(mockTestOutput);
+            // Verify test execution details section
+            expect(content).toContain('🧪 TEST EXECUTION DETAILS');
+            expect(content).toContain('Test Suites: 3 failed, 2 passed, 5 total');
+            expect(content).toContain('TypeError: Cannot read property \'email\' of undefined');
         });
 
-        test('should include code quality results section', async () => {
+        test('should include specific changes made section', async () => {
+            const mockDiff = `diff --git a/src/user/user.service.ts b/src/user/user.service.ts
++  validateUserEmail(email: string): boolean {
+-  validateUser(userData: any): boolean {`;
+            
             (fs.promises.readFile as jest.Mock)
-                .mockResolvedValueOnce('mock diff')
+                .mockResolvedValueOnce(mockDiff)
                 .mockResolvedValueOnce('mock test output');
 
             await compiler.compileContext('debug', true);
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify code quality section matches legacy format
-            expect(content).toContain('🔧 CODE QUALITY RESULTS');
-            expect(content).toContain('📋 LINTING RESULTS:');
-            expect(content).toContain('✨ FORMATTING RESULTS:');
-            expect(content).toContain('🚀 PUSH READINESS:');
-            expect(content).toContain('✅ READY TO PUSH');
-            expect(content).toContain('• Tests: Passing ✅');
-            expect(content).toContain('• Lint: Clean ✅');
-            expect(content).toContain('• Format: Applied ✅');
+            // Verify specific changes section
+            expect(content).toContain('📋 SPECIFIC CHANGES MADE');
+            expect(content).toContain('Files changed:');
+            expect(content).toContain('Lines added:');
+            expect(content).toContain('Lines removed:');
+            expect(content).toContain('Modified files:');
+            expect(content).toContain('• src/user/user.service.ts');
         });
 
-        test('should show not ready status for failing tests', async () => {
+        test('should show failing status in header', async () => {
             (fs.promises.readFile as jest.Mock)
                 .mockResolvedValueOnce('mock diff')
                 .mockResolvedValueOnce('mock test output');
@@ -163,21 +174,16 @@ STATUS: ❌ FAILED`;
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify not ready status for failing tests
-            expect(content).toContain('⚠️  NOT READY - Issues need resolution:');
-            expect(content).toContain('• Tests: Failing ❌');
-            expect(content).toContain('• Lint: Pending ⚠️');
-            expect(content).toContain('• Format: Pending ⚠️');
+            // Verify failing status in header
+            expect(content).toContain('STATUS: ❌ TESTS FAILING');
+            expect(content).toContain('FAILING TESTS - IMMEDIATE FIXES NEEDED:');
         });
 
-        test('should include code changes analysis section', async () => {
-            const mockDiff = `=================================================================
-🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
-=================================================================
-
-COMMAND: git diff (smart detection)
-TIMESTAMP: 7/26/2025, 12:00:00 PM
-BRANCH: main`;
+        test('should include code changes with focused diff', async () => {
+            const mockDiff = `diff --git a/src/user/user.service.ts b/src/user/user.service.ts
+@@ -38,8 +38,8 @@ export class UserService {
+-  validateUser(userData: any): boolean {
++  validateUserEmail(email: string): boolean {`;
 
             (fs.promises.readFile as jest.Mock)
                 .mockResolvedValueOnce(mockDiff)
@@ -187,9 +193,10 @@ BRANCH: main`;
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify code changes section includes diff
-            expect(content).toContain('📋 CODE CHANGES ANALYSIS');
-            expect(content).toContain(mockDiff);
+            // Verify specific changes section with focused diff
+            expect(content).toContain('📋 SPECIFIC CHANGES MADE');
+            expect(content).toContain('=== src/user/user.service.ts ===');
+            expect(content).toContain('@@ -38,8 +38,8 @@');
         });
 
         test('should handle missing diff gracefully', async () => {
@@ -202,13 +209,11 @@ BRANCH: main`;
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
             // Verify handling of missing diff
-            expect(content).toContain('ℹ️  No recent code changes detected');
-            expect(content).toContain('This suggests the test failures may be due to:');
-            expect(content).toContain('• Environment or configuration issues');
-            expect(content).toContain('• Dependencies or version conflicts');
+            expect(content).toContain('No code changes detected in current commit.');
+            expect(content).toContain('Tests failing without changes - likely environment/setup issue.');
         });
 
-        test('should include AI assistant guidance section', async () => {
+        test('should include analysis focus section', async () => {
             (fs.promises.readFile as jest.Mock)
                 .mockResolvedValueOnce('mock diff')
                 .mockResolvedValueOnce('mock test output');
@@ -217,15 +222,14 @@ BRANCH: main`;
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify AI guidance section matches legacy format
-            expect(content).toContain('🚀 AI ASSISTANT GUIDANCE');
-            expect(content).toContain('This context file is optimized for AI analysis with:');
-            expect(content).toContain('• Structured failure information for easy parsing');
-            expect(content).toContain('• Code changes correlated with test failures');
-            expect(content).toContain('• Clear focus areas for targeted analysis');
-            expect(content).toContain('• Actionable fix categories for systematic resolution');
-            expect(content).toContain('Context file size:');
-            expect(content).toContain('lines (optimized for AI processing)');
+            // Verify analysis focus section
+            expect(content).toContain('🎯 ANALYSIS FOCUS');
+            expect(content).toContain('This context provides:');
+            expect(content).toContain('• Specific test failures with error messages');
+            expect(content).toContain('• Actual code changes with file paths and line numbers');
+            expect(content).toContain('• Focused prompts for actionable analysis');
+            expect(content).toContain('• Clear priority: fix failing tests first, enhance passing tests second');
+            expect(content).toContain('Complete relevant information included - optimized for AI analysis');
         });
     });
 
@@ -254,6 +258,14 @@ BRANCH: main`;
             expect(content).toContain('FOCUS: PR description generation');
             expect(content).toContain('📝 PR DESCRIPTION CONTEXT - READY FOR GENERATION');
             expect(content).toContain('📝 PR GENERATION REQUEST');
+            expect(content).toContain('ANALYSIS STEPS:');
+            expect(content).toContain('OUTPUT FORMAT:');
+            expect(content).toContain('# Pull Request Title');
+            expect(content).toContain('## Summary');
+            expect(content).toContain('## Changes Made');
+            expect(content).toContain('## Feature Flags (if any detected)');
+            expect(content).toContain('## Testing');
+            expect(content).toContain('## Breaking Changes (if any)');
         });
         
         test('should use PR template when available', async () => {
@@ -268,9 +280,11 @@ BRANCH: main`;
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            expect(content).toContain('Please generate a PR description using the project\'s PR template format');
-            expect(content).toContain('### PR Template Format:');
+            expect(content).toContain('Analyze the git diff and test results below, then generate a PR description using the project template.');
+            expect(content).toContain('PR TEMPLATE TO FILL:');
             expect(content).toContain(mockTemplate);
+            expect(content).toContain('ANALYSIS REQUIRED:');
+            expect(content).toContain('OUTPUT FORMAT:');
         });
         
         test('should fallback to default format when no PR template exists', async () => {
@@ -283,9 +297,10 @@ BRANCH: main`;
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            expect(content).toContain('Please generate a comprehensive PR description that includes:');
-            expect(content).toContain('1. Clear summary of the changes made');
-            expect(content).not.toContain('### PR Template Format:');
+            expect(content).toContain('Analyze the git diff and test results below to generate a comprehensive PR description.');
+            expect(content).toContain('ANALYSIS STEPS:');
+            expect(content).toContain('OUTPUT FORMAT:');
+            expect(content).not.toContain('PR TEMPLATE TO FILL:');
         });
         
         test('should save pr-description to separate file', async () => {
@@ -302,7 +317,7 @@ BRANCH: main`;
     });
 
     describe('Mock Data Validation Focus', () => {
-        test('should include critical mock data validation section for passing tests', async () => {
+        test('should include structured response format for passing tests', async () => {
             (fs.promises.readFile as jest.Mock)
                 .mockResolvedValueOnce('diff')
                 .mockResolvedValueOnce('test output');
@@ -311,13 +326,13 @@ BRANCH: main`;
 
             const [, content] = (fs.promises.writeFile as jest.Mock).mock.calls[0];
 
-            // Verify mock data validation section
-            expect(content).toContain('2. 🎭 MOCK DATA VALIDATION (CRITICAL)');
-            expect(content).toContain('• Review all mock data to ensure it matches real-world data structures');
-            expect(content).toContain('• Verify mock objects have correct property names and types');
-            expect(content).toContain('• Check that mock data represents realistic scenarios');
-            expect(content).toContain('• Ensure mocked API responses match actual API contract');
-            expect(content).toContain('• Identify mock data that might be giving false positives');
+            // Verify structured response format for passing tests
+            expect(content).toContain('### 🔍 Issues Found:');
+            expect(content).toContain('### 🧪 Missing Test Coverage:');
+            expect(content).toContain('### 🔒 Security Concerns:');
+            expect(content).toContain('### 🔗 Integration Tests:');
+            expect(content).toContain('describe("New test suite", () => {');
+            expect(content).toContain('it("should test specific behavior", () => {');
         });
     });
 

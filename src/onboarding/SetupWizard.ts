@@ -149,14 +149,15 @@ export class SetupWizard {
                 }
             }
 
-            vscode.window.showInformationMessage(
+            const selection = await vscode.window.showInformationMessage(
                 '✅ AI Debug Context is ready! Try "Run Affected Tests" command.',
-                'Run First Test'
-            ).then(selection => {
-                if (selection === 'Run First Test') {
-                    vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
-                }
-            });
+                'Run First Test',
+                'Close'
+            );
+            
+            if (selection === 'Run First Test') {
+                vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
+            }
 
             return true;
         } catch (error) {
@@ -251,13 +252,8 @@ export class SetupWizard {
             '🍎 Welcome to AI Debug Context!\n\nThis will set up your macOS environment for lightning-fast test feedback. The setup takes about 2 minutes.',
             { modal: true },
             'Start Setup',
-            'Quick Setup',
             'Skip'
         );
-
-        if (selection === 'Quick Setup') {
-            return this.runQuickSetup();
-        }
 
         return selection === 'Start Setup';
     }
@@ -458,17 +454,19 @@ export class SetupWizard {
         const completedCount = this.steps.filter(s => s.status === 'completed').length;
         const totalCount = this.steps.length;
 
-        await vscode.window.showInformationMessage(
+        const selection = await vscode.window.showInformationMessage(
             `🎉 Setup Complete!\n\nCompleted ${completedCount}/${totalCount} steps. AI Debug Context is ready to use!`,
             'Run First Test',
-            'View Documentation'
-        ).then(selection => {
-            if (selection === 'Run First Test') {
-                vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
-            } else if (selection === 'View Documentation') {
-                vscode.env.openExternal(vscode.Uri.parse('https://github.com/your-repo/ai-debug-context#usage'));
-            }
-        });
+            'View Documentation',
+            'Close'
+        );
+
+        if (selection === 'Run First Test') {
+            vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
+        } else if (selection === 'View Documentation') {
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/your-repo/ai-debug-context#usage'));
+        }
+        // If 'Close' or no selection, just return and let the progress dialog close
     }
 
     private async showInstallationInstructions(recommendations: string[]): Promise<void> {

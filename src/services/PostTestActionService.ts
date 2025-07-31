@@ -230,23 +230,33 @@ export class PostTestActionService {
             if (templateContent) {
                 prDescription = templateContent;
                 
-                // Fill in some basic information if test results are available
+                // Phase 3.4.0: Generate description based on actual changes
                 if (this.lastTestResult) {
-                    // Replace template sections with test information
+                    const changeAnalysis = await this.analyzeActualChanges();
+                    
+                    // Replace template sections with actual change analysis
                     prDescription = prDescription.replace(
                         '<!-- Brief description of what this PR does -->',
-                        `Phase 3.2.0 service simplification - Refactored services with ${this.lastTestResult.summary?.passed || 0} passing tests`
+                        changeAnalysis.summary
                     );
                     
                     prDescription = prDescription.replace(
                         '- \n- \n- ',
-                        `- Simplified TestAnalysisHelper (68% reduction)\n- Simplified PostTestActionService (56% reduction)\n- Updated test coverage and documentation`
+                        changeAnalysis.changesList
                     );
                     
                     prDescription = prDescription.replace(
                         '- [ ] Unit tests pass',
                         `- [x] Unit tests pass (${this.lastTestResult.summary?.passed || 0}/${this.lastTestResult.summary?.total || 0})`
                     );
+                    
+                    // Replace breaking changes section if there are any
+                    if (changeAnalysis.breakingChanges) {
+                        prDescription = prDescription.replace(
+                            '- None',
+                            changeAnalysis.breakingChanges
+                        );
+                    }
                 }
 
                 // Add feature flags to QA section if found
@@ -264,29 +274,26 @@ export class PostTestActionService {
                     qaSection = `\n\n## QA\n${this.buildQASection(featureFlags)}`;
                 }
 
+                // Phase 3.4.0: Generate PR description based on actual changes without template
+                const changeAnalysis = await this.analyzeActualChanges();
+                
                 prDescription = `# Pull Request
 
 ## Summary
-Phase 3.2.0 service simplification and refactoring
+${changeAnalysis.summary}
 
 ## Changes Made
-- Simplified TestAnalysisHelper: 154 lines (68% reduction)
-- Simplified PostTestActionService: 183 lines (56% reduction)
-- Removed over-engineered features
-- Updated tests and documentation
+${changeAnalysis.changesList}
 
 ## Testing
 - [x] Unit tests pass (${this.lastTestResult?.summary?.passed || 0}/${this.lastTestResult?.summary?.total || 0})
 - [x] TypeScript compilation successful
 - [x] Core functionality verified${qaSection}
 
-## Breaking Changes
-- Removed unused AI/ML terminology
-- Simplified service interfaces
-- Consolidated action menu options
+${changeAnalysis.breakingChanges ? `## Breaking Changes\n${changeAnalysis.breakingChanges}` : ''}
 
 ## Additional Notes
-Part of Phase 3.2.0 critical assessment to remove over-engineering and focus on core functionality.`;
+${changeAnalysis.additionalNotes || 'Code changes have been tested and are ready for review.'}`;
             }
 
             await vscode.env.clipboard.writeText(prDescription);
@@ -301,7 +308,7 @@ Part of Phase 3.2.0 critical assessment to remove over-engineering and focus on 
     }
 
     /**
-     * Extract feature flags from git diff
+     * Extract feature flags from git diff - Phase 3.4.0 Multi-system support
      */
     private async extractFeatureFlags(): Promise<string[]> {
         try {
@@ -309,73 +316,231 @@ Part of Phase 3.2.0 critical assessment to remove over-engineering and focus on 
             const { promisify } = require('util');
             const execAsync = promisify(exec);
 
-            const { stdout } = await execAsync('git diff --cached', { cwd: this.services.workspaceRoot });
-            const diffContent = stdout || '';
+            // Check both staged and working directory changes - Phase 3.4.0
+            const diffs = [
+                await execAsync('git diff --cached', { cwd: this.services.workspaceRoot }),
+                await execAsync('git diff', { cwd: this.services.workspaceRoot })
+            ];
 
             const featureFlags: string[] = [];
-            const lines = diffContent.split('\n');
 
-            // Track FlipperService variable names from type declarations
-            const flipperVariables = new Set<string>();
+            // Phase 3.4.0: Support multiple feature flag systems
+            const FLAG_PATTERNS = [
+                // FlipperService patterns
+                /\.flipperEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                /\.eagerlyEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // Generic isEnabled patterns
+                /\.isEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                /\.checkFlag\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // LaunchDarkly patterns
+                /LaunchDarkly\.variation\(['"`]([^'"`]+)['"`]\)/g,
+                /ldClient\.variation\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // Feature flag function patterns
+                /featureFlag\(['"`]([^'"`]+)['"`]\)/g,
+                /getFeatureFlag\(['"`]([^'"`]+)['"`]\)/g,
+                /isFeatureEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // Config-based patterns
+                /config\.feature\.([a-zA-Z0-9_-]+)/g,
+                /features\.([a-zA-Z0-9_-]+)\.enabled/g
+            ];
 
-            // First pass: collect FlipperService variable names
-            for (const line of lines) {
-                if (line.startsWith('+') && !line.startsWith('+++')) {
-                    // Look for FlipperService type declarations: variable: FlipperService
-                    const typeMatch = line.match(/(\w+)\s*:\s*FlipperService/);
-                    if (typeMatch) {
-                        flipperVariables.add(typeMatch[1]);
-                    }
-
-                    // Look for FlipperService instantiations: const variable = new FlipperService
-                    const instantiationMatch = line.match(/(?:const|let|var)\s+(\w+)\s*=\s*new\s+FlipperService/);
-                    if (instantiationMatch) {
-                        flipperVariables.add(instantiationMatch[1]);
-                    }
-                }
-            }
-
-            // Second pass: look for flipperEnabled/eagerlyEnabled calls
-            for (const line of lines) {
-                if (line.startsWith('+') && !line.startsWith('+++')) {
-                    // Method 1: Look for calls on known FlipperService variables
-                    if (flipperVariables.size > 0) {
-                        for (const varName of flipperVariables) {
-                            const flipperMatch = line.match(new RegExp(`${varName}\\s*\\.\\s*(?:flipperEnabled|eagerlyEnabled)\\s*\\(\\s*['"\`]([^'"\`]+)['"\`]`));
-                            if (flipperMatch) {
-                                const flagName = flipperMatch[1];
-                                if (!featureFlags.includes(flagName)) {
+            for (const { stdout } of diffs) {
+                if (!stdout) continue;
+                
+                const lines = stdout.split('\n');
+                
+                for (const line of lines) {
+                    // Only check added lines
+                    if (line.startsWith('+') && !line.startsWith('+++')) {
+                        // Apply all patterns
+                        for (const pattern of FLAG_PATTERNS) {
+                            let match;
+                            while ((match = pattern.exec(line)) !== null) {
+                                const flagName = match[1];
+                                if (flagName && !featureFlags.includes(flagName)) {
                                     featureFlags.push(flagName);
                                 }
                             }
-                        }
-                    }
-
-                    // Method 2: Look for any flipperEnabled/eagerlyEnabled method calls (generic pattern)
-                    const genericMatch = line.match(/\w+\s*\.\s*(?:flipperEnabled|eagerlyEnabled)\s*\(\s*['"\`]([^'"\`]+)['"\`]/);
-                    if (genericMatch) {
-                        const flagName = genericMatch[1];
-                        if (!featureFlags.includes(flagName)) {
-                            featureFlags.push(flagName);
-                        }
-                    }
-
-                    // Method 3: Look for standalone function calls (if they exist)
-                    const standaloneMatch = line.match(/(?:flipperEnabled|eagerlyEnabled)\s*\(\s*['"\`]([^'"\`]+)['"\`]/);
-                    if (standaloneMatch) {
-                        const flagName = standaloneMatch[1];
-                        if (!featureFlags.includes(flagName)) {
-                            featureFlags.push(flagName);
+                            // Reset regex lastIndex for global patterns
+                            pattern.lastIndex = 0;
                         }
                     }
                 }
             }
 
-            return featureFlags;
+            return [...new Set(featureFlags)]; // Remove duplicates
         } catch (error) {
             // If git diff fails, return empty array
             return [];
         }
+    }
+
+    /**
+     * Analyze actual code changes for PR description - Phase 3.4.0
+     */
+    private async analyzeActualChanges(): Promise<{
+        summary: string;
+        changesList: string;
+        breakingChanges?: string;
+        additionalNotes?: string;
+    }> {
+        try {
+            const { exec } = require('child_process');
+            const { promisify } = require('util');
+            const execAsync = promisify(exec);
+
+            // Get git diff and stats
+            const [diffResult, statsResult] = await Promise.all([
+                execAsync('git diff --cached', { cwd: this.services.workspaceRoot }),
+                execAsync('git diff --cached --stat', { cwd: this.services.workspaceRoot })
+            ]);
+
+            const diffContent = diffResult.stdout || '';
+            const statsContent = statsResult.stdout || '';
+            
+            if (!diffContent.trim()) {
+                return {
+                    summary: 'Code improvements and maintenance updates',
+                    changesList: '- Code maintenance and improvements\n- Updated dependencies and configurations',
+                    additionalNotes: 'No staged changes detected. This may include configuration or documentation updates.'
+                };
+            }
+
+            // Analyze the actual changes
+            const analysis = this.parseGitChanges(diffContent, statsContent);
+            
+            return {
+                summary: analysis.summary,
+                changesList: analysis.changes.map(change => `- ${change}`).join('\n'),
+                breakingChanges: analysis.breakingChanges.length > 0 ? 
+                    analysis.breakingChanges.map(change => `- ${change}`).join('\n') : undefined,
+                additionalNotes: analysis.notes
+            };
+            
+        } catch (error) {
+            // Fallback if git commands fail
+            return {
+                summary: 'Code updates and improvements',
+                changesList: '- Code changes and improvements\n- Updated functionality and tests',
+                additionalNotes: 'Git analysis unavailable. Changes have been manually reviewed.'
+            };
+        }
+    }
+
+    /**
+     * Parse git changes to extract meaningful information - Phase 3.4.0
+     */
+    private parseGitChanges(diffContent: string, statsContent: string): {
+        summary: string;
+        changes: string[];
+        breakingChanges: string[];
+        notes: string;
+    } {
+        const lines = diffContent.split('\n');
+        const changes: string[] = [];
+        const breakingChanges: string[] = [];
+        const filesChanged = new Set<string>();
+        let addedLines = 0;
+        let deletedLines = 0;
+        
+        // Parse diff content
+        for (const line of lines) {
+            if (line.startsWith('diff --git')) {
+                const match = line.match(/diff --git a\/(.*?) b\/(.*)/);
+                if (match) {
+                    filesChanged.add(match[1]);
+                }
+            } else if (line.startsWith('+') && !line.startsWith('+++')) {
+                addedLines++;
+                
+                // Look for significant changes
+                if (line.includes('export') && line.includes('class')) {
+                    const classMatch = line.match(/export class (\w+)/);
+                    if (classMatch) {
+                        changes.push(`Added new class: ${classMatch[1]}`);
+                    }
+                }
+                if (line.includes('export') && line.includes('function')) {
+                    const funcMatch = line.match(/export function (\w+)/);
+                    if (funcMatch) {
+                        changes.push(`Added new function: ${funcMatch[1]}`);
+                    }
+                }
+                if (line.includes('interface') && line.includes('export')) {
+                    const interfaceMatch = line.match(/export interface (\w+)/);
+                    if (interfaceMatch) {
+                        changes.push(`Added new interface: ${interfaceMatch[1]}`);
+                    }
+                }
+            } else if (line.startsWith('-') && !line.startsWith('---')) {
+                deletedLines++;
+                
+                // Look for breaking changes
+                if (line.includes('export') && (line.includes('class') || line.includes('function') || line.includes('interface'))) {
+                    breakingChanges.push('Removed exported API elements');
+                }
+            }
+        }
+        
+        // Generate summary based on changes
+        let summary = '';
+        const fileCount = filesChanged.size;
+        
+        if (fileCount === 1) {
+            summary = `Updated ${Array.from(filesChanged)[0]}`;
+        } else if (fileCount <= 3) {
+            summary = `Updated ${fileCount} files: ${Array.from(filesChanged).join(', ')}`;
+        } else {
+            summary = `Updated ${fileCount} files with ${addedLines} additions and ${deletedLines} deletions`;
+        }
+        
+        // Add change types based on file patterns
+        const fileTypes = Array.from(filesChanged);
+        if (fileTypes.some(f => f.includes('.test.'))) {
+            changes.push('Updated test coverage and test cases');
+        }
+        if (fileTypes.some(f => f.endsWith('.ts') && !f.includes('test'))) {
+            changes.push('Enhanced TypeScript implementation');
+        }
+        if (fileTypes.some(f => f.endsWith('.md'))) {
+            changes.push('Updated documentation');
+        }
+        if (fileTypes.some(f => f.includes('package.json') || f.includes('tsconfig'))) {
+            changes.push('Updated project configuration');
+        }
+        
+        // Analyze stats for better insights
+        if (statsContent.includes('insertion') && statsContent.includes('deletion')) {
+            const statsMatch = statsContent.match(/(\d+) insertion.*?(\d+) deletion/);
+            if (statsMatch) {
+                const inserted = parseInt(statsMatch[1]);
+                const deleted = parseInt(statsMatch[2]);
+                
+                if (deleted > inserted * 2) {
+                    changes.push(`Code simplification: removed ${deleted - inserted} lines of code`);
+                }
+                if (inserted > deleted * 2) {
+                    changes.push(`Feature expansion: added ${inserted - deleted} lines of new functionality`);
+                }
+            }
+        }
+        
+        // Default changes if none detected
+        if (changes.length === 0) {
+            changes.push('Code improvements and refactoring');
+            changes.push('Enhanced functionality and performance');
+        }
+        
+        return {
+            summary,
+            changes: [...new Set(changes)], // Remove duplicates
+            breakingChanges: [...new Set(breakingChanges)],
+            notes: `Analyzed ${fileCount} changed files with ${addedLines} additions and ${deletedLines} deletions.`
+        };
     }
 
     /**

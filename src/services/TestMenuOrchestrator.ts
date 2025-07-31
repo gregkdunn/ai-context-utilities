@@ -674,15 +674,17 @@ Please be specific and actionable in your suggestions. Include code examples whe
         try {
             this.services.updateStatusBar('Loading workspace info...', 'yellow');
             
-            const [projects, frameworks] = await Promise.all([
+            const [projects, frameworks, workspaceAnalysis] = await Promise.all([
                 this.services.projectDiscovery.getAllProjects(),
-                this.services.configManager.getDetectedFrameworks()
+                this.services.configManager.getDetectedFrameworks(),
+                this.services.workspaceAnalyzer.getFormattedSummary()
             ]);
 
             const info = [
                 `Workspace: ${this.services.workspaceRoot}`,
                 `Projects found: ${projects.length}`,
                 `Frameworks detected: ${frameworks.map(f => f.name).join(', ') || 'None'}`,
+                ...workspaceAnalysis,
                 `File watcher: ${this.services.fileWatcherActive ? 'Active' : 'Inactive'}`,
                 `Extension: Ready`
             ].join('\n');

@@ -1,4 +1,4 @@
-# Development Guide - AI Debug Context V3
+# Development Guide - AI Debug Context V3.4.0
 
 ## 🚀 Quick Start
 

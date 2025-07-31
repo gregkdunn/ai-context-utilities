@@ -104,7 +104,7 @@ describe('TestAnalysisHelper', () => {
             const analysis = await assistant.analyze(failureWithNullError, 'test output');
 
             expect(analysis).toBeDefined();
-            expect(analysis.summary).toContain('Standard test failure detected');
+            expect(analysis.summary).toContain('Test failure:');
         });
 
         test('should provide code change suggestions for common patterns', async () => {
@@ -204,25 +204,25 @@ describe('TestAnalysisHelper', () => {
         test('should parse TypeError correctly', () => {
             const result = assistant.parseErrorMessage('TypeError: Cannot read property');
             expect(result.type).toBe('Type Error');
-            expect(result.details).toBe('Variable type mismatch detected');
+            expect(result.details).toBe('Property access on null/undefined');
         });
 
         test('should parse ReferenceError correctly', () => {
             const result = assistant.parseErrorMessage('ReferenceError: variable is not defined');
             expect(result.type).toBe('Reference Error');
-            expect(result.details).toBe('Undefined variable or function');
+            expect(result.details).toBe('variable is not defined');
         });
 
         test('should parse AssertionError correctly', () => {
             const result = assistant.parseErrorMessage('AssertionError: Expected true but got false');
             expect(result.type).toBe('Assertion Error');
-            expect(result.details).toBe('Test expectation not met');
+            expect(result.details).toBe('Expected true but got false');
         });
 
         test('should handle unknown errors', () => {
             const result = assistant.parseErrorMessage('Some unknown error');
             expect(result.type).toBe('General Error');
-            expect(result.details).toBe('Standard test failure pattern');
+            expect(result.details).toBe('Some unknown error');
         });
     });
 

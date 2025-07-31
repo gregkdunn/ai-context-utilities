@@ -293,7 +293,7 @@ describe('Service Integration Tests', () => {
                 // Expected
             }
 
-            expect(mockServices.updateStatusBar).toHaveBeenCalledWith('❌ Cache error', 'red');
+            expect(mockServices.updateStatusBar).toHaveBeenCalledWith('❌ Error', 'red');
         });
     });
 });

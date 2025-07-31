@@ -429,8 +429,9 @@ describe('PostTestActionService', () => {
             expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
                 expect.stringContaining('# Pull Request')
             );
+            // Phase 3.4.0: Now generates actual change analysis instead of hardcoded text
             expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
-                expect.stringContaining('Phase 3.2.0 service simplification')
+                expect.stringContaining('Code improvements and maintenance updates')
             );
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 'PR description copied to clipboard using project template!'
@@ -461,8 +462,9 @@ describe('PostTestActionService', () => {
 
             await service.showPostTestActions(testResult, {});
 
+            // Phase 3.4.0: Now generates actual change analysis instead of hardcoded text
             expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
-                expect.stringContaining('Phase 3.2.0 service simplification')
+                expect.stringContaining('Code improvements and maintenance updates')
             );
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
                 'PR description copied to clipboard using default format!'
@@ -473,20 +475,31 @@ describe('PostTestActionService', () => {
             const fs = require('fs');
             fs.existsSync.mockReturnValue(false);
             
-            // Mock git diff with feature flags
+            // Mock git diff with multiple feature flag systems - Phase 3.4.0
             const childProcess = require('child_process');
             (childProcess.exec as jest.Mock).mockImplementation((cmd: any, opts: any, callback: any) => {
                 if (cmd === 'git diff --cached') {
                     callback(null, { 
                         stdout: `diff --git a/src/service.ts b/src/service.ts
-+    const flipper: FlipperService = new FlipperService();
-+    if (flipper.flipperEnabled('new-feature-flag')) {
-+        // new feature code
++    if (flipper.flipperEnabled('flipper-flag')) {
++        // flipper feature code
 +    }
-+    if (someService.eagerlyEnabled('eager-flag')) {
-+        // eager feature
++    if (LaunchDarkly.variation('launchdarkly-flag')) {
++        // LaunchDarkly feature
++    }
++    if (featureFlag('generic-flag')) {
++        // generic feature flag
 +    }`,
                         stderr: '' 
+                    });
+                } else if (cmd === 'git diff') {
+                    callback(null, {
+                        stdout: `diff --git a/src/other.ts b/src/other.ts
++    const enabled = config.feature.config-flag;
++    if (someService.isEnabled('service-flag')) {
++        // service feature
++    }`,
+                        stderr: ''
                     });
                 } else {
                     callback(null, { stdout: '', stderr: '' });
@@ -516,13 +529,16 @@ describe('PostTestActionService', () => {
             const clipboardCall = (vscode.env.clipboard.writeText as jest.Mock).mock.calls[0][0];
             expect(clipboardCall).toContain('## QA');
             expect(clipboardCall).toContain('**Feature Flags to Test:**');
-            expect(clipboardCall).toContain('`new-feature-flag` - Test with flag enabled');
-            expect(clipboardCall).toContain('`new-feature-flag` - Test with flag disabled');
-            expect(clipboardCall).toContain('`eager-flag` - Test with flag enabled');
-            expect(clipboardCall).toContain('`eager-flag` - Test with flag disabled');
+            
+            // Should detect multiple flag systems - Phase 3.4.0
+            expect(clipboardCall).toContain('`flipper-flag` - Test with flag enabled');
+            expect(clipboardCall).toContain('`launchdarkly-flag` - Test with flag enabled');
+            expect(clipboardCall).toContain('`generic-flag` - Test with flag enabled');
+            expect(clipboardCall).toContain('`config-flag` - Test with flag enabled');
+            expect(clipboardCall).toContain('`service-flag` - Test with flag enabled');
             
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'PR description copied to clipboard using default format (2 feature flags detected)!'
+                'PR description copied to clipboard using default format (5 feature flags detected)!'
             );
         });
 

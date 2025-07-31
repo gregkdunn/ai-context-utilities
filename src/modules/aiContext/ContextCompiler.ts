@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { WorkspaceAnalyzer } from '../../utils/WorkspaceAnalyzer';
 
 export interface ContextCompilerOptions {
     workspaceRoot: string;
@@ -105,6 +106,16 @@ export class ContextCompiler {
         const timestamp = new Date().toLocaleString();
         const workspace = path.basename(this.options.workspaceRoot);
 
+        // Get workspace analysis for better Copilot context
+        let workspaceInfo: string[] = [];
+        try {
+            const workspaceAnalyzer = new WorkspaceAnalyzer(this.options.workspaceRoot);
+            workspaceInfo = await workspaceAnalyzer.getFormattedSummary();
+        } catch (error) {
+            // If workspace analysis fails, continue without it
+            this.options.outputChannel.appendLine(`⚠️ Workspace analysis failed: ${error}`);
+        }
+
         // Legacy aiDebug.zsh format with exact structure and emojis
         // This header format is critical for AI recognition and processing
         // Customize header based on context type
@@ -130,168 +141,330 @@ export class ContextCompiler {
             `STATUS: ${testPassed ? '✅ TESTS PASSING' : '❌ TESTS FAILING'}`,
             `FOCUS: ${type === 'debug' ? 'General debugging' : type === 'new-tests' ? 'Test coverage analysis' : 'PR description generation'}`,
             `TIMESTAMP: ${timestamp}`,
-            '',
+            ''
+        ];
+
+        // Add workspace technology stack information for Copilot context
+        if (workspaceInfo.length > 0) {
+            sections.push(
+                '=================================================================',
+                '🔧 WORKSPACE TECHNOLOGY STACK - USE THESE FRAMEWORKS ONLY',
+                '=================================================================',
+                'IMPORTANT: All code suggestions must use the frameworks detected in this workspace.',
+                'Do not recommend alternatives. Use only the technologies listed below:',
+                '',
+                ...workspaceInfo.map(info => `• ${info}`),
+                '',
+                '⚠️  DO NOT suggest different frameworks (e.g., if Jest is detected, do not suggest Jasmine)',
+                '⚠️  DO NOT recommend changing the existing tech stack',
+                '⚠️  USE the detected versions when providing code examples',
+                ''
+            );
+        }
+
+        sections.push(
             '=================================================================',
             analysisHeader,
             '=================================================================',
             '',
             analysisIntro,
             ''
-        ];
+        );
 
-        // Add specific analysis requests based on context type
+        // Add specific analysis requests based on context type - Phase 3.4.0 focused prompts
         if (type === 'pr-description') {
-            // Special handling for PR description generation
             const prPrompt = await this.getPRDescriptionPrompt();
             sections.push(prPrompt);
         } else if (testPassed) {
+            // Focused passing test analysis with output format
             sections.push(
-                '1. 🔍 CODE QUALITY ANALYSIS',
-                '   • Review code changes for potential improvements',
-                '   • Identify any code smells or anti-patterns',
-                '   • Check for performance optimization opportunities',
+                'PASSING TESTS - CODE REVIEW NEEDED:',
                 '',
-                '2. 🎭 MOCK DATA VALIDATION (CRITICAL)',
-                '   • Review all mock data to ensure it matches real-world data structures',
-                '   • Verify mock objects have correct property names and types',
-                '   • Check that mock data represents realistic scenarios (not just minimal passing data)',
-                '   • Ensure mocked API responses match actual API contract',
-                '   • Validate that test data covers edge cases and realistic variations',
-                '   • Identify mock data that might be giving false positives',
+                'Review the code changes and test results below for:',
+                '1. Code quality issues in changed files',
+                '2. Missing test coverage for new functionality',
+                '3. Security concerns and performance issues',
+                '4. Integration testing gaps',
                 '',
-                '3. 🧪 TEST COVERAGE ANALYSIS',
-                '   • Missing test coverage for new functionality',
-                '   • Edge cases that should be tested',
-                '   • Additional test scenarios to prevent regressions',
-                '   • Test improvements for better maintainability',
-                '   • File-specific coverage analysis (diff coverage vs total coverage)',
+                '**RESPONSE FORMAT:**',
+                'Organize your response using these sections:',
                 '',
-                '4. 🚀 ENHANCEMENT RECOMMENDATIONS',
-                '   • Code quality improvements',
-                '   • Better error handling or validation',
-                '   • Documentation or typing improvements',
-                '   • Performance optimizations',
+                '```',
+                '## Code Quality Review',
                 '',
-                '5. 🛡️ ROBUSTNESS IMPROVEMENTS',
-                '   • Potential edge cases to handle',
-                '   • Error scenarios to test',
-                '   • Input validation opportunities',
-                '   • Defensive programming suggestions'
+                '### 🔍 Issues Found:',
+                '**File:** src/path/to/file.ts (lines X-Y)',
+                '- Issue description with specific concern',
+                '- Recommended fix with code example',
+                '',
+                '### 🧪 Missing Test Coverage:',
+                '**File:** src/path/to/test.spec.ts',
+                '```typescript',
+                'describe("New test suite", () => {',
+                '  it("should test specific behavior", () => {',
+                '    // Test implementation',
+                '  });',
+                '});',
+                '```',
+                '',
+                '### 🔒 Security Concerns:',
+                '**File:** src/path/to/file.ts (line X)',
+                '- Security issue description',
+                '- Mitigation code example',
+                '',
+                '### 🔗 Integration Tests:',
+                '- Test scenario 1: Expected behavior',
+                '- Test scenario 2: Expected behavior',
+                '```',
+                '',
+                'Use this exact structure for consistency.',
+                '',
+                '**FRAMEWORK REQUIREMENTS:**',
+                '- Use ONLY the frameworks detected in the workspace technology stack above',
+                '- Follow the existing patterns and conventions in the codebase',
+                '- Match the detected versions when suggesting code examples'
             );
         } else {
+            // Focused failing test analysis with output format
             sections.push(
-                '1. 🔍 ROOT CAUSE ANALYSIS',
-                '   • What specific changes are breaking the tests?',
-                '   • Are there type mismatches or interface changes?',
-                '   • Did method signatures change?',
+                'FAILING TESTS - IMMEDIATE FIXES NEEDED:',
                 '',
-                '2. 🛠️ CONCRETE FIXES (PRIORITY 1)',
-                '   • Exact code changes needed to fix failing tests',
-                '   • Updated test expectations if business logic changed',
-                '   • Type definitions or interface updates required',
+                'Analyze the test failures below and provide fixes for:',
+                '1. TypeScript compilation errors',
+                '2. Test assertion failures', 
+                '3. Missing imports or dependencies',
+                '4. Method signature changes',
                 '',
-                '3. 🧪 EXISTING TEST FIXES (PRIORITY 1)',
-                '   • Fix existing failing tests first',
-                '   • Update test assertions to match new behavior',
-                '   • Fix test setup or mocking issues',
+                '**RESPONSE FORMAT:**',
+                'For each fix, use this exact format:',
                 '',
-                '4. 🚀 IMPLEMENTATION GUIDANCE (PRIORITY 1)',
-                '   • Order of fixes (dependencies first)',
-                '   • Potential side effects to watch for',
-                '   • Getting tests green is the immediate priority',
+                '```',
+                '## Fix #[N]: [Brief description]',
+                '**File:** src/path/to/file.ts',
+                '**Line:** [line number]',
+                '**Issue:** [What\'s wrong]',
+                '**Solution:**',
+                '```typescript',
+                '// Replace this:',
+                '[old code]',
                 '',
-                '5. ✨ NEW TEST SUGGESTIONS (PRIORITY 2 - AFTER FIXES)',
-                '   • Missing test coverage for new functionality',
-                '   • Edge cases that should be tested',
-                '   • Additional test scenarios to prevent regressions',
-                '   • Test improvements for better maintainability',
-                '   • File-specific coverage analysis (diff coverage vs total coverage)',
-                '   • Specify files and line numbers where new tests should be added.',
+                '// With this:',
+                '[new code]',
+                '```',
+                '**Explanation:** [Why this fixes the issue]',
+                '```',
                 '',
-                'NOTE: Focus on items 1-4 first to get tests passing, then implement item 5'
+                'Provide fixes in this format for all errors shown below.',
+                '',
+                '**FRAMEWORK REQUIREMENTS:**',
+                '- Use ONLY the frameworks detected in the workspace technology stack above',
+                '- Do not suggest switching test frameworks (e.g., if Jest is detected, fix Jest issues, don\'t suggest Jasmine)',
+                '- Follow existing test patterns and imports in the codebase',
+                '- Use the exact versions detected in the workspace'
             );
         }
 
         sections.push('', '');
 
-        // Add test results analysis section
+        // Add focused test results section - Phase 3.4.0
+        if (testOutput && testOutput.trim()) {
+            sections.push(
+                '==================================================================',
+                '🧪 TEST EXECUTION DETAILS',
+                '==================================================================',
+                ''
+            );
+            
+            // Extract key information from test output
+            const testSummary = this.extractTestSummary(testOutput);
+            if (testSummary) {
+                sections.push(testSummary, '');
+            }
+            
+            // Include actual test output but keep it focused
+            const focusedOutput = this.getFocusedTestOutput(testOutput, testPassed);
+            sections.push(focusedOutput);
+            
+            sections.push('', '');
+        }
+
+        // Add specific code changes analysis - Phase 3.4.0 focused
         sections.push(
             '==================================================================',
-            '🧪 TEST RESULTS ANALYSIS',
+            '📋 SPECIFIC CHANGES MADE',
             '==================================================================',
             ''
         );
 
-        if (testOutput) {
-            sections.push(testOutput);
-        } else {
-            sections.push('❌ No test results available');
-        }
-
-        sections.push('', '');
-
-        // Add code quality results (simplified for Phase 2.1)
-        sections.push(
-            '==================================================================',
-            '🔧 CODE QUALITY RESULTS',
-            '==================================================================',
-            '',
-            '📋 LINTING RESULTS:',
-            testPassed ? '✅ Status: PASSED' : '⚠️  Status: NEEDS REVIEW',
-            testPassed ? '• All linting rules satisfied' : '• Review linting after test fixes',
-            '',
-            '✨ FORMATTING RESULTS:',
-            testPassed ? '✅ Status: COMPLETED' : '⚠️  Status: PENDING',
-            testPassed ? '• Code formatting applied successfully' : '• Formatting will run after tests pass',
-            '',
-            '🚀 PUSH READINESS:',
-            testPassed ? '✅ READY TO PUSH' : '⚠️  NOT READY - Issues need resolution:',
-            testPassed ? '• Tests: Passing ✅' : '• Tests: Failing ❌',
-            testPassed ? '• Lint: Clean ✅' : '• Lint: Pending ⚠️',
-            testPassed ? '• Format: Applied ✅' : '• Format: Pending ⚠️'
-        );
-
-        sections.push('', '');
-
-        // Add git changes analysis
-        sections.push(
-            '==================================================================',
-            '📋 CODE CHANGES ANALYSIS',
-            '==================================================================',
-            ''
-        );
-
-        if (diff) {
-            sections.push(diff);
+        if (diff && diff.trim()) {
+            const changesSummary = this.extractChangesSummary(diff);
+            sections.push(changesSummary, '');
+            
+            // Include focused diff content
+            const focusedDiff = this.getFocusedDiff(diff);
+            sections.push(focusedDiff);
         } else {
             sections.push(
-                'ℹ️  No recent code changes detected',
+                'No code changes detected in current commit.',
                 '',
-                'This suggests the test failures may be due to:',
-                '• Environment or configuration issues',
-                '• Dependencies or version conflicts',
-                '• Test setup or teardown problems',
-                '• Race conditions or timing issues'
+                testPassed ? 
+                'Tests passing without changes - good for code review.' :
+                'Tests failing without changes - likely environment/setup issue.'
             );
         }
 
         sections.push('', '');
 
-        // Add final AI guidance (exact legacy format)
+        // Add final guidance - Phase 3.4.0 focused
         sections.push(
             '==================================================================',
-            '🚀 AI ASSISTANT GUIDANCE',
+            '🎯 ANALYSIS FOCUS',
             '==================================================================',
-            'This context file is optimized for AI analysis with:',
-            '• Structured failure information for easy parsing',
-            '• Code changes correlated with test failures',
-            '• Clear focus areas for targeted analysis',
-            '• Actionable fix categories for systematic resolution',
+            'This context provides:',
+            '• Specific test failures with error messages',
+            '• Actual code changes with file paths and line numbers',
+            '• Focused prompts for actionable analysis',
+            '• Clear priority: fix failing tests first, enhance passing tests second',
             '',
-            `Context file size: ${sections.length} lines (optimized for AI processing)`
+            `Complete relevant information included - optimized for AI analysis`
         );
 
         return sections.join('\n');
+    }
+
+    /**
+     * Extract focused test summary from test output - Phase 3.4.0
+     */
+    private extractTestSummary(testOutput: string): string | null {
+        const lines = testOutput.split('\n');
+        let summary = '';
+        
+        // Look for test summary patterns
+        for (const line of lines) {
+            if (line.includes('Test Suites:') || line.includes('Tests:') || 
+                line.includes('PASS') || line.includes('FAIL') ||
+                line.includes('passed') || line.includes('failed')) {
+                summary += line + '\n';
+            }
+        }
+        
+        return summary.trim() || null;
+    }
+
+    /**
+     * Extract focused test output - Phase 3.4.0
+     */
+    private getFocusedTestOutput(testOutput: string, testPassed: boolean): string {
+        const lines = testOutput.split('\n');
+        let focusedLines: string[] = [];
+        
+        if (!testPassed) {
+            // For failing tests, focus on errors and failures
+            let inErrorBlock = false;
+            for (const line of lines) {
+                if (line.includes('FAIL') || line.includes('Error:') || 
+                    line.includes('TypeError') || line.includes('ReferenceError') ||
+                    line.includes('AssertionError') || line.includes('Expected')) {
+                    inErrorBlock = true;
+                    focusedLines.push(line);
+                } else if (inErrorBlock && (line.startsWith('    ') || line.startsWith('\t'))) {
+                    focusedLines.push(line);
+                } else if (inErrorBlock && line.trim() === '') {
+                    focusedLines.push(line);
+                } else {
+                    inErrorBlock = false;
+                }
+                
+                // Include all relevant error information - no arbitrary limits
+            }
+        } else {
+            // For passing tests, include summaries, warnings, and performance info
+            for (const line of lines) {
+                if (line.includes('PASS') || line.includes('✓') || 
+                    line.includes('Warning') || line.includes('Deprecation') ||
+                    line.includes('Test Suites:') || line.includes('Tests:') ||
+                    line.includes('Time:') || line.includes('Snapshot') ||
+                    line.includes('Coverage') || line.includes('Slow test') ||
+                    line.includes('Memory') || line.includes('Performance') ||
+                    line.includes('Heap') || line.includes('TODO') ||
+                    line.includes('FIXME') || line.includes('console.')) {
+                    focusedLines.push(line);
+                }
+                // Include all relevant information that could help with code review
+            }
+        }
+        
+        // If no focused content found, include relevant portions filtering out noise
+        if (focusedLines.length === 0) {
+            const relevantLines = testOutput.split('\n').filter(line => 
+                line.trim() !== '' && 
+                !line.includes('npm WARN') && 
+                !line.includes('node_modules') &&
+                !line.startsWith('> ') // Remove npm script output headers
+            );
+            return relevantLines.join('\n');
+        }
+        
+        return focusedLines.join('\n');
+    }
+
+    /**
+     * Extract changes summary from diff - Phase 3.4.0
+     */
+    private extractChangesSummary(diff: string): string {
+        const lines = diff.split('\n');
+        let filesChanged = new Set<string>();
+        let addedLines = 0;
+        let deletedLines = 0;
+        
+        for (const line of lines) {
+            if (line.startsWith('diff --git')) {
+                const match = line.match(/diff --git a\/(.*) b\/(.*)/);
+                if (match) {
+                    filesChanged.add(match[1]);
+                }
+            } else if (line.startsWith('+') && !line.startsWith('+++')) {
+                addedLines++;
+            } else if (line.startsWith('-') && !line.startsWith('---')) {
+                deletedLines++;
+            }
+        }
+        
+        return [
+            `Files changed: ${filesChanged.size}`,
+            `Lines added: ${addedLines}`,
+            `Lines removed: ${deletedLines}`,
+            '',
+            'Modified files:',
+            ...Array.from(filesChanged).map(file => `• ${file}`)
+        ].join('\n');
+    }
+
+    /**
+     * Extract focused diff content - Phase 3.4.0
+     */
+    private getFocusedDiff(diff: string): string {
+        const lines = diff.split('\n');
+        let focusedLines: string[] = [];
+        let currentFile = '';
+        
+        for (const line of lines) {
+            if (line.startsWith('diff --git')) {
+                const match = line.match(/diff --git a\/(.*) b\/(.*)/);
+                if (match) {
+                    currentFile = match[1];
+                    focusedLines.push(`\n=== ${currentFile} ===`);
+                }
+            } else if (line.startsWith('@@')) {
+                focusedLines.push(line);
+            } else if (line.startsWith('+') || line.startsWith('-')) {
+                focusedLines.push(line);
+            }
+            
+            // Include all relevant changes - complete context is better than truncated
+        }
+        
+        return focusedLines.join('\n');
     }
 
     /**
@@ -336,19 +509,28 @@ export class ContextCompiler {
             return [
                 '## 📝 Pull Request Description Request',
                 '',
-                'Please generate a PR description using the project\'s PR template format below:',
+                'Analyze the git diff and test results below, then generate a PR description using the project template.',
                 '',
-                '### PR Template Format:',
+                '**ANALYSIS REQUIRED:**',
+                '1. Identify the main purpose of these changes from the git diff',
+                '2. List specific files changed and their functionality',
+                '3. Extract any feature flags found in the code changes',
+                '4. Identify any breaking changes or API modifications',
+                '5. Note the test results and coverage impact',
+                '',
+                '**PR TEMPLATE TO FILL:**',
                 '```',
                 prTemplate,
                 '```',
                 '',
-                'Instructions:',
-                '1. Fill in the template with information from the git diff and test results',
-                '2. Replace template placeholders with actual changes and details',
-                '3. Reference the passing tests in the testing section',
-                '4. Include any breaking changes or important considerations',
-                '5. Complete any checklists with appropriate checkmarks',
+                '**OUTPUT FORMAT:**',
+                'Return the completed template with:',
+                '- Summary based on actual code changes (not generic descriptions)',
+                '- Specific file changes with what each does',
+                '- Feature flags section if any flags detected in diff',
+                '- Breaking changes section if interface/API changes found',
+                '- Test results referenced with actual numbers from test output',
+                '- All placeholders replaced with real information',
                 ''
             ].join('\n');
         }
@@ -357,12 +539,45 @@ export class ContextCompiler {
         return [
             '## 📝 Pull Request Description Request',
             '',
-            'Please generate a comprehensive PR description that includes:',
-            '1. Clear summary of the changes made',
-            '2. Why these changes were necessary',
-            '3. How the changes have been tested (reference the passing tests)',
-            '4. Any potential impacts or considerations for reviewers',
-            '5. Checklist items if applicable',
+            'Analyze the git diff and test results below to generate a comprehensive PR description.',
+            '',
+            '**ANALYSIS STEPS:**',
+            '1. Examine the git diff to understand what was actually changed',
+            '2. Identify the main functionality being added/modified/removed',
+            '3. Extract any feature flags from the code changes',
+            '4. Detect breaking changes (interface modifications, method signature changes)',
+            '5. Note performance implications (new dependencies, heavy operations)',
+            '6. Reference actual test results and coverage numbers',
+            '',
+            '**OUTPUT FORMAT:**',
+            'Generate a PR description using this structure:',
+            '',
+            '```markdown',
+            '# Pull Request Title',
+            '',
+            '## Summary',
+            '[Specific description based on actual code changes]',
+            '',
+            '## Changes Made',
+            '- [Specific file]: [What changed and why]',
+            '- [Specific file]: [What changed and why]',
+            '',
+            '## Feature Flags (if any detected)',
+            '- `flag-name`: [Purpose and testing instructions]',
+            '',
+            '## Testing',
+            '- [X] Unit tests pass ([actual numbers from test output])',
+            '- [X] Integration tests pass',
+            '- [ ] Manual testing completed',
+            '',
+            '## Breaking Changes (if any)',
+            '- [Specific change]: [Migration instructions]',
+            '',
+            '## Additional Notes',
+            '[Performance implications, dependencies, etc.]',
+            '```',
+            '',
+            'Base all content on the actual git diff and test results provided below.',
             ''
         ].join('\n');
     }
