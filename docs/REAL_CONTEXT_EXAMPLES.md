@@ -69,9 +69,8 @@ Based on the test failures shown below, provide these specific fixes:
    → Test EmailValidator.getDomain() method functionality
 
 **RESPONSE FORMAT:**
-For each fix, provide your response in this exact format:
+For each fix, provide your response in this exact format (render as proper markdown):
 
-```
 ## Fix #1: [Brief description]
 **File:** src/path/to/file.ts
 **Line:** 42
@@ -85,7 +84,8 @@ old code here
 new code here
 ```
 **Explanation:** [Why this fixes the issue]
-```
+
+IMPORTANT: Do not wrap the entire response in code blocks. Use proper markdown formatting so headers (##) and bold text (**text**) render correctly.
 
 Use this format for all 4 fixes above.
 
@@ -285,9 +285,8 @@ Based on the new PaymentValidator service and code changes shown below, provide:
    → Test performance with large transaction amounts (encryption overhead)
 
 **RESPONSE FORMAT:**
-Organize your response using these sections:
+Organize your response using these sections (render as proper markdown):
 
-```
 ## Code Quality Review
 
 ### 🔍 Issues Found:
@@ -313,7 +312,8 @@ describe('New test suite', () => {
 ### 🔗 Integration Tests:
 - Test scenario 1: Expected behavior
 - Test scenario 2: Expected behavior
-```
+
+IMPORTANT: Do not wrap the entire response in code blocks. Use proper markdown formatting so headers (##, ###) and bold text (**text**) render correctly.
 
 Use this exact structure for consistency.
 
