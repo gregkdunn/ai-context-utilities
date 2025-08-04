@@ -143,17 +143,11 @@ export class TestActions {
      * Show successful test result with menu-based workflow
      */
     private async showSuccessResult(result: TestSummary): Promise<void> {
-        if (!this.shouldShowPopup()) {
-            // Just log to output if popup is suppressed
-            this.outputChannel.appendLine(`✅ ${result.project}: All tests passed!`);
-            return;
-        }
+        // Log to output
+        this.outputChannel.appendLine(`✅ ${result.project}: All tests passed!`);
         
         // Automatically trigger Copilot analysis for successful tests
         await this.copilotDebugTests(result);
-        
-        // Show test success menu
-        await this.showTestSuccessMenu(result);
     }
 
     /**
@@ -239,21 +233,12 @@ export class TestActions {
             this.outputChannel.appendLine(failureDetails);
         }
         
-        // Check if we should show popup
-        if (!this.shouldShowPopup()) {
-            // Just log to output if popup is suppressed
-            const message = UserFriendlyErrors.testsFailed(result.project, result.failed, result.total);
-            this.outputChannel.appendLine(`❌ ${message}`);
-            // Still trigger automatic AI analysis even when popup is suppressed
-            await this.copilotDebugTests(result);
-            return;
-        }
+        // Log to output
+        const message = UserFriendlyErrors.testsFailed(result.project, result.failed, result.total);
+        this.outputChannel.appendLine(`❌ ${message}`);
         
-        // Automatically trigger Copilot debug without waiting for user input
+        // Automatically trigger Copilot debug
         await this.copilotDebugTests(result);
-        
-        // Show test failure menu immediately
-        await this.showTestFailureMenu(result);
     }
 
     /**
@@ -665,7 +650,8 @@ Please provide specific, actionable suggestions with code examples where helpful
             const command = this.buildTestCommand(project);
             await this.executeTestCommand(command, `Re-running all tests for ${project}`);
         } catch (error) {
-            const errorMsg = UserFriendlyErrors.testCommandFailed(project, this.testCommand);
+            const command = this.buildTestCommand(project);
+            const errorMsg = UserFriendlyErrors.testCommandFailed(project, command);
             this.outputChannel.appendLine(`❌ ${errorMsg}`);
             vscode.window.showErrorMessage(errorMsg);
         }

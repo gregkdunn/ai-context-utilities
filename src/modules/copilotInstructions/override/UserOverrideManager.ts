@@ -1,0 +1,396 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+
+export interface OverrideContext {
+    overrideFilePath: string;
+    suggestion?: string;
+    userPreference?: string;
+    reason?: string;
+    whenToApply?: string;
+    justification?: string;
+}
+
+export interface CopilotSuggestion {
+    ruleName: string;
+    suggestion: string;
+    userPreference: string;
+    reason: string;
+    whenToApply: string;
+    justification: string;
+}
+
+export interface StyleContext {
+    styleName: string;
+    preferredPattern: string;
+    avoidPattern: string;
+    filePatterns: string[];
+    teamDecision: string;
+}
+
+export interface ArchitectureContext {
+    decisionName: string;
+    decision: string;
+    status: string;
+    implementationExample: string;
+    rationale: string;
+    consequences: string;
+}
+
+export class UserOverrideManager {
+    private readonly OVERRIDE_FILE_PATH = '.github/instructions/user-overrides.instructions.md';
+    
+    constructor(private workspaceRoot: string) {}
+
+    async ensureOverrideFileExists(): Promise<void> {
+        const overridePath = path.join(this.workspaceRoot, this.OVERRIDE_FILE_PATH);
+        
+        if (!fs.existsSync(overridePath)) {
+            console.log(`📝 Creating new user-overrides file: ${this.OVERRIDE_FILE_PATH}`);
+            await this.createOverrideFile(overridePath);
+            this.showWelcomeMessage();
+        } else {
+            console.log(`✅ User-overrides file exists, preserving content: ${this.OVERRIDE_FILE_PATH}`);
+        }
+    }
+    
+    private async createOverrideFile(filePath: string): Promise<void> {
+        const template = this.generateOverrideTemplate();
+        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.promises.writeFile(filePath, template, 'utf8');
+    }
+    
+    private generateOverrideTemplate(): string {
+        return `---
+applyTo: "**/*"
+priority: 1000
+userOverride: true
+lastModified: "${new Date().toISOString()}"
+description: "User-customizable instructions that override all automated generations"
+---
+
+# User Override Instructions
+
+> **📝 CUSTOMIZATION GUIDE**  
+> This file takes precedence over ALL automatically generated instructions.  
+> Add your personal coding preferences, project-specific rules, and overrides here.  
+> 
+> **🔄 SAFE TO EDIT**: This file is never automatically modified by the AI Debug Context extension.
+
+## Quick Override Examples
+
+### Override Automated Recommendations
+\`\`\`typescript
+// ❌ AI might suggest: Use signals for state management
+// ✅ My preference: Continue using RxJS observables for complex state
+// Reason: Team expertise and existing patterns
+\`\`\`
+
+### Custom Naming Conventions
+\`\`\`typescript
+// ✅ My project uses specific naming patterns:
+// - Services: end with 'Service' (UserService, not UserManager)
+// - Components: descriptive names (UserProfileComponent, not ProfileComponent) 
+// - Interfaces: start with 'I' prefix (IUser, not User)
+\`\`\`
+
+## 🎯 Common Override Scenarios
+
+### Framework Preferences
+<!-- Add your framework-specific overrides here -->
+
+### Testing Philosophy  
+<!-- Add your testing approach overrides here -->
+
+### Code Style Overrides
+<!-- Add your style preference overrides here -->
+
+### Architecture Decisions
+<!-- Add your architectural choice overrides here -->
+
+---
+
+## 📋 How to Use This File
+
+### 1. **Add Immediate Overrides**
+When Copilot suggests something you disagree with:
+1. Copy the suggestion here with ❌ 
+2. Add your preferred approach with ✅
+3. Include a brief reason
+
+### 2. **Document Team Decisions**
+Record architectural and style decisions that differ from framework defaults.
+
+### 3. **Create Positive Examples**
+Show Copilot exactly how you want code to look in your project.
+
+### 4. **Override Generated Rules**
+If automatically generated instructions don't match your workflow, override them here.
+
+---
+
+## 🔄 Maintenance Notes
+
+- **This file is NEVER automatically modified** by the extension
+- **Changes take effect immediately** for new Copilot interactions
+- **Higher priority** than all other instruction files
+- **Safe to version control** and share with team members
+
+---
+
+## 📚 Override Categories
+
+### Language & Framework Overrides
+<!-- Your language-specific preferences -->
+
+### Testing & Quality Overrides  
+<!-- Your testing philosophy and quality standards -->
+
+### Project Architecture Overrides
+<!-- Your architectural decisions and patterns -->
+
+### Team Workflow Overrides
+<!-- Your team's specific processes and conventions -->
+
+---
+
+## 💡 Tips for Effective Overrides
+
+1. **Be Specific**: Include code examples showing exactly what you want
+2. **Explain Why**: Brief reasons help Copilot understand context
+3. **Use Examples**: Show both ❌ avoid and ✅ prefer patterns
+4. **Keep Updated**: Remove overrides that are no longer relevant
+5. **Share with Team**: Consistent overrides improve team productivity
+
+---
+
+*Generated by AI Debug Context Extension - Safe to customize*
+`;
+    }
+    
+    private showWelcomeMessage(): void {
+        vscode.window.showInformationMessage(
+            '📝 User Override Instructions created! Customize your Copilot experience.',
+            'Open Override File',
+            'Learn More'
+        ).then(selection => {
+            if (selection === 'Open Override File') {
+                this.openOverrideFile();
+            } else if (selection === 'Learn More') {
+                this.showOverrideDocumentation();
+            }
+        });
+    }
+
+    async openOverrideFile(): Promise<void> {
+        const overridePath = path.join(this.workspaceRoot, this.OVERRIDE_FILE_PATH);
+        if (fs.existsSync(overridePath)) {
+            const document = await vscode.workspace.openTextDocument(overridePath);
+            await vscode.window.showTextDocument(document);
+        }
+    }
+
+    private showOverrideDocumentation(): void {
+        vscode.env.openExternal(vscode.Uri.parse(
+            'https://github.com/your-repo/ai-debug-context/docs/user-overrides.md'
+        ));
+    }
+
+    async loadUserOverrides(): Promise<string | null> {
+        const overridePath = path.join(this.workspaceRoot, this.OVERRIDE_FILE_PATH);
+        
+        if (!fs.existsSync(overridePath)) {
+            return null;
+        }
+
+        try {
+            return await fs.promises.readFile(overridePath, 'utf8');
+        } catch (error) {
+            console.error('Failed to load user overrides:', error);
+            return null;
+        }
+    }
+
+    async addOverrideEntry(type: string, context: OverrideContext): Promise<void> {
+        const template = this.generateOverrideEntryTemplate(type, context);
+        
+        const document = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(context.overrideFilePath)
+        );
+        
+        const editor = await vscode.window.showTextDocument(document);
+        await this.insertOverrideTemplate(editor, template);
+    }
+
+    private generateOverrideEntryTemplate(type: string, context: OverrideContext): string {
+        switch (type) {
+            case '🎯 Specific Rule Override':
+                return this.generateSpecificRuleOverride(context);
+            case '📝 Style Preference':
+                return this.generateStylePreference(context);
+            case '🏗️ Architecture Decision':
+                return this.generateArchitecturalDecision(context);
+            case '✍️ Custom Pattern':
+                return this.generateCustomPattern(context);
+            default:
+                return this.generateGenericOverride(context);
+        }
+    }
+
+    private generateSpecificRuleOverride(context: OverrideContext): string {
+        return `
+### Override: ${context.suggestion || 'Rule Name'}
+
+\`\`\`typescript
+// ❌ Copilot suggested: ${context.suggestion || 'Add suggestion here'}
+// ✅ My preference: ${context.userPreference || 'Add your preference here'}
+// Reason: ${context.reason || 'Add your reason here'}
+\`\`\`
+
+**When**: ${context.whenToApply || 'Specify when this applies'}
+**Why**: ${context.justification || 'Provide justification'}
+
+---
+`;
+    }
+
+    private generateStylePreference(context: OverrideContext): string {
+        return `
+### Style Preference: ${context.suggestion || 'Style Name'}
+
+\`\`\`typescript
+// ✅ My project style:
+${context.userPreference || 'Add your preferred pattern here'}
+
+// ❌ Avoid:
+${context.suggestion || 'Add pattern to avoid here'}
+\`\`\`
+
+**Applies to**: \`**/*.ts\`, \`**/*.tsx\`
+**Team decision**: ${context.reason || 'Add team decision context'}
+
+---
+`;
+    }
+
+    private generateArchitecturalDecision(context: OverrideContext): string {
+        const date = new Date().toISOString().split('T')[0];
+        return `
+### Architecture Decision: ${context.suggestion || 'Decision Name'}
+
+**Decision**: ${context.userPreference || 'State the decision'}
+**Status**: Approved
+**Date**: ${date}
+
+\`\`\`typescript
+// ✅ Our approach:
+${context.userPreference || 'Add implementation example'}
+\`\`\`
+
+**Rationale**: ${context.reason || 'Explain the rationale'}
+**Consequences**: ${context.justification || 'Document consequences'}
+
+---
+`;
+    }
+
+    private generateCustomPattern(context: OverrideContext): string {
+        return `
+### Custom Pattern: ${context.suggestion || 'Pattern Name'}
+
+\`\`\`typescript
+// ✅ Preferred pattern in this project:
+${context.userPreference || 'Add your custom pattern here'}
+
+// Example usage:
+// Add example of how to use this pattern
+\`\`\`
+
+**Use when**: ${context.whenToApply || 'Specify when to use this pattern'}
+**Benefits**: ${context.reason || 'Explain why this pattern is preferred'}
+
+---
+`;
+    }
+
+    private generateGenericOverride(context: OverrideContext): string {
+        return `
+### Override: ${context.suggestion || 'Override Name'}
+
+\`\`\`typescript
+// ❌ Avoid: ${context.suggestion || 'Pattern to avoid'}
+// ✅ Prefer: ${context.userPreference || 'Preferred approach'}
+\`\`\`
+
+**Reason**: ${context.reason || 'Explain the reasoning'}
+
+---
+`;
+    }
+
+    private async insertOverrideTemplate(editor: vscode.TextEditor, template: string): Promise<void> {
+        const document = editor.document;
+        const text = document.getText();
+        
+        // Find the best insertion point (after the override categories section)
+        const categorySection = text.indexOf('## 📚 Override Categories');
+        const languageSection = text.indexOf('### Language & Framework Overrides');
+        
+        let insertPosition: vscode.Position;
+        
+        if (languageSection !== -1) {
+            // Insert after the language section header
+            const line = document.positionAt(languageSection).line + 2;
+            insertPosition = new vscode.Position(line, 0);
+        } else if (categorySection !== -1) {
+            // Insert after the categories section header
+            const line = document.positionAt(categorySection).line + 2;
+            insertPosition = new vscode.Position(line, 0);
+        } else {
+            // Insert at the end of the file
+            insertPosition = new vscode.Position(document.lineCount, 0);
+        }
+
+        await editor.edit(editBuilder => {
+            editBuilder.insert(insertPosition, template);
+        });
+
+        // Move cursor to the inserted template
+        const newPosition = new vscode.Position(insertPosition.line + 1, 0);
+        editor.selection = new vscode.Selection(newPosition, newPosition);
+        editor.revealRange(new vscode.Range(newPosition, newPosition));
+    }
+}
+
+export class InteractiveOverrideCreator {
+    constructor(private overrideManager: UserOverrideManager) {}
+
+    async promptForOverride(context?: OverrideContext): Promise<void> {
+        const suggestion = await vscode.window.showInformationMessage(
+            '🤖 Create a custom override for your Copilot instructions?',
+            'Create Override',
+            'Cancel'
+        );
+        
+        if (suggestion === 'Create Override') {
+            await this.launchOverrideWizard(context);
+        }
+    }
+    
+    private async launchOverrideWizard(context?: OverrideContext): Promise<void> {
+        const overrideType = await vscode.window.showQuickPick([
+            { label: '🎯 Specific Rule Override', description: 'Override a specific recommendation' },
+            { label: '📝 Style Preference', description: 'Add a coding style preference' },
+            { label: '🏗️ Architecture Decision', description: 'Document an architectural choice' },
+            { label: '✍️ Custom Pattern', description: 'Add a custom code pattern' }
+        ], { placeHolder: 'What type of override would you like to create?' });
+        
+        if (overrideType) {
+            const overrideContext = context || {
+                overrideFilePath: path.join(this.overrideManager['workspaceRoot'], '.github/instructions/user-overrides.instructions.md')
+            };
+            
+            await this.overrideManager.addOverrideEntry(overrideType.label, overrideContext);
+        }
+    }
+}

@@ -27,10 +27,10 @@
 #   aiDebug --full-context complex-feature  # Include verbose test output
 #
 # Output Files:
-#   - .github/instructions/ai_utilities_context/ai-debug-context.txt (main AI context file)
-#   - .github/instructions/ai_utilities_context/pr-description-prompt.txt (PR description prompts)
-#   - .github/instructions/ai_utilities_context/diff.txt (git changes)
-#   - .github/instructions/ai_utilities_context/jest-output.txt (test results)
+#   - .github/instructions/ai-utilities-context/ai-debug-context.txt (main AI context file)
+#   - .github/instructions/ai-utilities-context/pr-description-prompt.txt (PR description prompts)
+#   - .github/instructions/ai-utilities-context/diff.txt (git changes)
+#   - .github/instructions/ai-utilities-context/jest-output.txt (test results)
 #
 # AI Optimization Features:
 #   - Intelligent context prioritization

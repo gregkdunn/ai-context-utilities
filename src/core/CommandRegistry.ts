@@ -29,16 +29,13 @@ export class CommandRegistry {
     registerAll(): vscode.Disposable[] {
         this.commands = [
             this.registerRunAffectedTests(),
-            this.registerStartFileWatcher(),
-            this.registerClearTestCache(),
             this.registerRunSetup(),
-            this.registerRunCopilotInstructionContexts(),
-            this.registerSelectProject(),
-            this.registerOpenContextBrowser(),
             this.registerShowWorkspaceInfo(),
             this.registerRunGitAffected(),
-            this.registerCreateConfig(),
-            this.registerRerunProjectTests()
+            this.registerRerunProjectTests(),
+            this.registerAddCopilotInstructionContexts(),
+            this.registerPrepareToPush(),
+            this.registerGeneratePRDescription()
         ];
 
         return this.commands;
@@ -57,31 +54,7 @@ export class CommandRegistry {
         });
     }
 
-    /**
-     * Register file watcher command
-     */
-    private registerStartFileWatcher(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.startFileWatcher', async () => {
-            try {
-                await this.orchestrator.toggleFileWatcher();
-            } catch (error) {
-                this.handleCommandError(error, 'startFileWatcher');
-            }
-        });
-    }
-
-    /**
-     * Register clear cache command
-     */
-    private registerClearTestCache(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.clearTestCache', async () => {
-            try {
-                await this.orchestrator.clearTestCache();
-            } catch (error) {
-                this.handleCommandError(error, 'clearTestCache');
-            }
-        });
-    }
+    // Removed unused commands: startFileWatcher, clearTestCache
 
     /**
      * Register setup command
@@ -96,48 +69,8 @@ export class CommandRegistry {
         });
     }
 
-    /**
-     * Register Copilot instruction contexts command
-     */
-    private registerRunCopilotInstructionContexts(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.runCopilotInstructionContexts', async () => {
-            try {
-                // Placeholder implementation - this feature is described but not yet implemented
-                vscode.window.showInformationMessage(
-                    '🤖 Copilot Instruction Contexts feature coming soon! This will add framework-specific instruction files for Copilot to follow.',
-                    { modal: false }
-                );
-            } catch (error) {
-                this.handleCommandError(error, 'runCopilotInstructionContexts');
-            }
-        });
-    }
 
-    /**
-     * Register project selection command
-     */
-    private registerSelectProject(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.selectProject', async () => {
-            try {
-                await this.orchestrator.showProjectBrowser();
-            } catch (error) {
-                this.handleCommandError(error, 'selectProject');
-            }
-        });
-    }
-
-    /**
-     * Register context browser command
-     */
-    private registerOpenContextBrowser(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.openContextBrowser', async () => {
-            try {
-                await this.orchestrator.openPostTestContext();
-            } catch (error) {
-                this.handleCommandError(error, 'openContextBrowser');
-            }
-        });
-    }
+    // Removed unused commands: selectProject, openContextBrowser
 
     /**
      * Register workspace info command
@@ -165,18 +98,7 @@ export class CommandRegistry {
         });
     }
 
-    /**
-     * Create configuration file command
-     */
-    private registerCreateConfig(): vscode.Disposable {
-        return vscode.commands.registerCommand('aiDebugContext.createConfig', async () => {
-            try {
-                await this.orchestrator.createConfig();
-            } catch (error) {
-                this.handleCommandError(error, 'createConfig');
-            }
-        });
-    }
+    // Removed unused command: createConfig
 
     /**
      * Re-run project tests based on current context
@@ -187,6 +109,49 @@ export class CommandRegistry {
                 await this.orchestrator.rerunProjectTestsFromContext();
             } catch (error) {
                 this.handleCommandError(error, 'rerunProjectTests');
+            }
+        });
+    }
+
+    /**
+     * Register add Copilot instruction contexts command
+     * Phase 3.5.0 - Automated Copilot instruction generation
+     */
+    private registerAddCopilotInstructionContexts(): vscode.Disposable {
+        return vscode.commands.registerCommand('aiDebugContext.addCopilotInstructionContexts', async () => {
+            try {
+                // Lazy load the module to avoid impacting extension startup
+                const { CopilotInstructionsModule } = await import('../modules/copilotInstructions/CopilotInstructionsModule');
+                const module = new CopilotInstructionsModule(this.services, this.services.outputChannel);
+                await module.addCopilotInstructionContexts();
+            } catch (error) {
+                this.handleCommandError(error, 'addCopilotInstructionContexts');
+            }
+        });
+    }
+
+    /**
+     * Prepare to push - run tests and checks before pushing
+     */
+    private registerPrepareToPush(): vscode.Disposable {
+        return vscode.commands.registerCommand('aiDebugContext.prepareToPush', async () => {
+            try {
+                await this.orchestrator.prepareToPush();
+            } catch (error) {
+                this.handleCommandError(error, 'prepareToPush');
+            }
+        });
+    }
+
+    /**
+     * Generate PR description based on changes
+     */
+    private registerGeneratePRDescription(): vscode.Disposable {
+        return vscode.commands.registerCommand('aiDebugContext.generatePRDescription', async () => {
+            try {
+                await this.orchestrator.generatePRDescription();
+            } catch (error) {
+                this.handleCommandError(error, 'generatePRDescription');
             }
         });
     }

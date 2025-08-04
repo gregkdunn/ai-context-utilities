@@ -464,7 +464,7 @@ export class SetupWizard {
         if (selection === 'Run First Test') {
             vscode.commands.executeCommand('aiDebugContext.runAffectedTests');
         } else if (selection === 'View Documentation') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/your-repo/ai-debug-context#usage'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/gregkdunn/ai-debug-context#usage'));
         }
         // If 'Close' or no selection, just return and let the progress dialog close
     }

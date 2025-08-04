@@ -1,7 +1,7 @@
 # =========================================================================
 # File: .ai_utilities.zshrc
 # Purpose: Contains utility functions for AI-assisted debugging in NX projects.
-BASE_DIR=".github/instructions/ai_utilities_context"
+BASE_DIR=".github/instructions/ai-utilities-context"
 # =========================================================================
 # FUNCTION: nxTest (Updated)
 # =========================================================================

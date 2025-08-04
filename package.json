@@ -1,15 +1,16 @@
 {
   "name": "ai-context-util",
   "displayName": "AI Context Util",
-  "version": "3.1.0",
-  "description": "Transform your testing workflow with AI-powered context utilities. Auto-detect changed tests, real-time watching, and smart project discovery with Copilot integration.",
+  "version": "3.5.0",
+  "description": "Generate GitHub Copilot instructions from your ESLint/Prettier configs. Automatically creates framework-specific guidance with user overrides, workspace analysis, and intelligent debugging context.",
   "main": "./out/extension.js",
   "publisher": "ai-context-util",
   "categories": [
-    "Testing",
-    "Other"
+    "AI",
+    "Other",
+    "Linters"
   ],
-  "icon": "icon/icon.png",
+  "icon": "icon/atomic_debug_logo.png",
   "galleryBanner": {
     "color": "#000000",
     "theme": "dark"
@@ -19,10 +20,15 @@
   ],
   "contributes": {
     "commands": [
-
+      {
+        "command": "aiDebugContext.runAffectedTests",
+        "title": "🧪 Open Testing Menu",
+        "category": "AI Context Util",
+        "icon": "$(beaker)"
+      },
       {
         "command": "aiDebugContext.runSetup",
-        "title": "🍎 Run Setup Wizard",
+        "title": "🍎 Setup",
         "category": "AI Context Util",
         "icon": "$(settings-gear)"
       },
@@ -33,8 +39,8 @@
         "icon": "$(info)"
       },
       {
-        "command": "aiDebugContext.runCopilotInstructionContexts",
-        "title": "🤖 Add Copilot Instruction Contexts",
+        "command": "aiDebugContext.addCopilotInstructionContexts",
+        "title": "🤖 Copilot Instructions",
         "category": "AI Context Util",
         "icon": "$(copilot)"
       },
@@ -46,9 +52,21 @@
       },
       {
         "command": "aiDebugContext.rerunProjectTests",
-        "title": "🔄 Re-Run Project Tests",
+        "title": "↻ Test Recent",
         "category": "AI Context Util",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "aiDebugContext.prepareToPush",
+        "title": "🚀 Prepare To Push",
+        "category": "AI Context Util",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "aiDebugContext.generatePRDescription",
+        "title": "📝 PR Description",
+        "category": "AI Context Util",
+        "icon": "$(git-pull-request)"
       }
     ],
     "menus": {
@@ -57,19 +75,7 @@
           "command": "aiDebugContext.runAffectedTests"
         },
         {
-          "command": "aiDebugContext.startFileWatcher"
-        },
-        {
-          "command": "aiDebugContext.clearTestCache"
-        },
-        {
           "command": "aiDebugContext.runSetup"
-        },
-        {
-          "command": "aiDebugContext.runCopilotInstructionContexts"
-        },
-        {
-          "command": "aiDebugContext.selectProject"
         },
         {
           "command": "aiDebugContext.showWorkspaceInfo"
@@ -78,10 +84,16 @@
           "command": "aiDebugContext.runGitAffected"
         },
         {
-          "command": "aiDebugContext.createConfig"
+          "command": "aiDebugContext.rerunProjectTests"
         },
         {
-          "command": "aiDebugContext.rerunProjectTests"
+          "command": "aiDebugContext.addCopilotInstructionContexts"
+        },
+        {
+          "command": "aiDebugContext.prepareToPush"
+        },
+        {
+          "command": "aiDebugContext.generatePRDescription"
         }
       ]
     },
@@ -91,16 +103,6 @@
         "key": "ctrl+shift+t",
         "mac": "cmd+shift+t",
         "when": "editorTextFocus"
-      },
-      {
-        "command": "aiDebugContext.startFileWatcher",
-        "key": "ctrl+shift+w",
-        "mac": "cmd+shift+w"
-      },
-      {
-        "command": "aiDebugContext.clearTestCache",
-        "key": "ctrl+shift+c",
-        "mac": "cmd+shift+c"
       },
       {
         "command": "aiDebugContext.runGitAffected",
@@ -126,7 +128,7 @@
         "aiDebugContext.recentProjects": {
           "type": "array",
           "default": [],
-          "description": "Recently used projects for quick access",
+          "description": "Recently used projects for quick access (legacy - use recentProjectsByWorkspace)",
           "items": {
             "type": "object",
             "properties": {
@@ -138,6 +140,31 @@
               },
               "testCount": {
                 "type": "number"
+              }
+            }
+          }
+        },
+        "aiDebugContext.recentProjectsByWorkspace": {
+          "type": "object",
+          "default": {},
+          "description": "Recently used projects organized by workspace for workspace-specific test history",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "lastUsed": {
+                  "type": "string"
+                },
+                "testCount": {
+                  "type": "number"
+                },
+                "lastUsedTimestamp": {
+                  "type": "number"
+                }
               }
             }
           }
@@ -179,6 +206,7 @@
     "quick-test": "./scripts/quick-test.sh || echo 'Run dev setup first'"
   },
   "devDependencies": {
+    "@types/eslint": "^9.6.1",
     "@types/jest": "^29.5.0",
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^20.0.0",
@@ -207,7 +235,11 @@
     "jest",
     "parallel-testing",
     "clean-architecture",
-    "phase-1-8"
+    "phase-3-5-0",
+    "copilot-instructions",
+    "eslint-translation",
+    "prettier-integration",
+    "user-overrides"
   ],
   "author": "AI Debug Context Team",
   "license": "MIT",
@@ -220,9 +252,27 @@
   },
   "homepage": "https://github.com/ai-debug-context/vscode-extension#readme",
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "cosmiconfig": "^9.0.0",
+    "eslint": "^8.57.0",
+    "find-up": "^7.0.0",
+    "js-yaml": "^4.1.0",
+    "json5": "^2.2.3",
+    "prettier": "^3.2.5"
   },
   "bundledDependencies": [
-    "js-yaml"
+    "js-yaml",
+    "eslint",
+    "prettier",
+    "cosmiconfig",
+    "find-up",
+    "json5"
+  ],
+  "bundleDependencies": [
+    "js-yaml",
+    "eslint",
+    "prettier",
+    "cosmiconfig",
+    "find-up",
+    "json5"
   ]
 }

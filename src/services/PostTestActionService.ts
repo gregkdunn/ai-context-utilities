@@ -42,12 +42,6 @@ export class PostTestActionService {
         }));
 
         // Add dismiss option
-        items.push({
-            label: '$(close) Dismiss',
-            detail: 'Close this menu',
-            action: async () => {} // No-op
-        });
-
         const selection = await vscode.window.showQuickPick(items, {
             placeHolder: result.success ? 'Tests passed!' : 'Tests failed. Choose an action:',
             title: `Test ${result.success ? 'Success' : 'Failure'} Actions`
@@ -70,7 +64,7 @@ export class PostTestActionService {
                 action: () => this.handleViewOutput()
             },
             {
-                label: 'Rerun Tests',
+                label: 'Test Recent',
                 description: 'Run the same tests again',
                 icon: '$(sync)',
                 action: () => this.handleRerunTests()
@@ -199,7 +193,7 @@ export class PostTestActionService {
     }
 
     /**
-     * Handle PR description generation using template
+     * Handle PR description generation using template and send to Copilot Chat
      */
     private async handlePRDescription(): Promise<void> {
         try {
@@ -296,11 +290,13 @@ ${changeAnalysis.breakingChanges ? `## Breaking Changes\n${changeAnalysis.breaki
 ${changeAnalysis.additionalNotes || 'Code changes have been tested and are ready for review.'}`;
             }
 
-            await vscode.env.clipboard.writeText(prDescription);
+            // Send to Copilot Chat with full automation (includes test results context)
+            const prPrompt = this.buildPRDescriptionPrompt(prDescription);
+            
+            await this.sendToCopilotChatAutomatic(prPrompt);
             
             const templateUsed = templateContent ? 'using project template' : 'using default format';
             const flagInfo = featureFlags.length > 0 ? ` (${featureFlags.length} feature flags detected)` : '';
-            vscode.window.showInformationMessage(`PR description copied to clipboard ${templateUsed}${flagInfo}!`);
             
         } catch (error) {
             this.services.errorHandler.handleError(error as Error, { operation: 'handlePRDescription' });
@@ -541,6 +537,113 @@ ${changeAnalysis.additionalNotes || 'Code changes have been tested and are ready
             breakingChanges: [...new Set(breakingChanges)],
             notes: `Analyzed ${fileCount} changed files with ${addedLines} additions and ${deletedLines} deletions.`
         };
+    }
+
+    /**
+     * Build comprehensive PR description prompt for Copilot Chat
+     */
+    private buildPRDescriptionPrompt(prDescription: string): string {
+        const testStatus = this.lastTestResult?.success ? 'PASSED' : 'FAILED';
+        const testCount = this.lastTestResult?.summary?.total || 0;
+        const passedCount = this.lastTestResult?.summary?.passed || 0;
+        
+        // Parse the PR description to extract key information
+        const hasJiraTicket = prDescription.includes('**JIRA:**') || prDescription.includes('JIRA:');
+        const hasFeatureFlags = prDescription.includes('## Feature Flags') || prDescription.includes('Feature Flags to Test:');
+        const hasTemplate = prDescription.includes('## Summary') || prDescription.includes('## Changes');
+        
+        return `# 🤖 Pull Request Description Enhancement
+
+Please enhance this PR description while maintaining the exact template structure and headers.
+
+## 📊 Test Results Context
+- **Test Status**: ${testStatus} (${passedCount}/${testCount} tests)
+- **Project**: ${this.lastTestResult?.project || 'Current project'}
+${this.lastTestResult?.duration ? `- **Test Duration**: ${this.lastTestResult.duration}ms` : ''}
+
+## 📝 Current PR Description Template
+${prDescription}
+
+## 🎯 IMPORTANT INSTRUCTIONS:
+
+1. **PRESERVE ALL HEADERS** - Keep all existing headers exactly as they are (## Summary, ## Changes, ## Details, ## QA, etc.)
+2. **MAINTAIN JIRA LINK** - Keep the **JIRA:** line at the top if present
+3. **FILL IN CONTENT** - Replace placeholder text with actual content based on the test results and changes
+
+## 📋 Content Guidelines for Each Section:
+
+### Summary Section
+- Provide a clear, one-paragraph description of what this PR accomplishes
+- Reference the test results showing all tests pass
+- Focus on the business value and impact
+
+### Changes Section
+- List the key technical changes made
+- Group related changes together
+- Use bullet points for clarity
+
+### Details Section (if present)
+- Provide technical implementation details
+- Explain architectural decisions
+${hasFeatureFlags ? `
+### Feature Flags
+- Include ALL detected feature flags
+- Add them to both QA section and Details section
+- Format as: \`flag-name\` - Description of what the flag controls` : ''}
+
+### QA Section
+- Include specific manual testing steps for this PR's changes
+- Add feature flag testing instructions if detected
+- Focus on user flows that QA should verify
+- Include edge cases or special scenarios to test
+
+## ❌ DO NOT INCLUDE:
+- Developer responsibility items:
+  - CI test verification (developer should ensure tests pass before PR)
+  - Merge conflict resolution (developer responsibility)
+  - Build/compilation checks (developer prerequisites)
+  - Unit test coverage (developer responsibility)
+
+## ✅ DO INCLUDE:
+- Specific manual testing steps for this PR's changes
+- Feature flag testing instructions if detected
+- User flows that QA should verify
+- Edge cases or special scenarios
+- Regression testing areas if applicable
+
+Please provide the enhanced PR description maintaining the exact template structure while filling in meaningful content.`;
+    }
+
+    /**
+     * Send PR description to Copilot Chat with full automation
+     */
+    private async sendToCopilotChatAutomatic(content: string): Promise<void> {
+        try {
+            this.services.outputChannel.appendLine(`🚀 Fully automated Copilot integration for PR description generation`);
+            this.services.outputChannel.appendLine(`📋 Preparing to send ${Math.round(content.length / 1024)}KB of context to Copilot Chat...`);
+            
+            // Import CopilotUtils dynamically to avoid startup dependencies
+            const { CopilotUtils } = await import('../utils/CopilotUtils');
+            
+            const integrationResult = await CopilotUtils.integrateWithCopilot(
+                content,
+                this.services.outputChannel,
+                {
+                    autoSuccess: '🎉 PR description sent to Copilot Chat automatically! Check the response.',
+                    manualPaste: '📋 PR description ready in Copilot Chat - press Enter to submit.',
+                    clipboardOnly: '📋 PR description copied to clipboard. Please open Copilot Chat and paste manually.',
+                    chatOpenFailed: '⚠️ Could not open Copilot Chat. PR description copied to clipboard.'
+                }
+            );
+            
+            this.services.outputChannel.appendLine(`✅ Copilot integration completed: ${integrationResult.method}`);
+            
+        } catch (error) {
+            this.services.outputChannel.appendLine(`❌ Error in automated Copilot integration: ${error}`);
+            // Fallback to manual copy
+            await vscode.env.clipboard.writeText(content);
+            vscode.window.showInformationMessage('❌ Auto-integration failed. PR description copied to clipboard - please paste in Copilot Chat manually.');
+        }
     }
 
     /**

@@ -105,7 +105,7 @@ gitDiff HEAD~1..HEAD  # Compare with last commit
 
 ## Output Files
 
-All functions save to the configured base directory (default: `.github/instructions/ai_utilities_context/`):
+All functions save to the configured base directory (default: `.github/instructions/ai-utilities-context/`):
 
 - **`ai-debug-context.txt`** - Complete debugging context for AI analysis
 - **`pr-description-prompt.txt`** - GitHub PR description generation prompts

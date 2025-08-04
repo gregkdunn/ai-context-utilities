@@ -34,14 +34,20 @@ export class CopilotUtils {
     static async openCopilotChat(): Promise<boolean> {
         const commands = [
             'workbench.panel.chat.view.copilot.focus',
-            'github.copilot.openChat'
+            'github.copilot.openChat',
+            'github.copilot.chat.focus',
+            'workbench.action.chat.open',
+            'workbench.action.chat.openCopilot',
+            'github.copilot.openCopilotSideBar'
         ];
 
         for (const command of commands) {
             try {
                 await vscode.commands.executeCommand(command);
+                console.log(`✅ DEBUG: Successfully opened Copilot Chat with command: ${command}`);
                 return true;
-            } catch {
+            } catch (error) {
+                console.log(`❌ DEBUG: Failed to open Copilot Chat with command: ${command}, error: ${error}`);
                 continue;
             }
         }
@@ -52,19 +58,41 @@ export class CopilotUtils {
      * Attempt automatic paste to Copilot Chat
      */
     static async tryAutomaticPaste(): Promise<boolean> {
-        try {
-            // Focus on Copilot Chat input
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Try paste command
-            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            return true;
-        } catch {
-            return false;
+        const pasteMethods = [
+            async () => {
+                console.log('DEBUG: Trying editor.action.clipboardPasteAction');
+                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+                return true;
+            },
+            async () => {
+                console.log('DEBUG: Trying editor.action.pasteAndGoToPosition');
+                await vscode.commands.executeCommand('editor.action.pasteAndGoToPosition');
+                return true;
+            },
+            async () => {
+                console.log('DEBUG: Trying workbench.action.terminal.paste');
+                await vscode.commands.executeCommand('workbench.action.terminal.paste');
+                return true;
+            }
+        ];
+
+        for (let i = 0; i < pasteMethods.length; i++) {
+            try {
+                // Focus on Copilot Chat input before each attempt
+                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                await pasteMethods[i]();
+                console.log(`✅ DEBUG: Paste method ${i + 1} succeeded`);
+                await new Promise(resolve => setTimeout(resolve, 300));
+                return true;
+            } catch (error) {
+                console.log(`❌ DEBUG: Paste method ${i + 1} failed: ${error}`);
+                continue;
+            }
         }
+        
+        return false;
     }
 
     /**
@@ -140,14 +168,17 @@ export class CopilotUtils {
         try {
             // Step 1: Copy to clipboard (always do this first)
             await vscode.env.clipboard.writeText(content);
-            outputChannel.appendLine('📋 Content copied to clipboard');
+            outputChannel.appendLine('📋 DEBUG: Content copied to clipboard successfully');
             
             // Step 2: Attempt to open Copilot Chat
+            outputChannel.appendLine('🔍 DEBUG: Attempting to open Copilot Chat...');
             const chatOpened = await this.openCopilotChat();
             if (!chatOpened) {
+                outputChannel.appendLine('❌ DEBUG: Failed to open Copilot Chat with any command');
                 vscode.window.showWarningMessage(finalMessages.chatOpenFailed, { modal: false });
                 return { success: false, method: 'clipboard-only' };
             }
+            outputChannel.appendLine('✅ DEBUG: Copilot Chat opened successfully');
 
             // Step 3: Wait for chat to fully load
             await new Promise(resolve => setTimeout(resolve, 1500));
@@ -156,20 +187,25 @@ export class CopilotUtils {
             await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
             
             // Step 4: Attempt automatic paste and submit
-            outputChannel.appendLine('🚀 Attempting fully automated paste and submit...');
+            outputChannel.appendLine('🚀 DEBUG: Attempting fully automated paste...');
             
             const pasteSuccess = await this.tryAutomaticPaste();
             if (!pasteSuccess) {
+                outputChannel.appendLine('❌ DEBUG: Automatic paste failed');
                 vscode.window.showInformationMessage(finalMessages.clipboardOnly, { modal: false });
                 return { success: false, method: 'clipboard-only' };
             }
+            outputChannel.appendLine('✅ DEBUG: Automatic paste succeeded');
 
             // Step 5: Try automatic submit
+            outputChannel.appendLine('🚀 DEBUG: Attempting automatic submit...');
             const submitSuccess = await this.tryAutomaticSubmit(outputChannel);
             if (submitSuccess) {
+                outputChannel.appendLine('✅ DEBUG: Automatic submit succeeded');
                 vscode.window.showInformationMessage(finalMessages.autoSuccess, { modal: false });
                 return { success: true, method: 'auto-submit' };
             } else {
+                outputChannel.appendLine('⚠️ DEBUG: Automatic submit failed, but paste succeeded');
                 vscode.window.showInformationMessage(finalMessages.manualPaste, { modal: false });
                 return { success: true, method: 'manual-paste' };
             }

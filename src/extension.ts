@@ -48,6 +48,21 @@ export async function activate(context: vscode.ExtensionContext) {
         // Register all commands with VS Code
         context.subscriptions.push(...commands);
 
+        // Check if setup is needed and run it automatically
+        const setupWizard = services.setupWizard;
+        if (await setupWizard.isSetupNeeded()) {
+            services.outputChannel.appendLine('🍎 First time setup detected. Running setup wizard...');
+            vscode.window.showInformationMessage(
+                'AI Context Utilities: Running first-time setup to configure your environment.',
+                'OK'
+            );
+            
+            // Run setup wizard automatically
+            setTimeout(async () => {
+                await setupWizard.runSetupWizard();
+            }, 1000); // Small delay to let VS Code fully initialize
+        }
+        
         // Extension is ready
         services.outputChannel.appendLine('🚀 AI Context Utilities V3.1.0 activated successfully');
         

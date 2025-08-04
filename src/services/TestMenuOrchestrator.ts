@@ -173,90 +173,76 @@ export class TestMenuOrchestrator {
         this.services.outputChannel.appendLine(`${'='.repeat(80)}`);
         this.services.outputChannel.appendLine('🚀 Auto-detecting projects from changed files...\n');
 
-        // Use progress indicator for long operation
-        return vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: "Auto-detecting projects",
-            cancellable: true
-        }, async (progress, token) => {
-            try {
-                progress.report({ increment: 10, message: "Checking for changes..." });
+        // Update status bar instead of showing notification
+        this.services.updateStatusBar('🔍 Auto-detecting projects...');
+        
+        try {
+            this.services.updateStatusBar('🔍 Checking for changes...');
 
-                // Check for cancellation
-                if (token.isCancellationRequested) {
-                    this.services.updateStatusBar('Auto-detect cancelled');
-                    return;
-                }
 
-                // Get changed files from git diff
-                progress.report({ increment: 30, message: "Analyzing changed files..." });
-                const gitDiffResult = await this.executeGitDiff();
-                
-                if (!gitDiffResult.success) {
-                    const friendlyError = UserFriendlyErrors.gitCommandFailed('git diff --name-only HEAD~1');
-                    this.services.outputChannel.appendLine(`❌ ${friendlyError}\n`);
-                    this.services.outputChannel.appendLine('🔄 Falling back to git affected...\n');
-                    progress.report({ increment: 100, message: "Falling back to git affected..." });
-                    await this.runGitAffected();
-                    return;
-                }
-
-                progress.report({ increment: 50, message: "Processing changed files..." });
-                const changedFiles = gitDiffResult.stdout
-                    .split('\n')
-                    .map(f => f.trim())
-                    .filter(f => f.length > 0);
-                    
-                if (changedFiles.length === 0) {
-                    const friendlyError = UserFriendlyErrors.noChangedFiles();
-                    this.services.outputChannel.appendLine(`ℹ️ ${friendlyError}\n`);
-                    this.services.updateStatusBar('No changes detected');
-                    progress.report({ increment: 100, message: "No changes detected" });
-                    return;
-                }
-
-                this.services.outputChannel.appendLine(`📁 Found ${changedFiles.length} changed files:`);
-                changedFiles.forEach(file => this.services.outputChannel.appendLine(`   ${file}`));
-                this.services.outputChannel.appendLine('');
-
-                progress.report({ increment: 70, message: "Finding affected projects..." });
-                // Find unique projects for changed files
-                const projects = await this.services.projectDiscovery.getProjectsForFiles(changedFiles);
-
-                if (projects.length === 0) {
-                    const friendlyError = UserFriendlyErrors.autoDetectionFailed('No projects found for changed files');
-                    this.services.outputChannel.appendLine(`⚠️ ${friendlyError}\n`);
-                    progress.report({ increment: 100, message: "Falling back to git affected..." });
-                    await this.runGitAffected();
-                    return;
-                }
-
-                this.services.outputChannel.appendLine(`🎯 Auto-detected projects: ${projects.join(', ')}\n`);
-
-                progress.report({ increment: 80, message: `Running tests for ${projects.length} projects...` });
-                // Run tests for each detected project
-                for (let i = 0; i < projects.length; i++) {
-                    const project = projects[i];
-                    progress.report({ 
-                        increment: 80 + (15 * (i + 1) / projects.length), 
-                        message: `Testing ${project}...` 
-                    });
-                    await this.executeProjectTest(project);
-                }
-
-                const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
-                progress.report({ increment: 100, message: `Completed in ${totalDuration}s` });
-                this.services.updateStatusBar(`✅ Auto-detect complete (${totalDuration}s)`, 'green');
-                this.services.outputChannel.appendLine(`🎉 Auto-detection completed in ${totalDuration}s`);
-
-            } catch (error) {
-                const friendlyError = UserFriendlyErrors.autoDetectionFailed(String(error));
+            // Get changed files from git diff
+            this.services.updateStatusBar('🔍 Analyzing changed files...');
+            const gitDiffResult = await this.executeGitDiff();
+            
+            if (!gitDiffResult.success) {
+                const friendlyError = UserFriendlyErrors.gitCommandFailed('git diff --name-only HEAD~1');
                 this.services.outputChannel.appendLine(`❌ ${friendlyError}\n`);
                 this.services.outputChannel.appendLine('🔄 Falling back to git affected...\n');
-                progress.report({ increment: 100, message: "Error occurred, falling back..." });
+                this.services.updateStatusBar('🔄 Falling back to git affected...');
                 await this.runGitAffected();
+                return;
             }
-        });
+
+            this.services.updateStatusBar('🔍 Processing changed files...');
+            const changedFiles = gitDiffResult.stdout
+                .split('\n')
+                .map(f => f.trim())
+                .filter(f => f.length > 0);
+                
+            if (changedFiles.length === 0) {
+                const friendlyError = UserFriendlyErrors.noChangedFiles();
+                this.services.outputChannel.appendLine(`ℹ️ ${friendlyError}\n`);
+                this.services.updateStatusBar('No changes detected');
+                return;
+            }
+
+            this.services.outputChannel.appendLine(`📁 Found ${changedFiles.length} changed files:`);
+            changedFiles.forEach(file => this.services.outputChannel.appendLine(`   ${file}`));
+            this.services.outputChannel.appendLine('');
+
+            this.services.updateStatusBar('🔍 Finding affected projects...');
+            // Find unique projects for changed files
+            const projects = await this.services.projectDiscovery.getProjectsForFiles(changedFiles);
+
+            if (projects.length === 0) {
+                const friendlyError = UserFriendlyErrors.autoDetectionFailed('No projects found for changed files');
+                this.services.outputChannel.appendLine(`⚠️ ${friendlyError}\n`);
+                this.services.updateStatusBar('🔄 Falling back to git affected...');
+                await this.runGitAffected();
+                return;
+            }
+
+            this.services.outputChannel.appendLine(`🎯 Auto-detected projects: ${projects.join(', ')}\n`);
+
+            this.services.updateStatusBar(`🔍 Running tests for ${projects.length} projects...`);
+            // Run tests for each detected project
+            for (let i = 0; i < projects.length; i++) {
+                const project = projects[i];
+                this.services.updateStatusBar(`🔍 Testing ${project}...`);
+                await this.executeProjectTest(project);
+            }
+
+            const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
+            this.services.updateStatusBar(`✅ Auto-detect complete (${totalDuration}s)`, 'green');
+            this.services.outputChannel.appendLine(`🎉 Auto-detection completed in ${totalDuration}s`);
+
+        } catch (error) {
+            const friendlyError = UserFriendlyErrors.autoDetectionFailed(String(error));
+            this.services.outputChannel.appendLine(`❌ ${friendlyError}\n`);
+            this.services.outputChannel.appendLine('🔄 Falling back to git affected...\n');
+            this.services.updateStatusBar('❌ Error occurred, falling back...');
+            await this.runGitAffected();
+        }
     }
 
     /**
@@ -755,7 +741,36 @@ Please be specific and actionable in your suggestions. Include code examples whe
 
     // Backwards compatibility method
     async rerunProjectTestsFromContext(): Promise<void> {
-        await this.execute({ type: 'context' });
+        // Get the most recent project from configuration (workspace-specific)
+        const config = vscode.workspace.getConfiguration('aiDebugContext');
+        const workspaceKey = this.getWorkspaceKey();
+        const allWorkspaceProjects = config.get<Record<string, any[]>>('recentProjectsByWorkspace', {});
+        const recentProjects = allWorkspaceProjects[workspaceKey] || [];
+        
+        if (recentProjects.length > 0) {
+            const mostRecent = recentProjects[0];
+            // Show a quick confirmation with the project name
+            const choice = await vscode.window.showQuickPick(
+                [
+                    {
+                        label: `↻ Test Recent: ${mostRecent.name}`,
+                        detail: `Last tested: ${mostRecent.lastUsed || 'Recently'}`,
+                        description: 'Press Enter to run'
+                    }
+                ],
+                {
+                    placeHolder: 'Run tests for the most recent project',
+                    ignoreFocusOut: false
+                }
+            );
+            
+            if (choice) {
+                await this.execute({ type: 'context' });
+            }
+        } else {
+            // No recent projects, just execute normally
+            await this.execute({ type: 'context' });
+        }
     }
 
     private async executeContextRerun(): Promise<void> {
@@ -866,6 +881,493 @@ Please be specific and actionable in your suggestions. Include code examples whe
     }
 
     /**
+     * Prepare to push - run tests and checks before pushing
+     */
+    async prepareToPush(): Promise<void> {
+        this.services.updateStatusBar('🚀 Preparing to push...', 'yellow');
+        this.services.outputChannel.appendLine('🚀 Prepare To Push - Running pre-push checks...\n');
+
+        try {
+            // Check if we have recent projects in configuration (workspace-specific)
+            const config = vscode.workspace.getConfiguration('aiDebugContext');
+            const workspaceKey = this.getWorkspaceKey();
+            const allWorkspaceProjects = config.get<Record<string, any[]>>('recentProjectsByWorkspace', {});
+            const recentProjects = allWorkspaceProjects[workspaceKey] || [];
+
+            if (recentProjects.length > 0) {
+                // Run tests on the most recent project
+                const mostRecent = recentProjects[0];
+                this.services.outputChannel.appendLine(`🎯 Running tests for most recent project: ${mostRecent.name}\n`);
+                await this.executeProjectTest(mostRecent.name);
+            } else {
+                // Fallback to auto-detect if no recent projects
+                this.services.outputChannel.appendLine('📊 No recent projects found, running auto-detect...\n');
+                await this.runAutoDetectProjects();
+            }
+            
+            // Show git status
+            const gitStatus = await this.executeGitCommand(['status', '--porcelain']);
+            if (gitStatus.stdout.trim()) {
+                this.services.outputChannel.appendLine('📋 Git Status:');
+                this.services.outputChannel.appendLine(gitStatus.stdout);
+            }
+
+            // Check for uncommitted changes
+            if (gitStatus.stdout.trim()) {
+                const response = await vscode.window.showWarningMessage(
+                    'You have uncommitted changes. Do you want to continue?',
+                    'Continue', 'Cancel'
+                );
+                if (response !== 'Continue') {
+                    this.services.updateStatusBar('🚀 Push preparation cancelled', 'yellow');
+                    return;
+                }
+            }
+
+            vscode.window.showInformationMessage('✅ Ready to push! All checks passed.');
+            this.services.updateStatusBar('✅ Ready to push', 'green');
+            this.services.outputChannel.appendLine('✅ Pre-push checks completed successfully!\n');
+
+        } catch (error) {
+            this.services.outputChannel.appendLine(`❌ Pre-push checks failed: ${error}\n`);
+            vscode.window.showErrorMessage('❌ Pre-push checks failed. Check output for details.');
+            this.services.updateStatusBar('❌ Push preparation failed', 'red');
+        }
+    }
+
+    /**
+     * Generate PR description based on changes
+     */
+    async generatePRDescription(): Promise<void> {
+        this.services.updateStatusBar('📝 Generating PR description...', 'yellow');
+        this.services.outputChannel.appendLine('📝 Generating PR Description...\n');
+
+        try {
+            // Get current branch name
+            const currentBranch = await this.executeGitCommand(['branch', '--show-current']);
+            const branchName = currentBranch.stdout.trim();
+
+            // Extract JIRA ticket from branch name
+            const jiraTicket = this.extractJiraTicket(branchName);
+
+            // Get git diff against main/master branch
+            let baseBranch = 'main';
+            const mainExists = await this.executeGitCommand(['show-ref', '--verify', '--quiet', 'refs/heads/main']);
+            if (!mainExists.success) {
+                const masterExists = await this.executeGitCommand(['show-ref', '--verify', '--quiet', 'refs/heads/master']);
+                if (masterExists.success) {
+                    baseBranch = 'master';
+                }
+            }
+
+            // Get git diff with actual changes
+            const gitDiffResult = await this.executeGitCommand(['diff', `${baseBranch}...HEAD`]);
+            const gitDiff = gitDiffResult.stdout;
+
+            // Get changed files compared to base branch
+            const gitDiffFiles = await this.executeGitCommand(['diff', '--name-only', `${baseBranch}...HEAD`]);
+            const changedFiles = gitDiffFiles.stdout.split('\n').filter(f => f.trim());
+
+            // If no changes against base branch, try staged changes
+            if (changedFiles.length === 0) {
+                const stagedDiff = await this.executeGitCommand(['diff', '--cached', '--name-only']);
+                changedFiles.push(...stagedDiff.stdout.split('\n').filter(f => f.trim()));
+            }
+
+            // Get commit messages for this branch
+            const gitLog = await this.executeGitCommand(['log', `${baseBranch}..HEAD`, '--oneline']);
+            const commits = gitLog.stdout.split('\n').filter(c => c.trim()).slice(0, 10);
+
+            // Read PR template if it exists
+            const prTemplate = await this.readPRTemplate();
+
+            // Extract feature flags from git diff
+            const featureFlags = await this.extractFeatureFlags(gitDiff);
+
+            // Generate description using template or AI-guided approach
+            let description: string;
+            if (prTemplate) {
+                description = await this.generateFromTemplate(prTemplate, branchName, jiraTicket, gitDiff, changedFiles, commits, featureFlags);
+                this.services.outputChannel.appendLine('📝 Used PR template from .github/PULL_REQUEST_TEMPLATE.md');
+            } else {
+                description = await this.generateWithAI(branchName, jiraTicket, gitDiff, changedFiles, commits, featureFlags);
+                this.services.outputChannel.appendLine('📝 Generated PR description using AI guidance');
+            }
+
+            if (featureFlags.length > 0) {
+                this.services.outputChannel.appendLine(`📝 Detected ${featureFlags.length} feature flags: ${featureFlags.join(', ')}`);
+            }
+
+            // Send to Copilot Chat with full automation
+            await this.sendPRDescriptionToCopilot(description);
+
+            this.services.updateStatusBar('📝 PR description sent to Copilot Chat', 'green');
+            this.services.outputChannel.appendLine('✅ PR description sent to Copilot Chat for enhancement!\n');
+
+        } catch (error) {
+            this.services.outputChannel.appendLine(`❌ PR description generation failed: ${error}\n`);
+            vscode.window.showErrorMessage('❌ Failed to generate PR description. Check output for details.');
+            this.services.updateStatusBar('Ready');
+        }
+    }
+
+    /**
+     * Send PR description to Copilot Chat with full automation
+     */
+    private async sendPRDescriptionToCopilot(prDescription: string): Promise<void> {
+        try {
+            // Parse the PR description to extract key information
+            const hasJiraTicket = prDescription.includes('**JIRA:**');
+            const hasFeatureFlags = prDescription.includes('## Feature Flags') || prDescription.includes('Feature flags detected:');
+            const isTemplate = prDescription.includes('<!-- ') || prDescription.includes('## Summary') || prDescription.includes('## Changes');
+            
+            // Build comprehensive PR description prompt for Copilot Chat
+            const prPrompt = `# 🤖 Pull Request Description Enhancement
+
+Please enhance this PR description while maintaining the exact template structure and headers. 
+
+## 📝 Current PR Description Template
+${prDescription}
+
+## 🎯 IMPORTANT INSTRUCTIONS:
+
+1. **PRESERVE ALL HEADERS** - Keep all existing headers exactly as they are (## Summary, ## Changes, ## Details, ## QA, etc.)
+2. **MAINTAIN JIRA LINK** - Keep the **JIRA:** line at the top if present
+3. **FILL IN CONTENT** - Replace placeholder text and comments with actual content based on the git diff and commits provided
+
+## 📋 Content Guidelines for Each Section:
+
+### Summary Section
+- Provide a clear, one-paragraph description of what this PR accomplishes
+- Focus on the "why" and the business value
+- Keep it concise but informative
+
+### Changes Section  
+- List the key technical changes made
+- Group related changes together
+- Use bullet points for clarity
+
+### Details Section (if present)
+- Provide technical implementation details
+- Explain architectural decisions
+- Note any important considerations
+${hasFeatureFlags ? `
+### Feature Flags
+- Include ALL detected feature flags
+- Add them to both QA section and Details section
+- Format as: \`flag-name\` - Description of what the flag controls` : ''}
+
+### QA Section
+- Include manual testing steps
+- Add feature flag testing if applicable
+- Focus on what QA engineers need to verify
+- DO NOT include the standard checklist items (unit tests, ESLint, etc.) as these are prerequisites
+
+## ❌ DO NOT INCLUDE:
+- Generic testing checklists (unit tests pass, ESLint, Prettier, etc.)
+- These items are already completed before PR review:
+  - All unit tests pass locally
+  - All integration/E2E tests pass
+  - No new ESLint or Prettier errors
+  - Code coverage meets thresholds
+  - CI pipeline passes
+
+## ✅ DO INCLUDE:
+- Specific manual testing steps for this PR's changes
+- Feature flag testing instructions if applicable
+- Any special configuration or setup needed for testing
+- Edge cases or scenarios QA should verify
+
+Please provide the enhanced PR description maintaining the exact template structure while filling in meaningful content based on the provided context.`;
+
+            this.services.outputChannel.appendLine(`🚀 DEBUG: Starting Copilot integration for PR description`);
+            this.services.outputChannel.appendLine(`📋 DEBUG: Content length: ${prPrompt.length} characters (${Math.round(prPrompt.length / 1024)}KB)`);
+            this.services.outputChannel.appendLine(`📋 DEBUG: Content preview:\n${prPrompt.substring(0, 200)}...`);
+            
+            // Import CopilotUtils dynamically to avoid startup dependencies
+            const { CopilotUtils } = await import('../utils/CopilotUtils');
+            
+            const integrationResult = await CopilotUtils.integrateWithCopilot(
+                prPrompt,
+                this.services.outputChannel,
+                {
+                    autoSuccess: '🎉 PR description sent to Copilot Chat automatically! Check the response.',
+                    manualPaste: '📋 PR description ready in Copilot Chat - press Enter to submit.',
+                    clipboardOnly: '📋 PR description copied to clipboard. Please open Copilot Chat and paste manually.',
+                    chatOpenFailed: '⚠️ Could not open Copilot Chat. PR description copied to clipboard.'
+                }
+            );
+            
+            this.services.outputChannel.appendLine(`✅ Copilot integration completed: ${integrationResult.method}`);
+            
+        } catch (error) {
+            this.services.outputChannel.appendLine(`❌ Error in automated Copilot integration: ${error}`);
+            // Fallback to manual copy
+            await vscode.env.clipboard.writeText(prDescription);
+            vscode.window.showInformationMessage('❌ Auto-integration failed. PR description copied to clipboard - please paste in Copilot Chat manually.');
+        }
+    }
+
+    /**
+     * Execute git command and return result
+     */
+    /**
+     * Extract JIRA ticket number from branch name
+     */
+    private extractJiraTicket(branchName: string): string | null {
+        // Common JIRA patterns: ABC-123, PROJECT-456, etc.
+        const jiraPattern = /([A-Z]{2,}-\d+)/i;
+        const match = branchName.match(jiraPattern);
+        return match ? match[1].toUpperCase() : null;
+    }
+
+    /**
+     * Extract feature flags from git diff - Multi-system support
+     */
+    private async extractFeatureFlags(gitDiff: string): Promise<string[]> {
+        try {
+            const featureFlags: string[] = [];
+
+            // Support multiple feature flag systems
+            const FLAG_PATTERNS = [
+                // FlipperService patterns
+                /\.flipperEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                /\.eagerlyEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // Generic isEnabled patterns
+                /\.isEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                /\.checkFlag\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // LaunchDarkly patterns
+                /LaunchDarkly\.variation\(['"`]([^'"`]+)['"`]\)/g,
+                /ldClient\.variation\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // Feature flag function patterns
+                /featureFlag\(['"`]([^'"`]+)['"`]\)/g,
+                /getFeatureFlag\(['"`]([^'"`]+)['"`]\)/g,
+                /isFeatureEnabled\(['"`]([^'"`]+)['"`]\)/g,
+                
+                // Config-based patterns
+                /config\.feature\.([a-zA-Z0-9_-]+)/g,
+                /features\.([a-zA-Z0-9_-]+)\.enabled/g
+            ];
+
+            // Search through git diff for feature flag patterns
+            const diffLines = gitDiff.split('\n').filter(line => line.startsWith('+'));
+            
+            for (const line of diffLines) {
+                for (const pattern of FLAG_PATTERNS) {
+                    let match;
+                    while ((match = pattern.exec(line)) !== null) {
+                        const flagName = match[1];
+                        if (flagName && !featureFlags.includes(flagName)) {
+                            featureFlags.push(flagName);
+                        }
+                    }
+                }
+            }
+
+            return [...new Set(featureFlags)]; // Remove duplicates
+        } catch (error) {
+            this.services.outputChannel.appendLine(`⚠️ Failed to extract feature flags: ${error}`);
+            return [];
+        }
+    }
+
+    /**
+     * Read PR template from .github/PULL_REQUEST_TEMPLATE.md
+     */
+    private async readPRTemplate(): Promise<string | null> {
+        const fs = require('fs');
+        const path = require('path');
+        
+        const templatePaths = [
+            path.join(this.services.workspaceRoot, '.github', 'PULL_REQUEST_TEMPLATE.md'),
+            path.join(this.services.workspaceRoot, '.github', 'pull_request_template.md'),
+            path.join(this.services.workspaceRoot, '.github', 'PULL_REQUEST_TEMPLATE'),
+            path.join(this.services.workspaceRoot, 'PULL_REQUEST_TEMPLATE.md'),
+            path.join(this.services.workspaceRoot, 'pull_request_template.md')
+        ];
+
+        for (const templatePath of templatePaths) {
+            if (fs.existsSync(templatePath)) {
+                try {
+                    return fs.readFileSync(templatePath, 'utf8');
+                } catch (error) {
+                    this.services.outputChannel.appendLine(`⚠️ Could not read PR template at ${templatePath}: ${error}`);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Generate PR description from template
+     */
+    private async generateFromTemplate(
+        template: string, 
+        branchName: string, 
+        jiraTicket: string | null, 
+        gitDiff: string, 
+        changedFiles: string[], 
+        commits: string[],
+        featureFlags: string[]
+    ): Promise<string> {
+        // Start with the JIRA ticket if found
+        let description = '';
+        if (jiraTicket) {
+            description = `**JIRA:** [${jiraTicket}](https://jira.yourcompany.com/browse/${jiraTicket})\n\n`;
+        }
+
+        // Add the template
+        description += template;
+
+        // Add context information as HTML comments for AI to use
+        description += `\n\n<!-- Context for AI Enhancement:\n`;
+        description += `Branch: ${branchName}\n`;
+        description += `Files changed: ${changedFiles.length}\n`;
+        
+        if (commits.length > 0) {
+            description += `\nRecent commits:\n`;
+            commits.slice(0, 10).forEach(commit => {
+                description += `- ${commit}\n`;
+            });
+        }
+
+        if (changedFiles.length > 0) {
+            description += `\nModified files:\n`;
+            changedFiles.slice(0, 20).forEach(file => {
+                description += `- ${file}\n`;
+            });
+            if (changedFiles.length > 20) {
+                description += `- ... and ${changedFiles.length - 20} more files\n`;
+            }
+        }
+
+        if (featureFlags.length > 0) {
+            description += `\nFeature flags detected:\n`;
+            featureFlags.forEach(flag => {
+                description += `- ${flag}\n`;
+            });
+            description += `\nIMPORTANT: Include these feature flags in both Details and QA sections\n`;
+        }
+
+        // Add git diff preview for context
+        const diffPreview = gitDiff.substring(0, 2000);
+        if (diffPreview.length > 0) {
+            description += `\nGit diff preview:\n\`\`\`diff\n${diffPreview}${gitDiff.length > 2000 ? '\n...' : ''}\n\`\`\`\n`;
+        }
+        
+        description += `-->\n`;
+
+        return description;
+    }
+
+    /**
+     * Generate PR description with AI guidance
+     */
+    private async generateWithAI(
+        branchName: string, 
+        jiraTicket: string | null, 
+        gitDiff: string, 
+        changedFiles: string[], 
+        commits: string[],
+        featureFlags: string[]
+    ): Promise<string> {
+        let description = '';
+
+        // Add JIRA ticket if found
+        if (jiraTicket) {
+            description += `**JIRA:** [${jiraTicket}](https://jira.yourcompany.com/browse/${jiraTicket})\n\n`;
+        }
+
+        // Add standard PR template sections
+        description += `## Summary\n\n`;
+        description += `<!-- Provide a clear description of what this PR accomplishes and why -->\n\n`;
+
+        description += `## Changes\n\n`;
+        description += `<!-- List the key technical changes made in this PR -->\n\n`;
+
+        description += `## Details\n\n`;
+        description += `<!-- Technical implementation details and architectural decisions -->\n\n`;
+
+        // Add feature flags to Details if detected
+        if (featureFlags.length > 0) {
+            description += `### Feature Flags\n\n`;
+            featureFlags.forEach(flag => {
+                description += `- \`${flag}\` - <!-- Describe what this flag controls -->\n`;
+            });
+            description += `\n`;
+        }
+
+        description += `## QA\n\n`;
+        description += `<!-- Manual testing steps specific to this PR -->\n\n`;
+        
+        // Add feature flag testing to QA section
+        if (featureFlags.length > 0) {
+            description += `### Feature Flag Testing\n\n`;
+            featureFlags.forEach(flag => {
+                description += `- Test with \`${flag}\` enabled: <!-- Describe expected behavior -->\n`;
+                description += `- Test with \`${flag}\` disabled: <!-- Describe expected behavior -->\n`;
+            });
+            description += `\n`;
+        }
+
+        // Add context information as HTML comments for AI to use
+        description += `\n<!-- Context for AI Enhancement:\n`;
+        description += `Branch: ${branchName}\n`;
+        description += `Files changed: ${changedFiles.length}\n`;
+        
+        if (commits.length > 0) {
+            description += `\nRecent commits:\n`;
+            commits.slice(0, 10).forEach(commit => {
+                description += `- ${commit}\n`;
+            });
+        }
+
+        if (changedFiles.length > 0) {
+            description += `\nModified files:\n`;
+            changedFiles.slice(0, 20).forEach(file => {
+                description += `- ${file}\n`;
+            });
+            if (changedFiles.length > 20) {
+                description += `- ... and ${changedFiles.length - 20} more files\n`;
+            }
+        }
+
+        // Add git diff preview for context
+        const diffPreview = gitDiff.substring(0, 2000);
+        if (diffPreview.length > 0) {
+            description += `\nGit diff preview:\n\`\`\`diff\n${diffPreview}${gitDiff.length > 2000 ? '\n...' : ''}\n\`\`\`\n`;
+        }
+        
+        description += `-->`;
+
+        return description;
+    }
+
+    private async executeGitCommand(args: string[]): Promise<{success: boolean, stdout: string}> {
+        return new Promise((resolve) => {
+            const { spawn } = require('child_process');
+            const child = spawn('git', args, {
+                cwd: this.services.workspaceRoot,
+                stdio: ['ignore', 'pipe', 'pipe']
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            child.stdout?.on('data', (data: any) => stdout += data.toString());
+            child.stderr?.on('data', (data: any) => stderr += data.toString());
+
+            child.on('close', (code: any) => {
+                resolve({ success: code === 0, stdout });
+            });
+        });
+    }
+
+    /**
      * Simplified error handling - consolidate into 2 types: User Error and System Error
      */
     private async handleError(error: any, operation: string): Promise<void> {
@@ -897,5 +1399,35 @@ Please be specific and actionable in your suggestions. Include code examples whe
         const errorString = String(error).toLowerCase();
         const userErrorPatterns = ['command not found', 'no such file', 'permission denied', 'configuration'];
         return userErrorPatterns.some(pattern => errorString.includes(pattern));
+    }
+
+    /**
+     * Get workspace-specific key for storing recent projects
+     */
+    private getWorkspaceKey(): string {
+        // Use workspace root path as the key, with fallback
+        const workspacePath = this.services.workspaceRoot;
+        
+        // Create a shorter, more readable key from the workspace path
+        const pathParts = workspacePath.split(/[/\\]/);
+        const workspaceName = pathParts[pathParts.length - 1] || 'unknown';
+        
+        // Combine workspace name with a hash of the full path for uniqueness
+        const pathHash = this.simpleHash(workspacePath);
+        
+        return `${workspaceName}-${pathHash}`;
+    }
+
+    /**
+     * Simple hash function for creating workspace keys
+     */
+    private simpleHash(str: string): string {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash).toString(36).substring(0, 8);
     }
 }

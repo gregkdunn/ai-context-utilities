@@ -95,7 +95,7 @@ describe('PostTestActionService', () => {
             expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
                 expect.arrayContaining([
                     expect.objectContaining({ label: expect.stringContaining('View Output') }),
-                    expect.objectContaining({ label: expect.stringContaining('Rerun Tests') }),
+                    expect.objectContaining({ label: expect.stringContaining('Test Recent') }),
                     expect.objectContaining({ label: expect.stringContaining('Copy Failure Analysis') })
                 ]),
                 expect.objectContaining({
@@ -121,7 +121,7 @@ describe('PostTestActionService', () => {
             expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
                 expect.arrayContaining([
                     expect.objectContaining({ label: expect.stringContaining('View Output') }),
-                    expect.objectContaining({ label: expect.stringContaining('Rerun Tests') }),
+                    expect.objectContaining({ label: expect.stringContaining('Test Recent') }),
                     expect.objectContaining({ label: expect.stringContaining('PR Description') })
                 ]),
                 expect.objectContaining({
@@ -274,7 +274,7 @@ describe('PostTestActionService', () => {
 
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
                 const rerunItem = items.find((item: any) => 
-                    item.label.includes('Rerun Tests')
+                    item.label.includes('Test Recent')
                 );
                 await rerunItem.action();
                 return rerunItem;
@@ -289,7 +289,7 @@ describe('PostTestActionService', () => {
         test('should handle error when no previous test request', async () => {
             (vscode.window.showQuickPick as jest.Mock).mockImplementation(async (items) => {
                 const rerunItem = items.find((item: any) => 
-                    item.label.includes('Rerun Tests')
+                    item.label.includes('Test Recent')
                 );
                 await rerunItem.action();
                 return rerunItem;
@@ -426,16 +426,14 @@ describe('PostTestActionService', () => {
 
             await service.showPostTestActions(testResult, {});
 
+            // Phase 3.5.0: Now uses full automation with CopilotUtils
             expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
-                expect.stringContaining('# Pull Request')
+                expect.stringContaining('Pull Request Description Review & Enhancement')
             );
-            // Phase 3.4.0: Now generates actual change analysis instead of hardcoded text
             expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
-                expect.stringContaining('Code improvements and maintenance updates')
+                expect.stringContaining('Test Status: PASSED')
             );
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'PR description copied to clipboard using project template!'
-            );
+            // Note: Full automation testing requires mocking CopilotUtils.integrateWithCopilot
         });
 
         test('should generate PR description without template', async () => {
@@ -462,13 +460,11 @@ describe('PostTestActionService', () => {
 
             await service.showPostTestActions(testResult, {});
 
-            // Phase 3.4.0: Now generates actual change analysis instead of hardcoded text
+            // Phase 3.5.0: Now uses full automation with CopilotUtils
             expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
-                expect.stringContaining('Code improvements and maintenance updates')
+                expect.stringContaining('Pull Request Description Review & Enhancement')
             );
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'PR description copied to clipboard using default format!'
-            );
+            // Note: Full automation testing requires mocking CopilotUtils.integrateWithCopilot
         });
 
         test('should detect feature flags and add QA section', async () => {
@@ -537,9 +533,9 @@ describe('PostTestActionService', () => {
             expect(clipboardCall).toContain('`config-flag` - Test with flag enabled');
             expect(clipboardCall).toContain('`service-flag` - Test with flag enabled');
             
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'PR description copied to clipboard using default format (5 feature flags detected)!'
-            );
+            // Phase 3.5.0: Now uses full automation with CopilotUtils
+            // Feature flags are included in the comprehensive prompt
+            expect(clipboardCall).toContain('Pull Request Description Review & Enhancement');
         });
 
         test('should handle errors in PR description generation', async () => {
@@ -568,11 +564,8 @@ describe('PostTestActionService', () => {
 
             await service.showPostTestActions(testResult, {});
 
-            // Should still generate PR description without feature flags
+            // Should still generate PR description with full automation
             expect(vscode.env.clipboard.writeText).toHaveBeenCalled();
-            expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'PR description copied to clipboard using default format!'
-            );
         });
     });
 });

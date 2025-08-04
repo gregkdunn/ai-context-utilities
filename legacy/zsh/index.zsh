@@ -6,7 +6,7 @@
 # =========================================================================
 
 # Set base directory for all AI utilities output
-export AI_UTILITIES_BASE_DIR="${AI_UTILITIES_BASE_DIR:-.github/instructions/ai_utilities_context}"
+export AI_UTILITIES_BASE_DIR="${AI_UTILITIES_BASE_DIR:-.github/instructions/ai-utilities-context}"
 
 # Get the directory where this script is located
 local AI_UTILITIES_DIR="${0:A:h}"

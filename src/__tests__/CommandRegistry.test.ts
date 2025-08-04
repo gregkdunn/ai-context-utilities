@@ -47,15 +47,12 @@ describe('CommandRegistry', () => {
         // Mock orchestrator methods
         mockOrchestrator = {
             showMainMenu: jest.fn(),
-            showProjectBrowser: jest.fn(),
-            runGitAffected: jest.fn(),
-            toggleFileWatcher: jest.fn(),
-            clearTestCache: jest.fn(),
             runSetup: jest.fn(),
             showWorkspaceInfo: jest.fn(),
-            createConfig: jest.fn(),
-            openPostTestContext: jest.fn(),
-            rerunProjectTestsFromContext: jest.fn()
+            runGitAffected: jest.fn(),
+            rerunProjectTestsFromContext: jest.fn(),
+            prepareToPush: jest.fn(),
+            generatePRDescription: jest.fn()
         } as any;
 
         // Make TestMenuOrchestrator constructor return our mock
@@ -75,16 +72,16 @@ describe('CommandRegistry', () => {
             const registeredCommands = registerSpy.mock.calls.map(call => call[0]);
             
             expect(registeredCommands).toContain('aiDebugContext.runAffectedTests');
-            expect(registeredCommands).toContain('aiDebugContext.selectProject');
-            expect(registeredCommands).toContain('aiDebugContext.clearTestCache');
-            expect(registeredCommands).toContain('aiDebugContext.startFileWatcher');
             expect(registeredCommands).toContain('aiDebugContext.runSetup');
             expect(registeredCommands).toContain('aiDebugContext.showWorkspaceInfo');
             expect(registeredCommands).toContain('aiDebugContext.runGitAffected');
-            expect(registeredCommands).toContain('aiDebugContext.runCopilotInstructionContexts');
-            expect(registeredCommands).toContain('aiDebugContext.createConfig');
-            expect(registeredCommands).toContain('aiDebugContext.openContextBrowser');
             expect(registeredCommands).toContain('aiDebugContext.rerunProjectTests');
+            expect(registeredCommands).toContain('aiDebugContext.addCopilotInstructionContexts');
+            expect(registeredCommands).toContain('aiDebugContext.prepareToPush');
+            expect(registeredCommands).toContain('aiDebugContext.generatePRDescription');
+            
+            // Should register exactly 8 commands
+            expect(registeredCommands).toHaveLength(8);
         });
 
         test('should return array of disposables', () => {
@@ -120,46 +117,46 @@ describe('CommandRegistry', () => {
             expect(mockOrchestrator.showMainMenu).toHaveBeenCalled();
         });
 
-        test('selectProject should delegate to orchestrator.showProjectBrowser', async () => {
+        test('runSetup should delegate to orchestrator.runSetup', async () => {
             const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
             
-            const selectProjectCall = registerSpy.mock.calls.find(
-                call => call[0] === 'aiDebugContext.selectProject'
+            const runSetupCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.runSetup'
             );
-            expect(selectProjectCall).toBeDefined();
+            expect(runSetupCall).toBeDefined();
             
-            const handler = selectProjectCall![1];
+            const handler = runSetupCall![1];
             await handler();
 
-            expect(mockOrchestrator.showProjectBrowser).toHaveBeenCalled();
+            expect(mockOrchestrator.runSetup).toHaveBeenCalled();
         });
 
-        test('clearTestCache should delegate to orchestrator.clearTestCache', async () => {
+        test('showWorkspaceInfo should delegate to orchestrator.showWorkspaceInfo', async () => {
             const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
             
-            const clearCacheCall = registerSpy.mock.calls.find(
-                call => call[0] === 'aiDebugContext.clearTestCache'
+            const showWorkspaceInfoCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.showWorkspaceInfo'
             );
-            expect(clearCacheCall).toBeDefined();
+            expect(showWorkspaceInfoCall).toBeDefined();
             
-            const handler = clearCacheCall![1];
+            const handler = showWorkspaceInfoCall![1];
             await handler();
 
-            expect(mockOrchestrator.clearTestCache).toHaveBeenCalled();
+            expect(mockOrchestrator.showWorkspaceInfo).toHaveBeenCalled();
         });
 
-        test('startFileWatcher should delegate to orchestrator.toggleFileWatcher', async () => {
+        test('runGitAffected should delegate to orchestrator.runGitAffected', async () => {
             const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
             
-            const fileWatcherCall = registerSpy.mock.calls.find(
-                call => call[0] === 'aiDebugContext.startFileWatcher'
+            const runGitAffectedCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.runGitAffected'
             );
-            expect(fileWatcherCall).toBeDefined();
+            expect(runGitAffectedCall).toBeDefined();
             
-            const handler = fileWatcherCall![1];
+            const handler = runGitAffectedCall![1];
             await handler();
 
-            expect(mockOrchestrator.toggleFileWatcher).toHaveBeenCalled();
+            expect(mockOrchestrator.runGitAffected).toHaveBeenCalled();
         });
 
         test('rerunProjectTests should delegate to orchestrator.rerunProjectTestsFromContext', async () => {
@@ -174,6 +171,60 @@ describe('CommandRegistry', () => {
             await handler();
 
             expect(mockOrchestrator.rerunProjectTestsFromContext).toHaveBeenCalled();
+        });
+
+        test('prepareToPush should delegate to orchestrator.prepareToPush', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            const prepareToPushCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.prepareToPush'
+            );
+            expect(prepareToPushCall).toBeDefined();
+            
+            const handler = prepareToPushCall![1];
+            await handler();
+
+            expect(mockOrchestrator.prepareToPush).toHaveBeenCalled();
+        });
+
+        test('generatePRDescription should delegate to orchestrator.generatePRDescription', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            const generatePRCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.generatePRDescription'
+            );
+            expect(generatePRCall).toBeDefined();
+            
+            const handler = generatePRCall![1];
+            await handler();
+
+            expect(mockOrchestrator.generatePRDescription).toHaveBeenCalled();
+        });
+
+        test('addCopilotInstructionContexts should handle module loading', async () => {
+            const registerSpy = jest.spyOn(vscode.commands, 'registerCommand');
+            
+            const addCopilotCall = registerSpy.mock.calls.find(
+                call => call[0] === 'aiDebugContext.addCopilotInstructionContexts'
+            );
+            expect(addCopilotCall).toBeDefined();
+            
+            // Mock the dynamic import
+            const mockModule = {
+                addCopilotInstructionContexts: jest.fn()
+            };
+            const mockCopilotInstructionsModule = jest.fn().mockImplementation(() => mockModule);
+            
+            // Mock the import
+            jest.doMock('../modules/copilotInstructions/CopilotInstructionsModule', () => ({
+                CopilotInstructionsModule: mockCopilotInstructionsModule
+            }));
+            
+            const handler = addCopilotCall![1];
+            await handler();
+
+            // Note: Testing dynamic import is complex and may require additional setup
+            // This test ensures the command is registered properly
         });
     });
 

@@ -300,6 +300,11 @@ export class ConfigurationManager {
      * Get test command for a specific mode
      */
     getTestCommand(mode: 'default' | 'affected' | 'watch' | 'coverage' | 'debug' = 'default', project?: string): string {
+        // Check if we're using Nx but it's not actually available
+        if (this.isNx() && !this.isNxAvailable()) {
+            return this.getFallbackTestCommand(mode, project);
+        }
+
         let command = this.config.testCommands[mode] || this.config.testCommands.default;
         
         // Replace placeholders
@@ -316,6 +321,98 @@ export class ConfigurationManager {
         }
         
         return command;
+    }
+
+    /**
+     * Get fallback test command when Nx is configured but not available
+     */
+    private getFallbackTestCommand(mode: 'default' | 'affected' | 'watch' | 'coverage' | 'debug' = 'default', project?: string): string {
+        const packageScripts = this.getPackageJsonTestScripts();
+        
+        // Show notification about fallback (only once per session)
+        if (!this.hasShownFallbackNotification) {
+            this.showNxFallbackNotification();
+            this.hasShownFallbackNotification = true;
+        }
+
+        // Handle affected tests differently since package.json scripts don't support this
+        if (mode === 'affected') {
+            return this.getAffectedTestFallback();
+        }
+
+        // Map modes to package.json scripts
+        let command: string | undefined;
+        switch (mode) {
+            case 'default':
+                command = packageScripts.default;
+                break;
+            case 'watch':
+                command = packageScripts.watch || packageScripts.default;
+                break;
+            case 'coverage':
+                command = packageScripts.coverage || packageScripts.default;
+                break;
+            case 'debug':
+                // For debug mode, fall back to default since package.json rarely has debug scripts
+                command = packageScripts.default;
+                break;
+        }
+
+        // If no suitable script found, return a basic test command
+        if (!command) {
+            return 'npm test';
+        }
+
+        return command;
+    }
+
+    private hasShownFallbackNotification = false;
+
+    /**
+     * Show notification when falling back from Nx to package.json scripts
+     */
+    private showNxFallbackNotification(): void {
+        const message = 'Nx is not installed, falling back to project test script';
+        
+        // Use setTimeout to avoid blocking the current execution
+        setTimeout(() => {
+            vscode.window.showInformationMessage(message);
+        }, 100);
+    }
+
+    /**
+     * Get alternative affected test strategy for non-Nx workspaces
+     * This provides a git-based fallback when nx affected is not available
+     */
+    getAffectedTestFallback(): string {
+        const packageScripts = this.getPackageJsonTestScripts();
+        
+        // Show notification about affected test limitations
+        if (!this.hasShownAffectedFallbackNotification) {
+            this.showAffectedFallbackNotification();
+            this.hasShownAffectedFallbackNotification = true;
+        }
+
+        // For non-Nx workspaces, we can't truly run "affected" tests
+        // so we fall back to running all tests
+        return packageScripts.default || 'npm test';
+    }
+
+    private hasShownAffectedFallbackNotification = false;
+
+    /**
+     * Show notification about affected test limitations in non-Nx workspaces
+     */
+    private showAffectedFallbackNotification(): void {
+        const message = 'Affected tests not available without Nx - running all tests instead';
+        
+        setTimeout(() => {
+            vscode.window.showInformationMessage(message, 'Learn More').then(selection => {
+                if (selection === 'Learn More') {
+                    vscode.env.openExternal(vscode.Uri.parse('https://nx.dev/features/run-tasks#run-only-tasks-affected-by-a-pr'));
+                }
+            });
+        }, 100);
     }
     
     /**
@@ -415,6 +512,84 @@ output:
      */
     isNx(): boolean {
         return this.config.framework === 'nx';
+    }
+
+    /**
+     * Check if Nx is actually installed and available in the workspace
+     */
+    isNxAvailable(): boolean {
+        try {
+            // Check for nx.json configuration file
+            if (fs.existsSync(path.join(this.workspaceRoot, 'nx.json'))) {
+                return true;
+            }
+
+            // Check for nx binary in node_modules
+            const nxBinaryPath = path.join(this.workspaceRoot, 'node_modules', '.bin', 'nx');
+            if (fs.existsSync(nxBinaryPath)) {
+                return true;
+            }
+
+            // Check package.json for nx dependencies
+            const packageJsonPath = path.join(this.workspaceRoot, 'package.json');
+            if (fs.existsSync(packageJsonPath)) {
+                const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+                const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+                
+                if (deps['@nrwl/workspace'] || deps['@nx/workspace'] || deps['nx']) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (error) {
+            console.warn('Error checking Nx availability:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Get test scripts from package.json as fallback when Nx is not available
+     */
+    private getPackageJsonTestScripts(): { default?: string; watch?: string; coverage?: string; [key: string]: string | undefined } {
+        try {
+            const packageJsonPath = path.join(this.workspaceRoot, 'package.json');
+            if (!fs.existsSync(packageJsonPath)) {
+                return {};
+            }
+
+            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+            const scripts = packageJson.scripts || {};
+            
+            const testScripts: { default?: string; watch?: string; coverage?: string; [key: string]: string | undefined } = {};
+
+            // Map common script names to our test command modes
+            if (scripts.test) {
+                testScripts.default = `npm run test`;
+            }
+            if (scripts['test:watch']) {
+                testScripts.watch = `npm run test:watch`;
+            } else if (scripts['test-watch']) {
+                testScripts.watch = `npm run test-watch`;
+            }
+            if (scripts['test:coverage']) {
+                testScripts.coverage = `npm run test:coverage`;
+            } else if (scripts.coverage) {
+                testScripts.coverage = `npm run coverage`;
+            }
+
+            // Look for other test-related scripts
+            for (const [scriptName, scriptValue] of Object.entries(scripts)) {
+                if (typeof scriptValue === 'string' && scriptName.includes('test')) {
+                    testScripts[scriptName] = `npm run ${scriptName}`;
+                }
+            }
+
+            return testScripts;
+        } catch (error) {
+            console.warn('Error reading package.json test scripts:', error);
+            return {};
+        }
     }
 
     /**

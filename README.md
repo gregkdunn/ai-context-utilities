@@ -1,349 +1,208 @@
-# AI Context Utilities - Intelligent Test Runner for VSCode
+# AI Context Util - Copilot Instructions & Intelligent Testing
 
-VSCode extension for running tests and generating AI context files.
+VSCode extension that automatically generates GitHub Copilot instructions from your ESLint/Prettier configs and provides intelligent test running with AI-friendly context generation.
 
-**Version:** 3.4.0  
+**Version:** 3.5.1  
 **Status:** Production Ready  
 **Architecture:** TypeScript  
+**Project Support:** Nx, Turborepo, Lerna, Standalone, Workspaces  
 **Test Coverage:** 90%+
 
 ---
 
-## Features
+## 🚀 Key Features
 
-### Test Execution
-- Run tests from command palette
-- Project discovery and selection
-- Git affected test detection
-- Real-time progress monitoring
+### 🤖 GitHub Copilot Instructions
+- **Automatic Generation**: Creates `.github/instructions/copilot-instructions.md` from your configs
+- **ESLint Translation**: Converts ESLint rules into natural language guidance
+- **Prettier Integration**: Generates formatting instructions from Prettier settings
+- **Framework Detection**: Supports Angular, React, Vue, TypeScript projects
+- **User Overrides**: Priority 1000 custom instructions that override everything
 
-### Context Generation
-- Generates AI context files when tests run
-- Captures test output and git changes
-- Creates debugging context for failures
-- Generates PR descriptions for passing tests
+### 📁 Organized Structure
+```
+.github/instructions/
+├── copilot-instructions.md           # Main entry point
+├── user-overrides.instructions.md    # Your customizations (Priority: 1000)
+└── frameworks/                       # Framework-specific files
+    ├── eslint-rules.instructions.md      # ESLint rules translated
+    ├── prettier-formatting.instructions.md # Prettier formatting rules
+    ├── angular.instructions.md           # Angular best practices
+    └── typescript.instructions.md       # TypeScript guidelines
+```
 
-### Post-Test Actions
-- View test output
-- Rerun tests
-- Copy failure analysis to clipboard
-- Generate PR descriptions
+### 🔍 Smart Configuration Discovery
+- **Nx Workspace Support**: Finds configs in workspace root and project-specific locations
+- **Multiple Formats**: Supports all ESLint and Prettier config formats
+- **Debug Logging**: Shows exactly which paths were checked for configs
+- **Fallback Content**: Generates basic guidelines even with minimal configs
 
----
+### 🧪 Universal Test Runner
+- **Run Affected Tests** (`Cmd+Shift+T`): Smart test detection with automatic project type detection
+- **Non-Nx Support**: Automatically falls back to package.json scripts when Nx unavailable
+- **Workspace-Specific History**: Recent projects isolated per workspace for better organization
+- **Git-Based Testing** (`Cmd+Shift+G`): Test only files changed in git across all project types
+- **Re-Run Tests** (`Cmd+Shift+R`): Quickly re-run your last test suite with workspace memory
+- **Multi-Project Support**: Nx, Turborepo, Lerna, standalone projects, and workspaces
+- **Test Context Generation**: Creates AI-friendly context from test results
 
-## Version 3.4.0 Changes
+### 🏗️ Universal Project Support
+- **Automatic Detection**: Intelligently detects Nx, Turborepo, Lerna, workspaces, or standalone projects
+- **Smart Fallbacks**: Gracefully handles missing tools with appropriate alternatives
+- **Clear Communication**: User notifications explain what's happening and why
+- **Workspace Isolation**: Recent projects and test history separated by workspace
+- **Configuration Templates**: Optimized settings for different project architectures
 
-### Context Generation
-- Includes all relevant information without arbitrary limits
-- Context-aware prompts for failing vs passing tests
-- Filters out noise while preserving useful content
-
-### Feature Flag Detection
-- Supports FlipperService, LaunchDarkly, and generic patterns
-- Detects flags in git changes
-- Generates QA checklists for PR descriptions
-
-### Test Analysis
-- Pattern-based error categorization (TypeError, AssertionError, etc.)
-- Extracts expected vs actual values from test failures
-- Provides specific file paths and line numbers for fixes
-
-### PR Descriptions
-- Analyzes git changes to generate content
-- Detects breaking changes and API modifications
-- Uses project PR templates when available
-
----
-
-## ✨ **What's New in Version 3.1.0**
-
-### 🔄 **Enhanced Command Palette Integration**
-- **Re-Run Project Tests** - `Ctrl+Shift+R` keyboard shortcut to re-run tests based on current context
-- **Test Updated Files** - Moved from main menu to command palette for better accessibility
-- **Context-Aware Navigation** - Back button intelligently returns to the menu that opened current view
-
-### 🛠️ **Code Quality & Architecture**
-- **Utility Classes** - Centralized UI patterns with `QuickPickUtils`, `CopilotUtils`, and `MessageUtils`
-- **DRY Implementation** - Eliminated 150+ lines of duplicate code across 8 files
-- **Consistent UI** - Standardized QuickPick creation, Copilot integration, and message patterns
-- **Enhanced Reliability** - Copilot integration with 6 fallback methods for maximum compatibility
-
-### 🧠 **Real Test Intelligence**
-- **Test Intelligence Engine** - Machine learning-inspired system that learns from every test execution
-- **Pattern Detection** - Automatically identifies flaky, slow, and problematic tests
-- **Failure Prediction** - Predicts which tests are likely to fail based on code changes and history
-- **Intelligent Optimization** - Suggests test order optimization and performance improvements
-
-### 🚀 **Native Implementation**  
-- **No Shell Script Dependencies** - Pure TypeScript implementation replacing shell script wrappers
-- **Real-Time Monitoring** - Live test execution tracking with detailed metrics
-- **AI-Powered Analysis** - Automatic failure analysis with suggested fixes and confidence scores
-- **Predictive Analytics** - Estimates test duration and provides optimization suggestions
-
-### 🤖 **Advanced AI Features**
-- **Smart Failure Analysis** - AI analyzes test failures and suggests specific code fixes
-- **Test Correlation Detection** - Identifies tests that frequently fail together
-- **Performance Insights** - Automatically detects memory leaks, slow tests, and optimization opportunities
-- **Intelligent Test Selection** - Uses ML to determine optimal test execution order
-
-### 🎨 **Enhanced User Experience**
-- **Animated Status Bar** - Braille-pattern spinner animation during test execution for visual feedback
-- **Copilot Integration** - Automatic paste to Copilot Chat with "Analyze the pasted document." instruction
-- **Visual Menu Indicators** - Color-coded menu items showing default/recommended options
-- **PR Template Support** - Reads and uses `.github/PULL_REQUEST_TEMPLATE.md` for better PR descriptions
-
-### 📁 **Improved File Organization**
-- **Structured Output** - All files organized in `.github/instructions/ai-utilities-context/`
-  - `ai-debug-context.txt` - Consolidated debugging context
-  - `diff.txt` - Git changes data
-  - `test-output.txt` - Jest test execution results
-  - `pr-description.txt` - Generated PR descriptions
-- **Glob Pattern Safety** - Fixed critical bug where glob patterns were treated as file paths
+### 🚀 Developer Workflow Tools
+- **Prepare To Push**: Runs tests on recent projects and checks git status before pushing
+- **PR Description Generator**: Auto-generates detailed PR descriptions from git changes
+- **Workspace Analysis**: Detects frameworks, dependencies, and project structure
 
 ---
 
-## 🏗️ **Architecture Overview**
+## 🎯 Available Commands
 
-### **Service Container Pattern**
-The extension uses a modern service container architecture with dependency injection:
+### Primary Commands
+**🤖 Add Copilot Instruction Contexts**
+- Analyzes your workspace configuration
+- Generates GitHub Copilot instruction files
+- Creates user override template (if missing)
+- Links all files for easy discovery
 
+**🧪 Run Affected Tests** (`Cmd+Shift+T`)
+- Smart menu for selecting test execution mode
+- Auto-detects changed files and affected projects
+- Generates test context for AI debugging
+
+### Quick Actions
+- **⚡ Test Updated Files** (`Cmd+Shift+G`) - Run tests for git-changed files
+- **🔄 Re-Run Project Tests** (`Cmd+Shift+R`) - Re-run last test suite
+- **🚀 Prepare To Push** - Pre-push validation with tests
+- **📝 PR Description** - Generate PR description from changes
+- **📊 Show Workspace Info** - Display project structure
+- **🍎 Run Setup Wizard** - Initial configuration
+
+---
+
+## 📋 Example Generated Content
+
+### ESLint Rules Translation
+```markdown
+# TypeScript Development Guidelines
+
+**Configuration Source**: `/workspace/.eslintrc.json`
+
+## Type Safety
+- Always use specific types instead of 'any'. When the type is truly unknown, use 'unknown' and add type guards.
+- Always handle all Promises with await, .then(), or .catch(). Unhandled promises can cause silent failures.
+
+## Modern JavaScript  
+- Always use 'const' for variables that are never reassigned.
+- Always use 'let' or 'const' instead of 'var' for block-scoped variable declarations.
+```
+
+### Prettier Formatting Rules
+```markdown
+# Code Formatting Guidelines
+
+**Configuration Source**: `/workspace/.prettierrc`
+
+## Formatting Rules
+- Always add semicolons at the end of statements
+- Use single quotes for strings instead of double quotes
+- Keep lines under 120 characters
+- Add trailing commas where valid in ES5 (objects, arrays, etc)
+```
+
+### User Overrides Template
+```markdown
+# User Override Instructions
+
+> **📝 CUSTOMIZATION GUIDE**  
+> This file takes precedence over ALL automatically generated instructions.  
+> Add your personal coding preferences, project-specific rules, and overrides here.
+
+## Quick Override Examples
+
+### Override Automated Recommendations
 ```typescript
-ServiceContainer
-├── Core Services
-│   ├── ConfigurationManager     // Framework detection & test commands
-│   ├── SimplePerformanceTracker // Lightweight operation tracking  
-│   └── ProjectCache            // Intelligent project caching
-├── Business Logic
-│   ├── TestMenuOrchestrator    // Main user interface coordination
-│   ├── TestExecutionService    // Test running with progress monitoring
-│   ├── ProjectSelectionService // Project discovery & selection
-│   └── PostTestActionService   // Simplified post-test actions (3 core actions)
-├── Phase 3.4.0 - Enhanced Services
-│   ├── TestAnalysisHelper      // Enhanced pattern-based analysis with context extraction
-│   ├── RealTimeTestMonitor     // Live test execution monitoring
-│   └── NativeTestRunner        // Pure TypeScript test execution
-├── Phase 2.0+ Modules
-│   ├── GitDiffCapture         // Automatic diff capture for AI context
-│   ├── TestOutputCapture      // Structured test output collection
-│   └── ContextCompiler        // AI context generation with PR template support
-└── Infrastructure
-    ├── BackgroundDiscovery     // Continuous project scanning
-    ├── SmartFrameworkDetector  // Auto-detection of development frameworks
-    └── CommandRegistry         // VSCode command registration (thin layer)
+// ❌ AI might suggest: Use signals for state management
+// ✅ My preference: Continue using RxJS observables for complex state
+// Reason: Team expertise and existing patterns
 ```
 
-### **Key Benefits**
-- **Intelligent**: Machine learning-inspired test optimization and prediction
-- **Native**: Pure TypeScript implementation, no shell script dependencies
-- **Maintainable**: Clear separation of concerns with dependency injection
-- **Testable**: High test coverage with isolated unit tests
-- **Extensible**: Easy to add new AI features and test frameworks
-- **Performant**: Real-time monitoring and intelligent test execution
+### Test Context Output
+```markdown
+## Test Results Summary
+- Total Tests: 142
+- Passed: 140 ✅
+- Failed: 2 ❌
+- Duration: 12.5s
 
----
-
-## Installation
-
-1. Install the extension in VSCode
-2. Open a workspace with test files
-3. Use `Cmd+Shift+P` → "AI Context Util: Run Affected Tests"
-
-## Usage
-
-**Commands:**
-- `Ctrl+Shift+T` / `Cmd+Shift+T` - Run Affected Tests
-- `Ctrl+Shift+R` / `Cmd+Shift+R` - Re-Run Tests
-- `Ctrl+Shift+G` / `Cmd+Shift+G` - Test Updated Files
-- `Ctrl+Shift+C` / `Cmd+Shift+C` - Clear Cache
-
-**Output Files:**
-- `.github/instructions/ai-utilities-context/ai-debug-context.txt` - Test context
-- `.github/instructions/ai-utilities-context/pr-description.txt` - PR descriptions
-- `.github/instructions/ai-utilities-context/test-output.txt` - Raw test output
-- `.github/instructions/ai-utilities-context/diff.txt` - Git changes
-
----
-
-## 📈 **Smart Features**
-
-### **Intelligent Caching**
-- **Project Cache**: Remembers project structure to avoid repeated discovery
-- **Background Discovery**: Continuously updates project list without blocking UI
-- **Recent Projects**: Quick access to frequently tested projects
-
-### **Framework Intelligence**
-- **Auto-Detection**: Recognizes Angular, React, Vue, Next.js, Nuxt.js, and more
-- **Smart Commands**: Optimizes test commands based on detected framework
-- **Configuration**: Generates optimized `.aiDebugContext.yml` configurations
-
----
-
-## 🧪 **Testing & Quality**
-
-### **Test Coverage**
-- **Unit Tests**: Comprehensive coverage of core services
-- **Integration Tests**: Validates service interactions
-- **Smoke Tests**: Ensures basic functionality works
-
-### **Quality Metrics**
-- **TypeScript**: Strict type checking enabled
-- **Architecture**: Service-oriented design principles
-- **Speed**: Sub-second response times for most operations
-
----
-
-## 🛠️ **Development**
-
-### **Project Structure**
-```
-src/
-├── core/               # Core services and dependency injection
-│   ├── ServiceContainer.ts     # Main DI container
-│   ├── ConfigurationManager.ts # Framework detection
-│   └── CommandRegistry.ts      # VSCode command delegation
-├── services/           # Business logic services  
-│   ├── TestMenuOrchestrator.ts  # Main UI coordination
-│   ├── TestExecutionService.ts  # Test execution
-│   └── ProjectSelectionService.ts # Project management
-├── utils/              # Utility services
-│   ├── SimplePerformanceTracker.ts # Lightweight operation tracking
-│   ├── BackgroundProjectDiscovery.ts # Background scanning
-│   └── SmartFrameworkDetector.ts # Framework detection
-└── __tests__/          # Comprehensive test suite
-    ├── unit/           # Unit tests for individual services
-    │   └── utils/      # Tests for utility classes (QuickPickUtils, CopilotUtils, MessageUtils)
-    └── integration/    # Integration tests for service interactions
-```
-
-### **Development Commands**
-```bash
-npm run compile     # Compile TypeScript
-npm test           # Run test suite
-npm run test:coverage # Generate coverage report
-npm run package    # Create VSIX package
-```
-
-### **Architecture Principles**
-1. **Dependency Injection**: All services receive dependencies through constructor
-2. **Single Responsibility**: Each service has a focused, well-defined purpose
-3. **Interface Segregation**: Services depend on interfaces, not implementations
-4. **Testability**: All services can be tested in isolation with mocks
-
----
-
-## 📝 **Configuration**
-
-### **Automatic Configuration**
-The extension automatically detects your framework and generates optimized configuration:
-
-```yaml
-# .aiDebugContext.yml (automatically generated)
-framework: 'Angular'  # or React, Vue, etc.
-testCommand: 'ng test'  # optimized for your framework
-settings:
-  cacheTimeout: 30      # project cache lifetime in minutes
-  backgroundDiscovery: true
-```
-
-### **Manual Configuration**
-Create `.aiDebugContext.yml` in your workspace root for custom settings:
-
-```yaml
-framework: 'Custom'
-testCommand: 'npm run test'
-projects:
-  - name: 'my-app'
-    testCommand: 'npm run test:app'
-  - name: 'my-lib' 
-    testCommand: 'npm run test:lib'
-settings:
-  cacheTimeout: 60
-  enableVerboseLogging: true
+## Failed Tests
+1. UserService › should validate email format
+   - Expected: valid@email.com
+   - Received: invalid-email
+   
+2. AuthGuard › should redirect unauthorized users
+   - Navigation timeout after 5000ms
 ```
 
 ---
 
-## 🔧 **Configuration & Setup**
+## 🛠️ Installation & Usage
 
-### **Auto-Configuration**
-The extension automatically detects your project setup and optimizes test commands for your framework.
-
-### **Manual Configuration** 
-Create `.aiDebugContext.yml` in your workspace root for custom test commands and project-specific settings.
-
----
-
-## 🔧 **Troubleshooting**
-
-### **Common Issues**
-
-**No projects found:**
-- Ensure you have `project.json` files in your workspace
-- Check that workspace root contains your projects
-- Run "Clear Test Cache" if projects were recently added
-
-**Tests not running:**
-- Verify your test command works in terminal: `npx nx test [project]`
-- Check `.aiDebugContext.yml` configuration if present
-- Enable extension output logs for detailed diagnostics
-
-**Slow execution:**
-- Check extension output logs for slow operations
-- Clear cache if workspace structure changed significantly  
-- Disable background discovery if CPU usage is high
-
-### **Getting Help**
-1. Check extension output logs for detailed information
-2. View VSCode Output → "AI Context Utilities" for detailed logs
-3. Clear cache: `Cmd+Shift+P` → "AI Context Util: Clear Test Cache"
-4. Reset configuration: Delete `.aiDebugContext.yml` and restart
+1. **Install Extension**: Search for "AI Context Util" in VSCode Extensions
+2. **Open Project**: Navigate to your workspace with ESLint/Prettier configs
+3. **Run Command**: Press `Cmd+Shift+P` → "🤖 Add Copilot Instruction Contexts"
+4. **Include in Copilot**: Add `.github/instructions/copilot-instructions.md` to your Copilot context
 
 ---
 
-## 🚀 **What's New in V3**
+## 🎨 Logo
 
-### **Phase 3.4.0 - Enhanced AI Context Generation** ⭐ **CURRENT**
-- ✅ **Streamlined Context Generation**: Complete, focused AI context with all relevant information
-- ✅ **Multi-System Feature Flag Detection**: Supports 10+ flag systems (FlipperService, LaunchDarkly, etc.)
-- ✅ **Enhanced Test Analysis**: Specific error patterns with context extraction
-- ✅ **Intelligent PR Descriptions**: Based on actual git changes, not templates
-- ✅ **Pattern-Based Fixes**: Concrete code suggestions with file paths and line numbers
-
-### **Phase 3.2.0 - Service Simplification**
-- ✅ **Animated Status Bar**: Braille-pattern spinner animation during test execution
-- ✅ **Copilot Integration**: Automatic paste to Copilot Chat with analysis instruction
-- ✅ **PR Template Support**: Reads and uses project-specific `.github/PULL_REQUEST_TEMPLATE.md`
-- ✅ **Visual Menu Indicators**: Color-coded menu items showing defaults and recommendations
-- ✅ **Smart File Organization**: Structured output in `.github/instructions/ai-utilities-context/`
-- ✅ **Glob Pattern Safety**: Fixed critical TestResultCache bug with wildcard patterns
-
-### **Phase 2.0.3 - Real Test Intelligence**
-- ✅ **Test Intelligence Engine**: Machine learning-inspired system that learns from every test execution
-- ✅ **Native Test Runner**: Pure TypeScript implementation replacing shell script dependencies
-- ✅ **AI Test Assistant**: Automatic failure analysis with suggested fixes and confidence scores
-- ✅ **Real-Time Monitoring**: Live test execution tracking with predictive analytics
-- ✅ **Pattern Detection**: Identifies flaky, slow, and problematic tests automatically
-
-### **Phase 1.9.3 - Complete Service Architecture**
-- ✅ **Service Container**: Modern dependency injection pattern
-- ✅ **Smart Framework Detection**: Auto-detection of 10+ frameworks
-- ✅ **Background Discovery**: Non-blocking project scanning
-- ✅ **Comprehensive Testing**: 55% test coverage with integration tests
-- ✅ **Focused UI**: Clean interface focused on core testing workflow
-
-### **Key Improvements**
-- **Real AI Intelligence**: No more shell script wrappers, actual test learning and prediction
-- **95% faster failure detection** through pattern recognition and prediction
-- **Intelligent test optimization** with ML-inspired execution order
-- **Native implementation** eliminating external dependencies
-- **Advanced failure analysis** with actionable fix suggestions
+The extension features a cheerful atomic debug logo with a friendly face and mustache - because debugging should be fun! The logo represents the atomic structure of your code with intelligent, helpful debugging assistance. The orbital rings and colorful electrons symbolize the dynamic nature of code analysis and testing.
 
 ---
 
-## 📄 **License**
+## 🔧 Support & Configuration
 
-MIT License - See LICENSE file for details.
+### Supported Config Files
+- **ESLint**: `.eslintrc.json`, `.eslintrc.js`, `eslint.config.js` (flat config)
+- **Prettier**: `.prettierrc`, `.prettierrc.json`, `prettier.config.js`, `package.json`
+- **Frameworks**: Angular, React, Vue, TypeScript detection
+
+### Supported Test Frameworks
+- **Jest** - Automatic detection and parallel execution
+- **Vitest** - Modern testing with instant feedback
+- **Mocha** - Classic testing framework support
+- **Nx** - Monorepo testing with affected detection
+- **Custom Scripts** - Any npm test script in package.json
+
+### Debug Information
+Enable VS Code Output → "AI Context Utilities" to see detailed configuration discovery logs.
 
 ---
 
-*Built with ❤️ for developers who value fast, reliable testing workflows.*
+## 📚 Version History
+
+### 3.5.0 - Current
+- GitHub Copilot instruction generation
+- ESLint rule translation to natural language
+- Prettier configuration parsing
+- User override system with priority 1000
+- Nx workspace support
+- Framework-specific instruction files
+- Intelligent test runner with affected detection
+- Prepare to Push workflow automation
+- PR description generation from git changes
+- Multi-project test orchestration
+
+### 3.4.0 - Previous
+- Enhanced test context generation
+- Feature flag detection
+- Improved error analysis
+
+---
+
+**Transform your development workflow with intelligent GitHub Copilot instructions and smart test automation!** 🚀

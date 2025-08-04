@@ -116,8 +116,8 @@ export class TestExecutionService {
             this.services.outputChannel.appendLine(`🧪 Running: ${command}`);
             this.services.outputChannel.appendLine(`${'='.repeat(80)}`);
             
-            // Save project as recent if it's a specific project
-            if (request.project) {
+            // Save project as recent if it's a specific project (not a special command)
+            if (request.project && request.project !== 'SHOW_BROWSER') {
                 await this.saveRecentProject(request.project);
             }
             
@@ -536,24 +536,30 @@ export class TestExecutionService {
     }
 
     /**
-     * Save project as recent
+     * Save project as recent (workspace-specific)
      */
     private async saveRecentProject(projectName: string): Promise<void> {
         try {
             if (!projectName || typeof projectName !== 'string' || 
-                projectName === '[object Object]' || projectName === '[Object object]') {
+                projectName === '[object Object]' || projectName === '[Object object]' ||
+                projectName === 'SHOW_BROWSER') {
                 return;
             }
             
             const workspaceState = vscode.workspace.getConfiguration('aiDebugContext');
-            let recentProjects: any[] = workspaceState.get('recentProjects', []);
+            const workspaceKey = this.getWorkspaceKey();
+            
+            // Get all workspace projects
+            let allWorkspaceProjects = workspaceState.get<Record<string, any[]>>('recentProjectsByWorkspace', {});
+            let recentProjects: any[] = allWorkspaceProjects[workspaceKey] || [];
             
             // Clean up corrupted entries
             recentProjects = recentProjects.filter((p: any) => {
                 return p && typeof p === 'object' && p.name && 
                        typeof p.name === 'string' && 
                        p.name !== '[object Object]' && 
-                       p.name !== '[Object object]';
+                       p.name !== '[Object object]' &&
+                       p.name !== 'SHOW_BROWSER';
             });
             
             // Find existing entry
@@ -574,9 +580,42 @@ export class TestExecutionService {
             // Keep only last 8 projects
             recentProjects = recentProjects.slice(0, 8);
             
-            await workspaceState.update('recentProjects', recentProjects, true);
+            // Update the workspace-specific projects
+            allWorkspaceProjects[workspaceKey] = recentProjects;
+            
+            await workspaceState.update('recentProjectsByWorkspace', allWorkspaceProjects, true);
         } catch (error) {
             console.warn('Failed to save recent project:', error);
         }
+    }
+
+    /**
+     * Get workspace-specific key for storing recent projects
+     */
+    private getWorkspaceKey(): string {
+        // Use workspace root path as the key, with fallback
+        const workspacePath = this.services.workspaceRoot;
+        
+        // Create a shorter, more readable key from the workspace path
+        const pathParts = workspacePath.split(/[/\\]/);
+        const workspaceName = pathParts[pathParts.length - 1] || 'unknown';
+        
+        // Combine workspace name with a hash of the full path for uniqueness
+        const pathHash = this.simpleHash(workspacePath);
+        
+        return `${workspaceName}-${pathHash}`;
+    }
+
+    /**
+     * Simple hash function for creating workspace keys
+     */
+    private simpleHash(str: string): string {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash).toString(36).substring(0, 8);
     }
 }

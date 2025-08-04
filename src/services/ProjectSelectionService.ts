@@ -160,24 +160,57 @@ export class ProjectSelectionService {
     }
 
     /**
-     * Get recent projects list
+     * Get recent projects list (workspace-specific)
      */
     async getRecentProjects(): Promise<RecentProject[]> {
         try {
             const workspaceState = vscode.workspace.getConfiguration('aiDebugContext');
-            const rawRecentProjects = workspaceState.get<any[]>('recentProjects', []);
+            const workspaceKey = this.getWorkspaceKey();
+            const allWorkspaceProjects = workspaceState.get<Record<string, any[]>>('recentProjectsByWorkspace', {});
+            const rawRecentProjects = allWorkspaceProjects[workspaceKey] || [];
             
             // Clean up corrupted entries
             return rawRecentProjects.filter(p => {
                 if (!p || typeof p !== 'object') return false;
                 if (!p.name || typeof p.name !== 'string') return false;
                 if (p.name === '[object Object]' || p.name === '[Object object]') return false;
+                if (p.name === 'SHOW_BROWSER') return false;
                 return true;
             });
         } catch (error) {
             console.warn('Failed to get recent projects:', error);
             return [];
         }
+    }
+
+    /**
+     * Get workspace-specific key for storing recent projects
+     */
+    private getWorkspaceKey(): string {
+        // Use workspace root path as the key, with fallback
+        const workspacePath = this.services.workspaceRoot;
+        
+        // Create a shorter, more readable key from the workspace path
+        const pathParts = workspacePath.split(/[/\\]/);
+        const workspaceName = pathParts[pathParts.length - 1] || 'unknown';
+        
+        // Combine workspace name with a hash of the full path for uniqueness
+        const pathHash = this.simpleHash(workspacePath);
+        
+        return `${workspaceName}-${pathHash}`;
+    }
+
+    /**
+     * Simple hash function for creating workspace keys
+     */
+    private simpleHash(str: string): string {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash).toString(36).substring(0, 8);
     }
 
     /**
@@ -214,7 +247,7 @@ export class ProjectSelectionService {
             
             // Add most recent with special formatting
             items.push({
-                label: `$(play-circle) Run Recent: ${recentProjects[0].name}`,
+                label: `↻ Test Recent: ${recentProjects[0].name}`,
                 detail: `Last tested: ${recentProjects[0].lastUsed || 'Recently'} $(check)`,
                 description: '$(star-full) Most Recent'
             });
@@ -393,9 +426,9 @@ export class ProjectSelectionService {
         } else if (selection.label.includes('Select Project')) {
             // This will trigger the project browser
             return { type: 'project', project: 'SHOW_BROWSER' };
-        } else if (selection.label.includes('Run Recent:')) {
-            // Extract project name from "Run Recent: project-name"
-            const projectName = selection.label.split('Run Recent: ')[1];
+        } else if (selection.label.includes('Test Recent:')) {
+            // Extract project name from "Test Recent: project-name"
+            const projectName = selection.label.split('Test Recent: ')[1];
             return { type: 'project', project: projectName };
         } else if (selection.label.includes('$(history)')) {
             // Handle other recent projects
