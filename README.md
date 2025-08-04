@@ -3,7 +3,7 @@
 VSCode extension with Copilot instruction and Test Result context generation for AI analysis.
 
 **Version:** 3.5.1  
-**Status:** Somewhat stable. I mean, what is stable these days?
+**Status:** Somewhat stable.
 **Architecture:** TypeScript  
 **Project Support:** Nx, Angular, React, Vue, TypeScript
 **Test Coverage:** 90%+
