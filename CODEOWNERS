@@ -1,0 +1,27 @@
+# Code Owners for AI Context Utilities
+# This file defines who is responsible for code in this repository.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owner - all files and directories
+* @gregkdunn
+
+# Documentation - require approval for major doc changes
+/docs/ @gregkdunn
+README.md @gregkdunn
+CHANGELOG.md @gregkdunn
+
+# Core extension files - require careful review
+/src/ @gregkdunn
+package.json @gregkdunn
+tsconfig.json @gregkdunn
+
+# Configuration and build files
+/.github/ @gregkdunn
+/scripts/ @gregkdunn
+jest.config.js @gregkdunn
+
+# ZSH CLI scripts - require shell scripting expertise
+/zsh/ @gregkdunn
+
+# Beta builds - require admin approval
+/beta-builds/ @gregkdunn

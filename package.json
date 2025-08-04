@@ -201,7 +201,7 @@
     "dev:setup": "node scripts/dev-setup.js",
     "dev:setup:shell": "./scripts/dev-setup.sh",
     "clean": "rm -rf out/ .jest-cache/",
-    "package": "vsce package",
+    "package": "vsce package --out beta-builds/",
     "publish": "vsce publish",
     "quick-test": "./scripts/quick-test.sh || echo 'Run dev setup first'"
   },

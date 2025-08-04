@@ -8,22 +8,22 @@
 
 ### Core Documentation
 - **[README.md](../README.md)** - Main project documentation and feature overview
-- **[Technical Specifications](TECHNICAL_SPECIFICATIONS.md)** - Comprehensive technical documentation
 - **[CHANGELOG.md](../CHANGELOG.md)** - Version history and feature updates
 
+### Development Documentation
+- **[Technical Specifications](development/TECHNICAL_SPECIFICATIONS.md)** - Comprehensive technical documentation
+- **[UI Specifications](development/UI_SPECIFICATIONS_v3_5_1.md)** - User interface reference and design specifications
+
 ### User Guides  
-- **[Installation Guide](guides/INSTALLATION_GUIDE.md)** - Installation and setup instructions
+- **[Beta Installation Guide](guides/BETA_INSTALLATION_GUIDE.md)** - Installation guide for beta testers
 - **[Quick Start Guide](guides/QUICK_START_GUIDE.md)** - Get started quickly with common workflows
-- **[Development Guide](guides/DEVELOPMENT.md)** - Development environment setup
-- **[Contributing Guide](guides/CONTRIBUTING.md)** - How to contribute to the project
-- **[Developer Guide](guides/DEVELOPER.md)** - Advanced development topics
+- **[Full User Guide](guides/FULL_USER_GUIDE.md)** - Comprehensive feature documentation
 
 ### Planning & Architecture
-- **[v3.6.0 Planning](planning/v3.6.0-non-nx-support.md)** - Future non-Nx project support roadmap
+- **[v3.6.0 Feature Plan](planning/v3_6_0_FEATURE_PLAN.md)** - Future non-Nx project support roadmap
 
 ### Archived Documentation
-- **[v3.5.0 Archive](archive/v3.5.0/)** - Previous technical documentation versions
-- **[Phase 3.5.0 Archive](archive/phase-3.5.0/)** - Phase-specific documentation and guides
+
 
 ## 🎯 Key Features (v3.5.1)
 
@@ -79,11 +79,12 @@
 
 ## 🚀 Quick Links
 
-- **New Users**: Start with [Installation Guide](guides/INSTALLATION_GUIDE.md)
-- **Contributors**: See [Contributing Guide](guides/CONTRIBUTING.md)  
-- **Technical Details**: Review [Technical Specifications](TECHNICAL_SPECIFICATIONS.md)
+- **New Users**: Start with [Beta Installation Guide](guides/BETA_INSTALLATION_GUIDE.md)
+- **Quick Setup**: Follow [Quick Start Guide](guides/QUICK_START_GUIDE.md)
+- **Complete Reference**: See [Full User Guide](guides/FULL_USER_GUIDE.md)
+- **Technical Details**: Review [Technical Specifications](development/TECHNICAL_SPECIFICATIONS.md)
 - **Latest Updates**: Check [CHANGELOG.md](../CHANGELOG.md) for recent features
-- **Future Planning**: See [v3.6.0 Roadmap](planning/v3.6.0-non-nx-support.md)
+- **Future Planning**: See [v3.6.0 Feature Plan](planning/v3_6_0_FEATURE_PLAN.md)
 
 ## 🔄 Recent Updates (v3.5.1)
 

@@ -1,11 +1,11 @@
 # AI Context Util - Copilot Instructions & Intelligent Testing
 
-VSCode extension that automatically generates GitHub Copilot instructions from your ESLint/Prettier configs and provides intelligent test running with AI-friendly context generation.
+VSCode extension with Copilot instruction and Test Result context generation for AI analysis.
 
 **Version:** 3.5.1  
-**Status:** Production Ready  
+**Status:** Somewhat stable. I mean, what is stable these days?
 **Architecture:** TypeScript  
-**Project Support:** Nx, Turborepo, Lerna, Standalone, Workspaces  
+**Project Support:** Nx, Angular, React, Vue, TypeScript
 **Test Coverage:** 90%+
 
 ---
@@ -31,57 +31,53 @@ VSCode extension that automatically generates GitHub Copilot instructions from y
     └── typescript.instructions.md       # TypeScript guidelines
 ```
 
-### 🔍 Smart Configuration Discovery
-- **Nx Workspace Support**: Finds configs in workspace root and project-specific locations
-- **Multiple Formats**: Supports all ESLint and Prettier config formats
-- **Debug Logging**: Shows exactly which paths were checked for configs
-- **Fallback Content**: Generates basic guidelines even with minimal configs
-
-### 🧪 Universal Test Runner
+### 🧪 Test Runner with Copilot Analysis
 - **Run Affected Tests** (`Cmd+Shift+T`): Smart test detection with automatic project type detection
-- **Non-Nx Support**: Automatically falls back to package.json scripts when Nx unavailable
-- **Workspace-Specific History**: Recent projects isolated per workspace for better organization
 - **Git-Based Testing** (`Cmd+Shift+G`): Test only files changed in git across all project types
-- **Re-Run Tests** (`Cmd+Shift+R`): Quickly re-run your last test suite with workspace memory
-- **Multi-Project Support**: Nx, Turborepo, Lerna, standalone projects, and workspaces
-- **Test Context Generation**: Creates AI-friendly context from test results
-
-### 🏗️ Universal Project Support
-- **Automatic Detection**: Intelligently detects Nx, Turborepo, Lerna, workspaces, or standalone projects
-- **Smart Fallbacks**: Gracefully handles missing tools with appropriate alternatives
-- **Clear Communication**: User notifications explain what's happening and why
-- **Workspace Isolation**: Recent projects and test history separated by workspace
-- **Configuration Templates**: Optimized settings for different project architectures
+- **Re-Run Tests** (`Cmd+Shift+R`): Quickly re-run your last test run
+- **Non-Nx Support**: Automatically falls back to package.json scripts when Nx unavailable
+- **Test Context Generation**: Test results and Git Diff are sent to Copilot for analysis
 
 ### 🚀 Developer Workflow Tools
 - **Prepare To Push**: Runs tests on recent projects and checks git status before pushing
 - **PR Description Generator**: Auto-generates detailed PR descriptions from git changes
-- **Workspace Analysis**: Detects frameworks, dependencies, and project structure
 
 ---
 
 ## 🎯 Available Commands
 
 ### Primary Commands
+
+#### Copilot Instructions
 **🤖 Add Copilot Instruction Contexts**
 - Analyzes your workspace configuration
 - Generates GitHub Copilot instruction files
 - Creates user override template (if missing)
-- Links all files for easy discovery
 
+#### Testing Commands
 **🧪 Run Affected Tests** (`Cmd+Shift+T`)
 - Smart menu for selecting test execution mode
 - Auto-detects changed files and affected projects
 - Generates test context for AI debugging
+**⚡ Test Updated Files** (`Cmd+Shift+G`) 
+- Run tests for git-changed files
+**🔄 Re-Run Project Tests** (`Cmd+Shift+R`) 
+- Re-run last test suite
 
-### Quick Actions
-- **⚡ Test Updated Files** (`Cmd+Shift+G`) - Run tests for git-changed files
-- **🔄 Re-Run Project Tests** (`Cmd+Shift+R`) - Re-run last test suite
-- **🚀 Prepare To Push** - Pre-push validation with tests
-- **📝 PR Description** - Generate PR description from changes
-- **📊 Show Workspace Info** - Display project structure
-- **🍎 Run Setup Wizard** - Initial configuration
+### PR Workflow Commands
+**🚀 Prepare To Push** 
+- Runs lint and prettier checks
+- Runs affected tests across all projects
+**📝 PR Description** 
+- Generate PR description from changes
+- Checks for Flippers in code changes
+- Checks for Jira ticket number in branch name
 
+**🔧 Setup Commands**
+**🍎 Run Setup**
+- Initial configuration
+**📊 Show Workspace Info**
+- Display project language, framework, and config details
 ---
 
 ## 📋 Example Generated Content
@@ -152,57 +148,42 @@ VSCode extension that automatically generates GitHub Copilot instructions from y
 
 ## 🛠️ Installation & Usage
 
-1. **Install Extension**: Search for "AI Context Util" in VSCode Extensions
+### VSCode Extension (Recommended)
+1. **Install Extension**: Search for "AI Context Util" in VSCode Extensions   
+1. Install the beta version located in the 'beta-builds' directory of this repository
+   - **Open Command Palette**: Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+   - **Install from VSIX**: Select "Install from VSIX..." and choose the downloaded `.vsix` file
+   More info at [docs/guides/BETA_INSTALLATION_GUIDE.md](docs/guides/BETA_INSTALLATION_GUIDE.md)
+
 2. **Open Project**: Navigate to your workspace with ESLint/Prettier configs
 3. **Run Command**: Press `Cmd+Shift+P` → "🤖 Add Copilot Instruction Contexts"
-4. **Include in Copilot**: Add `.github/instructions/copilot-instructions.md` to your Copilot context
+
+
+### CLI Alternative (Zsh Scripts)
+If you prefer command line tools, check out the [ZSH CLI scripts](zsh/README.md) in the `zsh/` directory:
+
+- **`aiDebug [project]`** - Complete development workflow in one command
+- **`prepareToPush [project]`** - Code quality validation before commits
+- **`nxTest [project]`** - AI-optimized test reporting
+- **`gitDiff`** - Smart git change analysis
+
+**Quick Setup**:
+```bash
+# Add to ~/.zshrc
+source /path/to/ai-context-util/zsh/index.zsh
+```
+
+The CLI tools provide the same AI-optimized context generation with additional workflow automation for terminal users.
 
 ---
 
-## 🎨 Logo
 
-The extension features a cheerful atomic debug logo with a friendly face and mustache - because debugging should be fun! The logo represents the atomic structure of your code with intelligent, helpful debugging assistance. The orbital rings and colorful electrons symbolize the dynamic nature of code analysis and testing.
+## 🔧 Support & Feedback
+- **Issues**: [GitHub Issues](https://github.com/gregkdunn/ai-context-util/issues)
 
----
-
-## 🔧 Support & Configuration
-
-### Supported Config Files
-- **ESLint**: `.eslintrc.json`, `.eslintrc.js`, `eslint.config.js` (flat config)
-- **Prettier**: `.prettierrc`, `.prettierrc.json`, `prettier.config.js`, `package.json`
-- **Frameworks**: Angular, React, Vue, TypeScript detection
-
-### Supported Test Frameworks
-- **Jest** - Automatic detection and parallel execution
-- **Vitest** - Modern testing with instant feedback
-- **Mocha** - Classic testing framework support
-- **Nx** - Monorepo testing with affected detection
-- **Custom Scripts** - Any npm test script in package.json
 
 ### Debug Information
 Enable VS Code Output → "AI Context Utilities" to see detailed configuration discovery logs.
 
 ---
 
-## 📚 Version History
-
-### 3.5.0 - Current
-- GitHub Copilot instruction generation
-- ESLint rule translation to natural language
-- Prettier configuration parsing
-- User override system with priority 1000
-- Nx workspace support
-- Framework-specific instruction files
-- Intelligent test runner with affected detection
-- Prepare to Push workflow automation
-- PR description generation from git changes
-- Multi-project test orchestration
-
-### 3.4.0 - Previous
-- Enhanced test context generation
-- Feature flag detection
-- Improved error analysis
-
----
-
-**Transform your development workflow with intelligent GitHub Copilot instructions and smart test automation!** 🚀
