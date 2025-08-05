@@ -1,12 +1,12 @@
 # =========================================================================
 # File: functions/aiDebug.zsh
-# Purpose: AI-optimized debugging with automatic quality checks and PR prompts
+# Purpose: AI Context debugging with automatic quality checks and PR prompts
 # =========================================================================
 
 # =========================================================================
-# FUNCTION: aiDebug (AI-Optimized with Integrated Quality Checks)
+# FUNCTION: aiDebug (AI Context with Integrated Quality Checks)
 # =========================================================================
-# Purpose: Creates an AI-optimized context file for debugging test failures
+# Purpose: Creates an AI Context context file for debugging test failures
 #          by intelligently combining git changes with test results and
 #          providing structured analysis guidance. Automatically runs code
 #          quality checks and generates PR descriptions when tests pass.
@@ -16,12 +16,12 @@
 #
 # Options:
 #   --quick              Skip detailed analysis, faster execution
-#   --full-context       Include full test output (not AI-optimized)
+#   --full-context       Include full test output (not AI Context)
 #   --no-diff           Skip git diff capture
 #   --focus <area>      Focus on specific area (tests|types|performance)
 #
 # Examples:
-#   aiDebug settings-voice-assist-feature     # Full AI-optimized analysis
+#   aiDebug settings-voice-assist-feature     # Full AI Context analysis
 #   aiDebug --quick my-component             # Quick analysis
 #   aiDebug --focus=types my-service         # Focus on TypeScript issues
 #   aiDebug --full-context complex-feature  # Include verbose test output
@@ -32,7 +32,7 @@
 #   - .github/instructions/ai-utilities-context/diff.txt (git changes)
 #   - .github/instructions/ai-utilities-context/jest-output.txt (test results)
 #
-# AI Optimization Features:
+# AI context Features:
 #   - Intelligent context prioritization
 #   - Failure correlation analysis
 #   - Change impact assessment
@@ -106,7 +106,7 @@ aiDebug() {
   echo "=========================================================="
   echo "Target: ${test_target:-"(auto-detect)"}"
   echo "Mode: $([ $quick_mode -eq 1 ] && echo "Quick" || echo "Full")"
-  echo "Context: $([ $full_context -eq 1 ] && echo "Verbose" || echo "AI-Optimized")"
+  echo "Context: $([ $full_context -eq 1 ] && echo "Verbose" || echo "AI Context")"
   echo "Focus: ${focus_area:-"General"}"
   echo ""
 
@@ -132,7 +132,7 @@ aiDebug() {
   if [[ $full_context -eq 1 ]]; then
     nxTest --full-output "$test_target"
   else
-    nxTest "$test_target"  # Use AI-optimized output by default
+    nxTest "$test_target"  # Use AI Context output by default
   fi
   local test_exit_code=$?
   
@@ -179,7 +179,7 @@ aiDebug() {
 
   # Step 4: Generate intelligent AI context
   echo ""
-  echo "🧠 Generating AI-optimized context file..."
+  echo "🧠 Generating AI Context context file..."
   _create_ai_debug_context "$context_file" "$diff_file" "$test_file" "$test_target" $test_exit_code "$focus_area" $quick_mode $lint_exit_code $prettier_exit_code
 
   # Step 5: Generate PR description prompts if tests are passing
@@ -212,7 +212,7 @@ _create_ai_debug_context() {
   local lint_exit_code="${8:-0}"
   local prettier_exit_code="${9:-0}"
   
-  # Start with AI-optimized header
+  # Start with AI Context header
   cat > "$context_file" << EOF
 =================================================================
 🤖 AI DEBUG CONTEXT - OPTIMIZED FOR ANALYSIS

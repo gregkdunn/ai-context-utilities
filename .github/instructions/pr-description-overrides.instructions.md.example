@@ -1,0 +1,70 @@
+# PR Description Override Instructions
+
+## 🎯 PURPOSE
+This file allows you to customize the PR description generation prompt with your own high-priority instructions.
+These instructions will be used FIRST when generating PR descriptions, overriding the default behavior.
+
+## 📝 YOUR CUSTOM INSTRUCTIONS
+<!-- Edit the section below with your preferred PR description style and requirements -->
+
+### Required Style
+- Use concise, bullet-point format for all sections
+- Start Summary with "This PR..." 
+- Keep descriptions under 500 words total
+- Use present tense throughout
+
+### Content Requirements
+1. **Summary**: One sentence maximum describing the change
+2. **Technical Changes**: List files modified with brief explanation
+3. **Testing**: Include specific test commands that were run
+4. **Impact**: Describe who this affects and how
+5. **Screenshots**: Request screenshots for any UI changes
+
+### Tone and Voice
+- Professional but conversational
+- Avoid jargon where possible
+- Focus on "why" not just "what"
+
+### Special Instructions
+- If feature flags are detected, create a dedicated "Feature Flag Testing" section
+- For bug fixes, include "Root Cause" section
+- For performance improvements, include metrics/benchmarks
+
+### Template Override Example
+```markdown
+## Summary
+This PR [action verb] [what changed] to [why/benefit].
+
+## Changes
+- `filename.ts`: [what changed and why]
+- `other-file.js`: [what changed and why]
+
+## Testing
+- ✅ `npm test` - All tests passing
+- ✅ Manual testing: [specific steps taken]
+
+## Impact
+- **Users**: [how users are affected]
+- **Developers**: [how developers are affected]
+```
+
+## 🔧 HOW TO USE THIS FILE
+1. Edit the instructions above to match your team's PR description style
+2. Save this file in one of these locations (in priority order):
+   - `.github/instructions/pr-description-overrides.instructions.md` (recommended)
+   - `.github/pr-description-overrides.instructions.md`
+   - `pr-description-overrides.instructions.md` (root)
+   - `.vscode/pr-description-overrides.instructions.md`
+3. Run the "📝 PR Description" command - your instructions will be used automatically
+
+## 💡 TIPS
+- Keep instructions clear and specific
+- Use examples to show desired format
+- Update regularly based on team feedback
+- Consider different instructions for different types of PRs (features, bugs, docs)
+
+<!-- 
+Note: This file is automatically detected by the AI Context Utilities extension.
+When present, these instructions take priority over default PR description generation.
+Delete or rename this file to revert to default behavior.
+-->

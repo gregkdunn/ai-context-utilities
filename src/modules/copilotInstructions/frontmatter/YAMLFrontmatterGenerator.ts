@@ -52,7 +52,12 @@ export class YAMLFrontmatterGenerator {
             if (Array.isArray(value)) {
                 lines.push(`${spaces}${key}:`);
                 for (const item of value) {
-                    lines.push(`${spaces}  - ${item}`);
+                    // Quote string items in arrays
+                    if (typeof item === 'string' && (item.includes('*') || item.includes('/') || item.includes(':') || item.includes('#') || item.includes('@'))) {
+                        lines.push(`${spaces}  - "${item}"`);
+                    } else {
+                        lines.push(`${spaces}  - ${item}`);
+                    }
                 }
             } else if (typeof value === 'object') {
                 lines.push(`${spaces}${key}:`);
@@ -63,9 +68,16 @@ export class YAMLFrontmatterGenerator {
                 value.split('\n').forEach(line => {
                     lines.push(`${spaces}  ${line}`);
                 });
-            } else if (typeof value === 'string' && (value.includes(':') || value.includes('#'))) {
-                // Quote strings that might confuse YAML parser
-                lines.push(`${spaces}${key}: "${value}"`);
+            } else if (typeof value === 'string') {
+                // Quote strings that might confuse YAML parser, contain special chars, or have spaces
+                const needsQuotes = value.includes(':') || value.includes('#') || value.includes('*') || 
+                                    value.includes('/') || value.includes(' ') || value.includes('@') ||
+                                    value.includes('"') || value.includes("'") || value.includes('\\');
+                if (needsQuotes) {
+                    lines.push(`${spaces}${key}: "${value}"`);
+                } else {
+                    lines.push(`${spaces}${key}: ${value}`);
+                }
             } else {
                 lines.push(`${spaces}${key}: ${value}`);
             }
@@ -330,51 +342,81 @@ export class YAMLFrontmatterGenerator {
         });
     }
 
-    private parseYAMLManually(yamlContent: string): FrontmatterOptions {
-        const result: any = {};
-        const lines = yamlContent.split('\n');
-        let currentKey: string | null = null;
-        let currentArray: string[] | null = null;
-        
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('#')) continue;
+    private parseYAMLManually(yamlContent: string): FrontmatterOptions | null {
+        try {
+            const result: any = {};
+            const lines = yamlContent.split('\n');
+            let currentKey: string | null = null;
+            let currentArray: string[] | null = null;
+            let inMalformedValue = false;
             
-            // Array item
-            if (trimmed.startsWith('- ')) {
-                if (currentArray && currentKey) {
-                    currentArray.push(trimmed.substring(2).trim());
-                }
-                continue;
-            }
-            
-            // Key-value pair
-            const match = line.match(/^(\s*)(\w+):\s*(.*)$/);
-            if (match) {
-                const [, indent, key, value] = match;
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('#')) continue;
                 
-                if (indent.length === 0) {
-                    // Top-level key
-                    currentKey = key;
-                    currentArray = null;
-                    
-                    if (!value) {
-                        // Start of array or object
-                        result[key] = [];
-                        currentArray = result[key];
-                    } else {
-                        // Direct value
+                // Check for unclosed brackets/braces - indicates malformed YAML
+                if (trimmed.includes('[') && !trimmed.includes(']')) {
+                    inMalformedValue = true;
+                }
+                if (trimmed.includes('{') && !trimmed.includes('}')) {
+                    inMalformedValue = true;
+                }
+                
+                // Skip if we're in a malformed value
+                if (inMalformedValue) {
+                    // Check if this line closes the malformed value
+                    if (trimmed.includes(']') || trimmed.includes('}')) {
+                        inMalformedValue = false;
+                    }
+                    continue;
+                }
+                
+                // Array item
+                if (trimmed.startsWith('- ')) {
+                    if (currentArray && currentKey) {
+                        const value = trimmed.substring(2).trim();
+                        // Remove quotes if present
                         const cleanValue = value.replace(/^["']|["']$/g, '');
-                        if (cleanValue === 'true') result[key] = true;
-                        else if (cleanValue === 'false') result[key] = false;
-                        else if (/^\d+$/.test(cleanValue)) result[key] = parseInt(cleanValue);
-                        else result[key] = cleanValue;
+                        currentArray.push(cleanValue);
+                    }
+                    continue;
+                }
+                
+                // Key-value pair
+                const match = line.match(/^(\s*)(\w+):\s*(.*)$/);
+                if (match) {
+                    const [, indent, key, value] = match;
+                    
+                    if (indent.length === 0) {
+                        // Top-level key
+                        currentKey = key;
+                        currentArray = null;
+                        
+                        if (!value) {
+                            // Start of array or object
+                            result[key] = [];
+                            currentArray = result[key];
+                        } else {
+                            // Direct value
+                            const cleanValue = value.replace(/^["']|["']$/g, '');
+                            if (cleanValue === 'true') result[key] = true;
+                            else if (cleanValue === 'false') result[key] = false;
+                            else if (/^\d+$/.test(cleanValue)) result[key] = parseInt(cleanValue);
+                            else result[key] = cleanValue;
+                        }
                     }
                 }
             }
+            
+            // If we detected malformed content, return null
+            if (inMalformedValue) {
+                return null;
+            }
+            
+            return result as FrontmatterOptions;
+        } catch (error) {
+            return null;
         }
-        
-        return result as FrontmatterOptions;
     }
 
     parseExistingFrontmatter(content: string): { frontmatter: FrontmatterOptions | null; body: string } {
@@ -384,6 +426,13 @@ export class YAMLFrontmatterGenerator {
             const [, frontmatterYaml, bodyContent] = frontmatterMatch;
             try {
                 const frontmatter = this.parseYAMLManually(frontmatterYaml);
+                if (frontmatter === null) {
+                    // Malformed YAML, return the entire content as body
+                    return {
+                        frontmatter: null,
+                        body: content.trim()
+                    };
+                }
                 return {
                     frontmatter,
                     body: bodyContent.trim()

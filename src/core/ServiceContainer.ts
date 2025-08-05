@@ -30,6 +30,7 @@ import { RealTimeTestMonitor } from '../services/RealTimeTestMonitor';
 import { TestAnalysisHelper } from '../services/TestAnalysisHelper';
 import { NativeTestRunner } from '../services/NativeTestRunner';
 import { WorkspaceAnalyzer } from '../utils/WorkspaceAnalyzer';
+import { PostTestActionService } from '../services/PostTestActionService';
 
 export interface ServiceConfiguration {
     workspaceRoot: string;
@@ -66,6 +67,7 @@ export class ServiceContainer {
     private _testAnalysisHelper!: TestAnalysisHelper;
     private _nativeTestRunner!: NativeTestRunner;
     private _workspaceAnalyzer!: WorkspaceAnalyzer;
+    private _postTestActions!: PostTestActionService;
     private _fileWatcherActive: boolean = false;
     
     // Status bar animation
@@ -164,6 +166,9 @@ export class ServiceContainer {
             testCommand: testCommand
         });
 
+        // Post-test action service
+        this._postTestActions = new PostTestActionService(this);
+
         // Start background discovery for current workspace
         this._backgroundDiscovery.queueDiscovery(this.config.workspaceRoot, 'medium');
 
@@ -225,6 +230,10 @@ export class ServiceContainer {
 
     get testActions(): TestActions {
         return this._testActions;
+    }
+
+    get postTestActions(): PostTestActionService {
+        return this._postTestActions;
     }
 
     /**

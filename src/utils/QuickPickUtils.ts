@@ -115,7 +115,7 @@ export class QuickPickUtils {
      * Check if selection is the back button
      */
     static isBackButton(selection: vscode.QuickPickItem): boolean {
-        return selection.label === '$(arrow-left) Back' || selection.label === '← Back';
+        return selection && (selection.label === '$(arrow-left) Back' || selection.label === '← Back');
     }
 
     /**

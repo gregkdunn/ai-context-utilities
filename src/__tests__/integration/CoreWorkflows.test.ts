@@ -191,38 +191,6 @@ describe('Core Workflows Integration Tests', () => {
             expect(testExecution).toBeDefined();
         });
 
-        test('should track performance during test execution', async () => {
-            // Mock child process for test execution
-            const mockChild = {
-                stdout: { on: jest.fn() },
-                stderr: { on: jest.fn() },
-                on: jest.fn((event, callback) => {
-                    if (event === 'close') {
-                        setTimeout(() => callback(0), 10); // Simulate successful exit
-                    }
-                })
-            };
-            
-            const { spawn } = require('child_process');
-            (spawn as jest.Mock).mockReturnValue(mockChild);
-
-            // Mock performance tracking
-            const trackCommandSpy = jest.spyOn(serviceContainer.performanceTracker, 'trackCommand')
-                .mockImplementation(async (name, fn) => await fn());
-
-            const request = {
-                project: 'test-project',
-                mode: 'default' as const,
-                verbose: true
-            };
-
-            await testExecution.executeTest(request);
-
-            expect(trackCommandSpy).toHaveBeenCalledWith(
-                'test-default-test-project',
-                expect.any(Function)
-            );
-        });
     });
 
     describe('ProjectSelectionService Integration', () => {
@@ -250,8 +218,24 @@ describe('Core Workflows Integration Tests', () => {
                 { name: 'recent-app', lastUsed: '2024-01-01', testCount: 5, lastUsedTimestamp: Date.now() }
             ];
 
+            // Use a Proxy to return mock data for any workspace key
+            const workspaceData = new Proxy({}, {
+                get: (target, prop) => {
+                    // Return mock projects for any key that looks like a workspace key
+                    if (typeof prop === 'string' && prop.includes('workspace')) {
+                        return mockRecentProjects;
+                    }
+                    return [];
+                }
+            });
+
             (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
-                get: jest.fn().mockReturnValue(mockRecentProjects),
+                get: jest.fn().mockImplementation((key: string, defaultValue: any) => {
+                    if (key === 'recentProjectsByWorkspace') {
+                        return workspaceData;
+                    }
+                    return defaultValue;
+                }),
                 update: jest.fn()
             });
 

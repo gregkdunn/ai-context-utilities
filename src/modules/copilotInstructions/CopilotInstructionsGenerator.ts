@@ -145,7 +145,13 @@ export class CopilotInstructionsGenerator {
         progress.report({ message: 'Parsing ESLint rules...', increment: 15 });
         this.services.updateStatusBar('📋 Parsing ESLint rules...', 'yellow');
         this.outputChannel.appendLine(`🔍 Searching for ESLint config in: ${this.services.workspaceRoot}`);
-        const eslintConfig = await this.eslintParser.parseConfiguration(this.services.workspaceRoot);
+        let eslintConfig = null;
+        try {
+            eslintConfig = await this.eslintParser.parseConfiguration(this.services.workspaceRoot);
+        } catch (error) {
+            this.outputChannel.appendLine(`⚠️ ESLint parsing failed: ${error}`);
+            // Continue without ESLint config
+        }
         
         if (eslintConfig) {
             this.outputChannel.appendLine(`🔍 ESLint parsing result: ${eslintConfig.configPath ? `Found config at ${eslintConfig.configPath}` : 'No config found'}`);
@@ -159,7 +165,13 @@ export class CopilotInstructionsGenerator {
         // Parse Prettier configuration
         progress.report({ message: 'Parsing Prettier configuration...', increment: 10 });
         this.outputChannel.appendLine(`🔍 Searching for Prettier config in: ${this.services.workspaceRoot}`);
-        const prettierConfig = await this.prettierParser.parseConfiguration(this.services.workspaceRoot);
+        let prettierConfig = null;
+        try {
+            prettierConfig = await this.prettierParser.parseConfiguration(this.services.workspaceRoot);
+        } catch (error) {
+            this.outputChannel.appendLine(`⚠️ Prettier parsing failed: ${error}`);
+            // Continue without Prettier config
+        }
         
         if (prettierConfig) {
             this.outputChannel.appendLine(`🔍 Prettier parsing result: ${prettierConfig.configPath ? `Found config at ${prettierConfig.configPath}` : 'resolved from defaults'}`);
@@ -186,6 +198,12 @@ export class CopilotInstructionsGenerator {
         progress.report({ message: 'Writing instruction files...', increment: 40 });
         this.services.updateStatusBar('✨ Generating instructions...', 'yellow');
         await this.writeInstructionFiles(instructions);
+        
+        // Show preview and success
+        const shouldContinue = await this.ui.showPreview(instructions.mainFile.content);
+        if (shouldContinue) {
+            this.ui.showSuccess('Copilot instructions generated successfully!');
+        }
         
         this.services.updateStatusBar('✅ Instructions ready', 'green');
     }

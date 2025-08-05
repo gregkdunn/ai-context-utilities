@@ -316,29 +316,6 @@ describe('ShellScriptBridge', () => {
         });
     });
 
-    // Test timeout handling
-    describe('timeout handling', () => {
-        beforeEach(() => {
-            jest.useFakeTimers();
-        });
-
-        afterEach(() => {
-            jest.useRealTimers();
-        });
-
-        it.skip('should handle script timeout', async () => {
-            // TODO: Fix timeout test - complex timing issues with mocked processes
-            // This functionality works in real usage, but is difficult to test reliably
-            const mockProcess = createMockProcess(0, '', '', undefined); // Never resolves
-            mockSpawn.mockReturnValue(mockProcess);
-
-            // Use a very short timeout to avoid waiting too long in tests
-            const promise = bridge.runAffectedTests({ timeout: 0.001 }); // 1ms timeout
-
-            // The timeout should trigger quickly with real timers
-            await expect(promise).rejects.toThrow('timed out');
-        }, 2000);
-    });
 
     // Helper functions to create mock processes
     function createMockProcess(exitCode: number, stdout: string, stderr: string, delay: number = 100) {

@@ -299,7 +299,7 @@ export class ESLintConfigParser {
     }
 
     private categorizeRule(ruleName: string): string {
-        if (ruleName.includes('no-unsafe') || ruleName.includes('no-any') || ruleName.includes('strict')) {
+        if (ruleName.includes('no-unsafe') || ruleName.includes('no-any') || ruleName.includes('no-explicit-any') || ruleName.includes('strict')) {
             return 'Type Safety';
         }
         if (ruleName.includes('import') || ruleName.includes('export')) {

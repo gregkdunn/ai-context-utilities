@@ -59,6 +59,12 @@ performance:
         });
 
         test('should merge YAML config with defaults', () => {
+            // Set up Nx workspace structure
+            fs.writeFileSync(path.join(tempDir, 'nx.json'), '{}');
+            fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({
+                devDependencies: { '@nx/workspace': '^17.0.0' }
+            }));
+            
             const yamlConfig = `
 testCommands:
   default: custom test command
@@ -197,6 +203,11 @@ testCommands:
 
     describe('Test Command Generation', () => {
         beforeEach(() => {
+            // Set up a proper Nx workspace for command generation tests
+            fs.writeFileSync(path.join(tempDir, 'nx.json'), '{}');
+            fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify({
+                devDependencies: { '@nx/workspace': '^17.0.0' }
+            }));
             configManager = new ConfigurationManager(tempDir);
         });
 

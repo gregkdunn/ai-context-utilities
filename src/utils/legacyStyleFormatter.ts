@@ -2,7 +2,7 @@
  * Legacy Style Test Output Formatter
  * Matches the output style from legacy/zsh/functions/nxTest.zsh
  * 
- * Provides AI-optimized, emoji-rich test reports with structured sections
+ * Provides AI Context, emoji-rich test reports with structured sections
  */
 
 import { TestSummary, TestFailure } from './testResultParser';

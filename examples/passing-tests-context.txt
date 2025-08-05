@@ -93,7 +93,7 @@ Lines removed: 23
   • libs/payment-service/src/lib/validation/payment-validator.spec.ts
 
 =================================================================
-🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+🔍 GIT DIFF FOR AI CONTEXT
 =================================================================
 
 COMMAND: git diff (smart detection)

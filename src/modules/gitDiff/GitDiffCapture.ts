@@ -180,7 +180,7 @@ export class GitDiffCapture {
         if (!diff || diff.trim().length === 0) {
             return [
                 '=================================================================',
-                '🔍 AI-OPTIMIZED GIT DIFF ANALYSIS',
+                '🔍 GIT DIFF FOR AI CONTEXT',
                 '=================================================================',
                 '',
                 'COMMAND: git diff (smart detection)',
@@ -211,7 +211,7 @@ export class GitDiffCapture {
         
         const sections = [
             '=================================================================',
-            '🔍 AI-OPTIMIZED GIT DIFF ANALYSIS',
+            '🔍 GIT DIFF FOR AI CONTEXT',
             '=================================================================',
             '',
             'COMMAND: git diff (smart detection)',

@@ -37,7 +37,8 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
             },
             outputChannel: {
                 appendLine: jest.fn()
-            }
+            },
+            updateStatusBar: jest.fn()
         } as any;
 
         // Mock OutputChannel
@@ -129,7 +130,9 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
                     ],
                     parser: '@typescript-eslint/parser',
                     plugins: ['@typescript-eslint'],
-                    typeAware: true
+                    typeAware: true,
+                    checkedPaths: ['.eslintrc.js', '.eslintrc.json'],
+                    configPath: '/mock/workspace/.eslintrc.js'
                 })
             };
 
@@ -147,7 +150,9 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
                         'Omit semicolons at the end of statements',
                         'Use single quotes for strings instead of double quotes',
                         'Use 2 spaces for indentation'
-                    ]
+                    ],
+                    checkedPaths: ['.prettierrc', '.prettierrc.json'],
+                    configPath: '/mock/workspace/.prettierrc'
                 })
             };
 
@@ -190,22 +195,22 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
 
             // Verify file writing
             expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                '.github/copilot-instructions.md',
-                expect.stringContaining('# Main Instructions')
+                '.github/instructions/copilot-instructions.md',
+                expect.stringContaining('# GitHub Copilot Instructions')
             );
             expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                '.github/instructions/eslint-rules.instructions.md',
+                '.github/instructions/frameworks/eslint-rules.instructions.md',
                 expect.stringContaining('# TypeScript Development Guidelines')
             );
             expect(mockFileManager.writeFile).toHaveBeenCalledWith(
-                '.github/instructions/prettier-formatting.instructions.md',
+                '.github/instructions/frameworks/prettier-formatting.instructions.md',
                 expect.stringContaining('# Code Formatting Guidelines')
             );
 
             // Verify progress reporting
             expect(mockProgress.report).toHaveBeenCalledWith({ message: 'Setting up user overrides...', increment: 5 });
             expect(mockProgress.report).toHaveBeenCalledWith({ message: 'Parsing ESLint rules...', increment: 15 });
-            expect(mockProgress.report).toHaveBeenCalledWith({ message: 'Writing instruction files...', increment: 30 });
+            expect(mockProgress.report).toHaveBeenCalledWith({ message: 'Writing instruction files...', increment: 40 });
         });
 
         it('should handle existing files with backup workflow', async () => {
@@ -233,7 +238,10 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
             (generator as any).frameworkDetector = { detectFrameworks: jest.fn().mockResolvedValue([]) };
             (generator as any).eslintParser = { parseConfiguration: jest.fn().mockResolvedValue(null) };
             (generator as any).prettierParser = { parseConfiguration: jest.fn().mockResolvedValue(null) };
-            (generator as any).templateEngine = { generateMainInstructions: jest.fn().mockResolvedValue('# Instructions') };
+            (generator as any).templateEngine = { 
+                generateMainInstructions: jest.fn().mockResolvedValue('# Instructions'),
+                generateFrameworkInstructions: jest.fn().mockResolvedValue('# Framework Instructions')
+            };
             (generator as any).fileManager = { writeFile: jest.fn() };
             (generator as any).userOverrideManager = { ensureOverrideFileExists: jest.fn() };
 
@@ -289,7 +297,12 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
                     mockToken.isCancellationRequested = true;
                 }
                 cancelAfterAnalysis = true;
-                return { frontendFrameworks: [] };
+                return { 
+                    frontendFrameworks: [],
+                    typescript: { version: '5.0.0', hasConfig: true },
+                    testFrameworks: [],
+                    packageManagers: ['npm']
+                };
             });
 
             mockServices.workspaceAnalyzer.analyze = mockAnalyze;
@@ -332,7 +345,10 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
             (generator as any).userOverrideManager = { ensureOverrideFileExists: jest.fn() };
             (generator as any).prettierParser = { parseConfiguration: jest.fn().mockResolvedValue(null) };
             (generator as any).frameworkDetector = { detectFrameworks: jest.fn().mockResolvedValue([]) };
-            (generator as any).templateEngine = { generateMainInstructions: jest.fn().mockResolvedValue('# Instructions') };
+            (generator as any).templateEngine = { 
+                generateMainInstructions: jest.fn().mockResolvedValue('# Instructions'),
+                generateFrameworkInstructions: jest.fn().mockResolvedValue('# Framework Instructions')
+            };
             (generator as any).fileManager = { writeFile: jest.fn() };
 
             // Should complete workflow despite ESLint error
@@ -364,7 +380,10 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
             (generator as any).eslintParser = { parseConfiguration: jest.fn().mockResolvedValue(null) };
             (generator as any).prettierParser = { parseConfiguration: jest.fn().mockResolvedValue(null) };
             (generator as any).frameworkDetector = { detectFrameworks: jest.fn().mockResolvedValue([]) };
-            (generator as any).templateEngine = { generateMainInstructions: jest.fn().mockResolvedValue('# Instructions') };
+            (generator as any).templateEngine = { 
+                generateMainInstructions: jest.fn().mockResolvedValue('# Instructions'),
+                generateFrameworkInstructions: jest.fn().mockResolvedValue('# Framework Instructions')
+            };
 
             await expect(generator.run(mockProgress, mockToken)).rejects.toThrow('File write error');
         });
@@ -421,13 +440,17 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
                     rules: mockESLintRules,
                     parser: '@typescript-eslint/parser',
                     plugins: ['@typescript-eslint'],
-                    typeAware: true
+                    typeAware: true,
+                    checkedPaths: ['.eslintrc.js'],
+                    configPath: '/mock/workspace/.eslintrc.js'
                 })
             };
             (generator as any).prettierParser = {
                 parseConfiguration: jest.fn().mockResolvedValue({
                     instructions: mockPrettierInstructions,
-                    options: { semi: false, singleQuote: true }
+                    options: { semi: false, singleQuote: true },
+                    checkedPaths: ['.prettierrc'],
+                    configPath: '/mock/workspace/.prettierrc'
                 })
             };
             (generator as any).frameworkDetector = {
@@ -445,20 +468,20 @@ describe('CopilotInstructionsGenerator Integration Tests', () => {
 
             // Verify comprehensive file generation
             expect(mockWriteFile).toHaveBeenCalledWith(
-                '.github/copilot-instructions.md',
+                '.github/instructions/copilot-instructions.md',
                 expect.stringContaining('applyTo: "**/*"')
             );
             expect(mockWriteFile).toHaveBeenCalledWith(
-                '.github/instructions/eslint-rules.instructions.md',
+                '.github/instructions/frameworks/eslint-rules.instructions.md',
                 expect.stringContaining('Type Safety')
             );
             expect(mockWriteFile).toHaveBeenCalledWith(
-                '.github/instructions/prettier-formatting.instructions.md',
+                '.github/instructions/frameworks/prettier-formatting.instructions.md',
                 expect.stringContaining('Code Formatting Guidelines')
             );
             expect(mockWriteFile).toHaveBeenCalledWith(
-                '.github/instructions/angular.instructions.md',
-                expect.stringContaining('framework: angular')
+                '.github/instructions/frameworks/angular.instructions.md',
+                expect.stringContaining('# Angular Guidelines')
             );
 
             // Verify content quality

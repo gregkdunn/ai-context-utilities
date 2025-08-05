@@ -1,10 +1,10 @@
 # =========================================================================
 # File: functions/gitDiff.zsh
-# Purpose: Smart git change capture with AI-optimized analysis
+# Purpose: Smart git change capture with AI Context analysis
 # =========================================================================
 
 # =========================================================================
-# FUNCTION: gitDiff (AI-Optimized)
+# FUNCTION: gitDiff (AI Context)
 # =========================================================================
 # Purpose: Captures git changes and formats them for AI analysis with 
 #          intelligent diff selection and change categorization.
@@ -25,7 +25,7 @@
 #   gitDiff HEAD~1..HEAD        # Compare with last commit
 #   gitDiff --no-save -- "*.ts" # View TypeScript changes only
 #
-# AI Optimization Features:
+# AI context Features:
 #   - Automatic detection of unstaged vs staged changes
 #   - Change categorization (new files, modifications, deletions)
 #   - File type analysis for relevant changes
@@ -154,7 +154,7 @@ gitDiff() {
       # Quick content summary
       if [[ $ai_context -eq 1 ]]; then
         local files_changed=$(grep -c "^📁" "$output_file" 2>/dev/null || echo "0")
-        echo "📈 AI-optimized format: $files_changed files analyzed"
+        echo "📈 AI Context format: $files_changed files analyzed"
       fi
     fi
   fi
@@ -165,7 +165,7 @@ gitDiff() {
 # =========================================================================
 # FUNCTION: _create_ai_diff_context
 # =========================================================================
-# Purpose: Creates an AI-optimized diff with change analysis and context
+# Purpose: Creates an AI Context diff with change analysis and context
 # =========================================================================
 _create_ai_diff_context() {
   local diff_file="$1"
@@ -175,7 +175,7 @@ _create_ai_diff_context() {
   # Initialize output
   cat > "$output_file" << EOF
 =================================================================
-🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+🔍 GIT DIFF FOR AI CONTEXT
 =================================================================
 
 COMMAND: git diff $diff_args

@@ -64,7 +64,7 @@ describe('Phase 2.1 Integration - Complete Legacy Format Matching Workflow', () 
 
             // Step 2: Mock git diff capture
             const mockGitDiff = `=================================================================
-🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+🔍 GIT DIFF FOR AI CONTEXT
 =================================================================
 
 COMMAND: git diff (smart detection)
@@ -199,7 +199,7 @@ Test Suites: 6 passed, 0 failed
 ✅ src/app/component.spec.ts`;
 
             const mockGitDiff = `=================================================================
-🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+🔍 GIT DIFF FOR AI CONTEXT
 =================================================================
 
 COMMAND: git diff (smart detection)
@@ -252,7 +252,7 @@ Total files changed: 1
 
             const mockFiles = {
                 diff: `=================================================================
-🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+🔍 GIT DIFF FOR AI CONTEXT
 =================================================================
 
 COMMAND: git diff (smart detection)

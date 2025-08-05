@@ -72,7 +72,7 @@ export class TestOutputCapture {
         this.isCapturing = false;
 
         try {
-            // Create AI-optimized output in legacy nxTest.zsh format
+            // Create AI Context output in legacy nxTest.zsh format
             const formattedOutput = this.createAIOptimizedOutput(exitCode, summary);
 
             // Ensure directory exists
@@ -93,7 +93,7 @@ export class TestOutputCapture {
     }
 
     /**
-     * Create AI-optimized output matching legacy nxTest.zsh format
+     * Create AI Context output matching legacy nxTest.zsh format
      * 
      * This method is the core of Phase 2.1 legacy format matching. It transforms
      * raw Jest test output into the exact format expected by the legacy nxTest.zsh
@@ -139,7 +139,7 @@ export class TestOutputCapture {
         ];
 
         // Add failure analysis section for failing tests (legacy nxTest.zsh compatibility)
-        // This section provides AI-optimized failure information that exactly matches
+        // This section provides AI Context failure information that exactly matches
         // the structure and content expected by AI debugging workflows
         if (exitCode !== 0) {
             sections.push(

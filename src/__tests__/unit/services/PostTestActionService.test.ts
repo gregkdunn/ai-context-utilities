@@ -8,23 +8,7 @@ import { ServiceContainer } from '../../../core/ServiceContainer';
 import { TestResult } from '../../../services/TestExecutionService';
 import * as vscode from 'vscode';
 
-// Mock vscode
-jest.mock('vscode', () => ({
-    window: {
-        showQuickPick: jest.fn(),
-        showErrorMessage: jest.fn(),
-        showInformationMessage: jest.fn(),
-        showWarningMessage: jest.fn()
-    },
-    commands: {
-        executeCommand: jest.fn()
-    },
-    env: {
-        clipboard: {
-            writeText: jest.fn()
-        }
-    }
-}));
+// Use moduleNameMapper for vscode mocking
 
 // Mock fs module
 jest.mock('fs', () => ({
@@ -427,12 +411,16 @@ describe('PostTestActionService', () => {
             await service.showPostTestActions(testResult, {});
 
             // Phase 3.5.0: Now uses full automation with CopilotUtils
-            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
-                expect.stringContaining('Pull Request Description Review & Enhancement')
+            // The prompt could be either the default or override format
+            const clipboardCalls = (vscode.env.clipboard.writeText as jest.Mock).mock.calls;
+            const prDescriptionCall = clipboardCalls.find(call => 
+                call[0].includes('Pull Request Description') || 
+                call[0].includes('HIGH PRIORITY USER INSTRUCTIONS')
             );
-            expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
-                expect.stringContaining('Test Status: PASSED')
-            );
+            
+            expect(prDescriptionCall).toBeDefined();
+            expect(prDescriptionCall[0]).toContain('Test Status');
+            expect(prDescriptionCall[0]).toContain('PASSED');
             // Note: Full automation testing requires mocking CopilotUtils.integrateWithCopilot
         });
 

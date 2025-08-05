@@ -29,7 +29,13 @@ jest.mock('../../../utils/simpleProjectDiscovery');
 jest.mock('../../../ShellScriptBridge');
 jest.mock('../../../nx/SmartCommandRouter');
 jest.mock('../../../utils/testActions');
-jest.mock('../../../core/ConfigurationManager');
+jest.mock('../../../core/ConfigurationManager', () => ({
+    ConfigurationManager: jest.fn().mockImplementation(() => ({
+        refreshFrameworkDetection: jest.fn().mockResolvedValue(undefined),
+        get: jest.fn().mockReturnValue({ cacheTimeout: 30 }),
+        getTestCommand: jest.fn().mockReturnValue('npm test')
+    }))
+}));
 jest.mock('../../../utils/ProjectCache');
 jest.mock('../../../utils/BackgroundProjectDiscovery');
 jest.mock('../../../utils/SimplePerformanceTracker');

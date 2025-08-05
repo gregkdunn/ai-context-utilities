@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Mock dependencies
-jest.mock('vscode');
 jest.mock('fs', () => ({
     existsSync: jest.fn(),
     promises: {
@@ -258,9 +257,19 @@ describe('UserOverrideManager', () => {
 `;
             
             mockDocument.getText.mockReturnValue(documentText);
-            mockDocument.positionAt.mockImplementation((offset: number) => ({
-                line: offset > 100 ? 5 : 0
-            }));
+            mockDocument.lineCount = documentText.split('\n').length;
+            mockDocument.positionAt.mockImplementation((offset: number) => {
+                // Calculate line based on character position in the document
+                const lines = documentText.split('\n');
+                let currentPos = 0;
+                for (let i = 0; i < lines.length; i++) {
+                    if (currentPos + lines[i].length >= offset) {
+                        return new vscode.Position(i, offset - currentPos);
+                    }
+                    currentPos += lines[i].length + 1; // +1 for newline
+                }
+                return new vscode.Position(lines.length - 1, 0);
+            });
 
             const mockEditBuilder = {
                 insert: jest.fn()
@@ -273,16 +282,30 @@ describe('UserOverrideManager', () => {
             const template = '\n### Test Override\nTest content\n';
             await (manager as any).insertOverrideTemplate(mockEditor, template);
 
-            expect(mockEditBuilder.insert).toHaveBeenCalledWith(
-                expect.objectContaining({ line: 7 }),
-                template
-            );
+            expect(mockEditBuilder.insert).toHaveBeenCalledTimes(1);
+            
+            // Get the position that was passed
+            const [position] = mockEditBuilder.insert.mock.calls[0];
+            expect(position).toHaveProperty('line', 7);
+            expect(position).toHaveProperty('character', 0);
         });
 
         it('should insert template at end when no specific section found', async () => {
             const documentText = '# User Override Instructions\n\nBasic content';
             
             mockDocument.getText.mockReturnValue(documentText);
+            mockDocument.lineCount = documentText.split('\n').length;
+            mockDocument.positionAt.mockImplementation((offset: number) => {
+                const lines = documentText.split('\n');
+                let currentPos = 0;
+                for (let i = 0; i < lines.length; i++) {
+                    if (currentPos + lines[i].length >= offset) {
+                        return new vscode.Position(i, offset - currentPos);
+                    }
+                    currentPos += lines[i].length + 1;
+                }
+                return new vscode.Position(lines.length - 1, 0);
+            });
             
             const mockEditBuilder = {
                 insert: jest.fn()
@@ -295,10 +318,12 @@ describe('UserOverrideManager', () => {
             const template = '\n### Test Override\nTest content\n';
             await (manager as any).insertOverrideTemplate(mockEditor, template);
 
-            expect(mockEditBuilder.insert).toHaveBeenCalledWith(
-                expect.objectContaining({ line: 10 }),
-                template
-            );
+            expect(mockEditBuilder.insert).toHaveBeenCalledTimes(1);
+            
+            // Get the position that was passed (should use document.lineCount which is 3)
+            const [position] = mockEditBuilder.insert.mock.calls[0];
+            expect(position).toHaveProperty('line', 3);
+            expect(position).toHaveProperty('character', 0);
         });
     });
 });

@@ -148,6 +148,11 @@ export class TestActions {
         
         // Automatically trigger Copilot analysis for successful tests
         await this.copilotDebugTests(result);
+        
+        // Show the success menu
+        if (this.shouldShowPopup()) {
+            await this.showTestSuccessMenu(result);
+        }
     }
 
     /**
@@ -170,13 +175,11 @@ export class TestActions {
             }
         ];
         
-        const quickPick = QuickPickUtils.showManualQuickPick(
-            items,
-            {
-                title: `✅ ${result.project} tests passed!`,
-                placeholder: 'What would you like to do next?'
-            }
-        );
+        const quickPick = vscode.window.createQuickPick();
+        quickPick.title = `✅ ${result.project} tests passed!`;
+        quickPick.placeholder = 'What would you like to do next?';
+        quickPick.ignoreFocusOut = true;
+        quickPick.items = items;
         
         return new Promise((resolve) => {
             quickPick.onDidAccept(async () => {
@@ -239,6 +242,11 @@ export class TestActions {
         
         // Automatically trigger Copilot debug
         await this.copilotDebugTests(result);
+        
+        // Show the failure menu
+        if (this.shouldShowPopup()) {
+            await this.showTestFailureMenu(result);
+        }
     }
 
     /**
@@ -265,13 +273,11 @@ export class TestActions {
             });
         }
         
-        const quickPick = QuickPickUtils.showManualQuickPick(
-            items,
-            {
-                title: `❌ ${result.project} tests failed (${result.failed} failures)`,
-                placeholder: 'What would you like to do next?'
-            }
-        );
+        const quickPick = vscode.window.createQuickPick();
+        quickPick.title = `❌ ${result.project} tests failed (${result.failed} failures)`;
+        quickPick.placeholder = 'What would you like to do next?';
+        quickPick.ignoreFocusOut = true;
+        quickPick.items = items;
         
         return new Promise((resolve) => {
             quickPick.onDidAccept(async () => {
@@ -964,53 +970,105 @@ ${existingContext}`;
     }
 
     /**
-     * Run prepare to push workflow (lint and prettier)
+     * Run prepare to push workflow (lint and prettier)  
      */
     private async runPrepareToPush(result: TestSummary): Promise<void> {
         try {
             this.outputChannel.appendLine(`\n🔧 Running prepare to push workflow for ${result.project}...`);
             
-            // Try to run lint and prettier commands
-            const lintCommands = [
-                'npm run lint:fix',
-                'npm run lint',
-                'npx eslint . --fix',
-                'yarn lint:fix',
-                'yarn lint'
-            ];
-            
-            const prettierCommands = [
-                'npm run format',
-                'npm run prettier:fix',
-                'npx prettier --write .',
-                'yarn format',
-                'yarn prettier:fix'
-            ];
+            // First try to extract project name from latest test-output.txt file
+            const projectName = await this.extractProjectFromTestOutput();
             
             let lintSuccess = false;
             let prettierSuccess = false;
             
-            // Try linting first
-            for (const command of lintCommands) {
-                try {
-                    await this.executeSimpleCommand(command, 'Linting code');
-                    lintSuccess = true;
-                    break;
-                } catch (error) {
-                    // Continue to next command
-                    continue;
+            if (projectName) {
+                this.outputChannel.appendLine(`📋 Using project name from test output: ${projectName}`);
+                
+                // Try Nx-specific commands first with the extracted project name
+                const nxLintCommands = [
+                    `nx lint ${projectName}`,
+                    `npx nx lint ${projectName}`,
+                    `yarn nx lint ${projectName}`
+                ];
+                
+                const nxPrettierCommands = [
+                    `nx prettier ${projectName} --write`,
+                    `npx nx prettier ${projectName} --write`, 
+                    `yarn nx prettier ${projectName} --write`
+                ];
+                
+                // Try Nx linting first
+                for (const command of nxLintCommands) {
+                    try {
+                        await this.executeSimpleCommand(command, 'Linting code');
+                        lintSuccess = true;
+                        break;
+                    } catch (error) {
+                        // Continue to next command
+                        continue;
+                    }
+                }
+                
+                // Try Nx prettier/formatting
+                for (const command of nxPrettierCommands) {
+                    try {
+                        await this.executeSimpleCommand(command, 'Formatting code');
+                        prettierSuccess = true;
+                        break;
+                    } catch (error) {
+                        // Continue to next command
+                        continue;
+                    }
                 }
             }
             
-            // Try prettier/formatting
-            for (const command of prettierCommands) {
-                try {
-                    await this.executeSimpleCommand(command, 'Formatting code');
-                    prettierSuccess = true;
-                    break;
-                } catch (error) {
-                    // Continue to next command
-                    continue;
+            // Fallback to generic commands if Nx commands failed or no project name found
+            if (!lintSuccess || !prettierSuccess) {
+                this.outputChannel.appendLine('🔄 Falling back to generic lint/format commands...');
+                
+                const genericLintCommands = [
+                    'npm run lint:fix',
+                    'npm run lint',
+                    'npx eslint . --fix',
+                    'yarn lint:fix',
+                    'yarn lint'
+                ];
+                
+                const genericPrettierCommands = [
+                    'npm run format',
+                    'npm run prettier:fix',
+                    'npx prettier --write .',
+                    'yarn format',
+                    'yarn prettier:fix'
+                ];
+                
+                // Try generic linting if Nx linting failed
+                if (!lintSuccess) {
+                    for (const command of genericLintCommands) {
+                        try {
+                            await this.executeSimpleCommand(command, 'Linting code');
+                            lintSuccess = true;
+                            break;
+                        } catch (error) {
+                            // Continue to next command
+                            continue;
+                        }
+                    }
+                }
+                
+                // Try generic prettier/formatting if Nx formatting failed  
+                if (!prettierSuccess) {
+                    for (const command of genericPrettierCommands) {
+                        try {
+                            await this.executeSimpleCommand(command, 'Formatting code');
+                            prettierSuccess = true;
+                            break;
+                        } catch (error) {
+                            // Continue to next command
+                            continue;
+                        }
+                    }
                 }
             }
             
@@ -1238,6 +1296,57 @@ I just completed work on **${result.project}** and all tests are passing! I need
 6. **✅ Checklist**: Standard PR checklist items
 
 Please analyze the git changes and create a professional, detailed PR description that follows best practices.`;
+    }
+
+    /**
+     * Extract project name from latest test-output.txt file
+     */
+    private async extractProjectFromTestOutput(): Promise<string | null> {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Look for test-output.txt in the standard location
+            const contextDir = path.join(this.workspaceRoot, '.github', 'instructions', 'ai-utilities-context');
+            const testOutputPath = path.join(contextDir, 'test-output.txt');
+            
+            this.outputChannel.appendLine(`🔍 Looking for test output file: ${testOutputPath}`);
+            
+            if (!fs.existsSync(testOutputPath)) {
+                this.outputChannel.appendLine('⚠️ No test-output.txt file found');
+                return null;
+            }
+            
+            const testOutput = fs.readFileSync(testOutputPath, 'utf8');
+            this.outputChannel.appendLine(`✅ Found test output file (${Math.round(testOutput.length / 1024)}KB)`);
+            
+            // Look for common patterns that indicate project name (same as TestMenuOrchestrator)
+            const patterns = [
+                /yarn nx test (\w+[\w-]*)/,
+                /npm run test (\w+[\w-]*)/,
+                /npx nx test (\w+[\w-]*)/,
+                /nx test (\w+[\w-]*)/,
+                /Testing (\w+[\w-]*)/i,
+                /Project: (\w+[\w-]*)/i,
+                /\[(\w+[\w-]*)\] tests/i,
+                /COMMAND: npx nx test (\w+[\w-]*)/  // Add pattern for COMMAND: prefix
+            ];
+            
+            for (const pattern of patterns) {
+                const match = testOutput.match(pattern);
+                if (match && match[1] && match[1] !== 'test') {
+                    this.outputChannel.appendLine(`📋 Extracted project name: ${match[1]}`);
+                    return match[1];
+                }
+            }
+            
+            this.outputChannel.appendLine('⚠️ Could not extract project name from test output');
+            return null;
+            
+        } catch (error) {
+            this.outputChannel.appendLine(`❌ Failed to extract project from test output: ${error}`);
+            return null;
+        }
     }
 
     /**

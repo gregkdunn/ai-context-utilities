@@ -2,9 +2,6 @@ import * as vscode from 'vscode';
 import { CopilotInstructionsModule } from '../../../../modules/copilotInstructions/CopilotInstructionsModule';
 import { ServiceContainer } from '../../../../core/ServiceContainer';
 
-// Mock vscode
-jest.mock('vscode');
-
 // Mock other modules
 jest.mock('../../../../modules/copilotInstructions/CopilotInstructionsGenerator');
 jest.mock('../../../../modules/copilotInstructions/InstructionBackupManager');

@@ -110,7 +110,7 @@ Modified files:
 • libs/user-management/src/lib/role.service.ts
 
 =================================================================
-🔍 AI-OPTIMIZED GIT DIFF ANALYSIS
+🔍 GIT DIFF FOR AI CONTEXT
 =================================================================
 
 COMMAND: git diff (smart detection)

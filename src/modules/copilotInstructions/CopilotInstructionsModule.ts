@@ -40,19 +40,16 @@ export class CopilotInstructionsModule {
             this.outputChannel.show();
             this.services.updateStatusBar('🤖 Analyzing project...', 'yellow');
 
-            // Create a mock progress and cancellation token for internal use
-            const mockProgress = {
-                report: (value: { message?: string; increment?: number }) => {
-                    // Progress updates are handled via status bar instead
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Generating Copilot Instructions',
+                    cancellable: true
+                },
+                async (progress, token) => {
+                    await this.generator.run(progress, token);
                 }
-            };
-            
-            const mockToken = {
-                isCancellationRequested: false,
-                onCancellationRequested: () => ({ dispose: () => {} })
-            };
-
-            await this.generator.run(mockProgress, mockToken);
+            );
 
             this.outputChannel.appendLine('✅ Copilot Instructions generation completed');
             this.services.updateStatusBar('✅ Instructions ready', 'green');

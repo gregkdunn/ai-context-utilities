@@ -114,7 +114,7 @@ describe('AngularContextDownloader', () => {
             expect(result.downloadedFiles).toHaveLength(0);
             expect(mockFileManager.writeFile).not.toHaveBeenCalled();
             expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-                expect.stringContaining('❌ Error downloading')
+                expect.stringContaining('❌ Both fetch and HTTPS fallback failed')
             );
         });
 

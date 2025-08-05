@@ -61,7 +61,7 @@ describe('CopilotUtils', () => {
             const result = await CopilotUtils.openCopilotChat();
 
             expect(result).toBe(false);
-            expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
+            expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(6);
         });
     });
 
@@ -125,7 +125,7 @@ describe('CopilotUtils', () => {
             expect(result.success).toBe(true);
             expect(result.method).toBe('auto-submit');
             expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(content);
-            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('📋 Content copied to clipboard');
+            expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('📋 DEBUG: Content copied to clipboard successfully');
         });
 
         it('should handle chat opening failure gracefully', async () => {

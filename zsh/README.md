@@ -1,6 +1,6 @@
 # AI Debug Utilities for NX Projects
 
-AI-powered debugging and code quality tools for Angular NX monorepos. Captures test results, git changes, and code quality metrics in AI-optimized formats.
+AI-powered debugging and code quality tools for Angular NX monorepos. Captures test results, git changes, and code quality metrics in AI Context formats.
 
 ## Installation
 
@@ -31,7 +31,7 @@ source /path/to/ai-debug-utilities/index.zsh
 
 **Benefits:**
 - Single command handles entire development workflow
-- AI-optimized output reduces noise by 80%+
+- AI Context output reduces noise by 80%+
 - Auto-correlates test failures with code changes
 - Generates PR descriptions when code is ready
 - Automatic quality checks (lint + format) when tests pass
@@ -65,7 +65,7 @@ prepareToPush my-component
 ```
 
 ### `nxTest [project-name]`
-**AI-optimized test reporting.** Runs Jest tests and creates focused reports highlighting failures, performance issues, and key metrics.
+**AI Context test reporting.** Runs Jest tests and creates focused reports highlighting failures, performance issues, and key metrics.
 
 **Benefits:**
 - Reduces verbose test output to essential information
@@ -109,7 +109,7 @@ All functions save to the configured base directory (default: `.github/instructi
 
 - **`ai-debug-context.txt`** - Complete debugging context for AI analysis
 - **`pr-description-prompt.txt`** - GitHub PR description generation prompts
-- **`jest-output.txt`** - AI-optimized test results
+- **`jest-output.txt`** - AI Context test results
 - **`diff.txt`** - Git changes with analysis
 
 ## Workflow

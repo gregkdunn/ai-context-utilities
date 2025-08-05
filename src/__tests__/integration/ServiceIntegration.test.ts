@@ -48,12 +48,15 @@ describe('Service Integration Tests', () => {
         mockOutputChannel = {
             appendLine: jest.fn(),
             show: jest.fn(),
-            dispose: jest.fn()
+            dispose: jest.fn(),
+            clear: jest.fn()
         };
 
         mockServices = {
             outputChannel: mockOutputChannel,
             updateStatusBar: jest.fn(),
+            startStatusBarAnimation: jest.fn(),
+            stopStatusBarAnimation: jest.fn(),
             errorHandler: {
                 handleError: jest.fn().mockReturnValue({}),
                 showUserError: jest.fn()
@@ -86,6 +89,21 @@ describe('Service Integration Tests', () => {
             projectSelection: {
                 showProjectBrowser: jest.fn().mockResolvedValue(null),
                 showMainMenu: jest.fn().mockResolvedValue(null)
+            },
+            testActions: {
+                setNavigationContext: jest.fn(),
+                showPostTestActions: jest.fn()
+            },
+            postTestActions: {
+                handlePRDescription: jest.fn()
+            },
+            testExecution: {
+                executeTest: jest.fn().mockResolvedValue({
+                    success: true,
+                    project: 'test-project',
+                    duration: 5000,
+                    summary: { passed: 10, failed: 0, total: 10 }
+                })
             },
             fileWatcherActive: false
         };
@@ -201,15 +219,38 @@ describe('Service Integration Tests', () => {
                 { name: 'recent-app', lastUsed: '2024-01-01', testCount: 5, lastUsedTimestamp: Date.now() }
             ];
 
+            // The implementation expects a structure like { workspaceKey: recentProjects }
+            // We'll use a Proxy to return our mock data for any workspace key
+            const workspaceData = new Proxy({}, {
+                get: (target, prop) => {
+                    // Return mock projects for any key that looks like a workspace key
+                    if (typeof prop === 'string' && prop.includes('workspace')) {
+                        return mockRecentProjects;
+                    }
+                    return [];
+                }
+            });
+            
             const mockWorkspaceConfig = {
-                get: jest.fn().mockReturnValue(mockRecentProjects),
+                get: jest.fn().mockImplementation((key: string, defaultValue: any) => {
+                    if (key === 'recentProjectsByWorkspace') {
+                        return workspaceData;
+                    }
+                    return defaultValue;
+                }),
                 update: jest.fn()
             };
 
             const vscode = require('vscode');
+            // Ensure showInformationMessage returns a proper Promise
+            vscode.window.showInformationMessage = jest.fn().mockResolvedValue(undefined);
             vscode.workspace.getConfiguration.mockReturnValue(mockWorkspaceConfig);
 
             const recentProjects = await projectSelection.getRecentProjects();
+            
+            // Debug: check what was actually called
+            expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith('aiDebugContext');
+            expect(mockWorkspaceConfig.get).toHaveBeenCalledWith('recentProjectsByWorkspace', {});
             
             expect(recentProjects).toEqual(mockRecentProjects);
         });

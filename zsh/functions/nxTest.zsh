@@ -1,12 +1,12 @@
 # =========================================================================
 # File: functions/nxTest.zsh
-# Purpose: AI-optimized Jest test runner for NX projects
+# Purpose: AI Context Jest test runner for NX projects
 # =========================================================================
 
 # =========================================================================
-# FUNCTION: nxTest (AI-Optimized)
+# FUNCTION: nxTest (AI Context)
 # =========================================================================
-# Purpose: Runs Jest tests for NX projects and creates an AI-optimized 
+# Purpose: Runs Jest tests for NX projects and creates an AI Context 
 #          report with minimal duplication and enhanced analysis focus.
 #
 # Usage:
@@ -17,12 +17,12 @@
 #   --full-output     Saves complete raw output (default: optimized for AI)
 #
 # Examples:
-#   nxTest settings-voice-assist-feature                # Run tests with AI-optimized output
+#   nxTest settings-voice-assist-feature                # Run tests with AI Context output
 #   nxTest --full-output settings-voice-assist-feature  # Include full raw output
 #   nxTest --use-expected                               # Use expected output without running tests
 #
 # Output:
-#   - AI-optimized test report saved to ai_utilities_context/jest-output.txt
+#   - AI Context test report saved to ai_utilities_context/jest-output.txt
 #   - Focuses on test results, failures, and summary while reducing noise
 #
 # =========================================================================
@@ -78,7 +78,7 @@ nxTest() {
 
   # --- Execution ---
   echo "Running: yarn nx test ${args[*]}"
-  echo "Output mode: $([ $full_output -eq 1 ] && echo "Full output" || echo "AI-optimized")"
+  echo "Output mode: $([ $full_output -eq 1 ] && echo "Full output" || echo "AI Context")"
   
   script -q /dev/null yarn nx test "${args[@]}" --verbose | tee "$temp_raw_output"
   local test_exit_code=${pipestatus[1]}
@@ -105,7 +105,7 @@ nxTest() {
     cp "$temp_raw_output" "$temp_clean_output"
   fi
 
-  # --- AI Optimization Process ---
+  # --- AI context Process ---
   if [[ $full_output -eq 1 ]]; then
     echo "📄 Using full output (--full-output specified)"
     cp "$temp_clean_output" "$final_output_file"
@@ -136,7 +136,7 @@ nxTest() {
 # =========================================================================
 # FUNCTION: _create_ai_optimized_output
 # =========================================================================
-# Purpose: Creates an AI-optimized version of test output by removing
+# Purpose: Creates an AI Context version of test output by removing
 #          redundant information and highlighting key data for analysis.
 # =========================================================================
 _create_ai_optimized_output() {

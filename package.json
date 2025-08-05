@@ -1,7 +1,7 @@
 {
   "name": "ai-context-util",
   "displayName": "AI Context Util",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "description": "Generate GitHub Copilot instructions from your ESLint/Prettier configs. Automatically creates framework-specific guidance with user overrides, workspace analysis, and intelligent debugging context.",
   "main": "./out/extension.js",
   "publisher": "ai-context-util",
@@ -183,6 +183,11 @@
           "type": "boolean",
           "default": false,
           "description": "Enable verbose logging for debugging"
+        },
+        "aiDebugContext.enablePostTestMenus": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable post-test action menus that appear after test execution (includes git diff capture, context generation, and other Phase 2.0 features)"
         }
       }
     }

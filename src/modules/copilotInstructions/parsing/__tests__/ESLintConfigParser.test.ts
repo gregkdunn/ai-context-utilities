@@ -45,7 +45,7 @@ describe('ESLintConfigParser', () => {
             parser['getESLint'] = jest.fn().mockResolvedValue(null);
             
             // Mock fs.existsSync to return false for all config files
-            mockFs.existsSync = jest.fn().mockReturnValue(false);
+            jest.spyOn(fs, 'existsSync').mockReturnValue(false);
 
             const result = await parser.parseConfiguration(mockProjectPath);
             
@@ -164,9 +164,15 @@ describe('ESLintConfigParser', () => {
             const result = await parser.parseConfiguration(mockProjectPath);
 
             expect(result).not.toBeNull();
-            expect(result!.rules[0].translation).toContain("Always use specific types instead of 'any'");
-            expect(result!.rules[1].translation).toContain("Prefer to use 'import type'");
-            expect(result!.rules[2].translation).toContain("Interfaces should use PascalCase naming");
+            
+            // Find rules by name since order may vary
+            const noExplicitAnyRule = result!.rules.find(r => r.name === '@typescript-eslint/no-explicit-any');
+            const typeImportsRule = result!.rules.find(r => r.name === '@typescript-eslint/consistent-type-imports');
+            const namingRule = result!.rules.find(r => r.name === '@typescript-eslint/naming-convention');
+            
+            expect(noExplicitAnyRule?.translation).toContain("use specific types instead of 'any'");
+            expect(typeImportsRule?.translation).toContain("use 'import type'");
+            expect(namingRule?.translation).toContain("Interfaces should use PascalCase naming");
         });
 
         it('should categorize rules correctly', async () => {

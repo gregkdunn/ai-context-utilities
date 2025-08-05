@@ -195,7 +195,7 @@ export class PostTestActionService {
     /**
      * Handle PR description generation using template and send to Copilot Chat
      */
-    private async handlePRDescription(): Promise<void> {
+    async handlePRDescription(): Promise<void> {
         try {
             let prDescription = '';
 
@@ -312,11 +312,28 @@ ${changeAnalysis.additionalNotes || 'Code changes have been tested and are ready
             const { promisify } = require('util');
             const execAsync = promisify(exec);
 
-            // Check both staged and working directory changes - Phase 3.4.0
-            const diffs = [
-                await execAsync('git diff --cached', { cwd: this.services.workspaceRoot }),
-                await execAsync('git diff', { cwd: this.services.workspaceRoot })
-            ];
+            // Use smart detection logic - check unstaged first, then staged, then fallback
+            const diffs = [];
+            
+            // Priority 1: Unstaged changes
+            const unstagedResult = await execAsync('git diff', { cwd: this.services.workspaceRoot });
+            if (unstagedResult.stdout && unstagedResult.stdout.trim()) {
+                diffs.push(unstagedResult);
+            }
+            
+            // Priority 2: Staged changes
+            const stagedResult = await execAsync('git diff --cached', { cwd: this.services.workspaceRoot });
+            if (stagedResult.stdout && stagedResult.stdout.trim()) {
+                diffs.push(stagedResult);
+            }
+            
+            // Priority 3: If no unstaged or staged changes, check last commit
+            if (diffs.length === 0) {
+                const lastCommitResult = await execAsync('git diff HEAD~1..HEAD', { cwd: this.services.workspaceRoot });
+                if (lastCommitResult.stdout && lastCommitResult.stdout.trim()) {
+                    diffs.push(lastCommitResult);
+                }
+            }
 
             const featureFlags: string[] = [];
 
@@ -389,20 +406,49 @@ ${changeAnalysis.additionalNotes || 'Code changes have been tested and are ready
             const { promisify } = require('util');
             const execAsync = promisify(exec);
 
-            // Get git diff and stats
-            const [diffResult, statsResult] = await Promise.all([
-                execAsync('git diff --cached', { cwd: this.services.workspaceRoot }),
-                execAsync('git diff --cached --stat', { cwd: this.services.workspaceRoot })
-            ]);
+            // Use smart detection logic like GitDiffCapture - check unstaged first, then staged, then fallback
+            let diffContent = '';
+            let statsContent = '';
+            let diffType = '';
 
-            const diffContent = diffResult.stdout || '';
-            const statsContent = statsResult.stdout || '';
+            // Priority 1: Check for unstaged changes (working directory)
+            const unstagedResult = await execAsync('git diff', { cwd: this.services.workspaceRoot });
+            if (unstagedResult.stdout && unstagedResult.stdout.trim()) {
+                const [diffResult, statsResult] = await Promise.all([
+                    execAsync('git diff', { cwd: this.services.workspaceRoot }),
+                    execAsync('git diff --stat', { cwd: this.services.workspaceRoot })
+                ]);
+                diffContent = diffResult.stdout || '';
+                statsContent = statsResult.stdout || '';
+                diffType = 'unstaged';
+            } else {
+                // Priority 2: Check for staged changes
+                const stagedResult = await execAsync('git diff --cached', { cwd: this.services.workspaceRoot });
+                if (stagedResult.stdout && stagedResult.stdout.trim()) {
+                    const [diffResult, statsResult] = await Promise.all([
+                        execAsync('git diff --cached', { cwd: this.services.workspaceRoot }),
+                        execAsync('git diff --cached --stat', { cwd: this.services.workspaceRoot })
+                    ]);
+                    diffContent = diffResult.stdout || '';
+                    statsContent = statsResult.stdout || '';
+                    diffType = 'staged';
+                } else {
+                    // Priority 3: Fallback to last commit
+                    const [diffResult, statsResult] = await Promise.all([
+                        execAsync('git diff HEAD~1..HEAD', { cwd: this.services.workspaceRoot }),
+                        execAsync('git diff HEAD~1..HEAD --stat', { cwd: this.services.workspaceRoot })
+                    ]);
+                    diffContent = diffResult.stdout || '';
+                    statsContent = statsResult.stdout || '';
+                    diffType = 'last-commit';
+                }
+            }
             
             if (!diffContent.trim()) {
                 return {
                     summary: 'Code improvements and maintenance updates',
                     changesList: '- Code maintenance and improvements\n- Updated dependencies and configurations',
-                    additionalNotes: 'No staged changes detected. This may include configuration or documentation updates.'
+                    additionalNotes: 'No changes detected in git diff. This may include configuration or documentation updates.'
                 };
             }
 
@@ -552,7 +598,26 @@ ${changeAnalysis.additionalNotes || 'Code changes have been tested and are ready
         const hasFeatureFlags = prDescription.includes('## Feature Flags') || prDescription.includes('Feature Flags to Test:');
         const hasTemplate = prDescription.includes('## Summary') || prDescription.includes('## Changes');
         
-        return `# 🤖 Pull Request Description Enhancement
+        // Check for user override instructions with high priority
+        const overrideInstructions = this.loadPRDescriptionOverrides();
+        
+        // If override instructions exist, use them with high priority
+        if (overrideInstructions) {
+            return `# 🎯 HIGH PRIORITY USER INSTRUCTIONS
+${overrideInstructions}
+
+# 🤖 Pull Request Description Context
+## 📊 Test Results
+- **Test Status**: ${testStatus} (${passedCount}/${testCount} tests)
+- **Project**: ${this.lastTestResult?.project || 'Current project'}
+${this.lastTestResult?.duration ? `- **Test Duration**: ${this.lastTestResult.duration}ms` : ''}
+
+## 📝 Current PR Description Template
+${prDescription}`;
+        }
+        
+        // Default prompt without overrides
+        return `# 🤖 Pull Request Description Review & Enhancement
 
 Please enhance this PR description while maintaining the exact template structure and headers.
 
@@ -615,6 +680,43 @@ Please provide the enhanced PR description maintaining the exact template struct
     }
 
     /**
+     * Load PR description override instructions from user file
+     * Checks multiple locations for pr-description-overrides.instructions.md
+     */
+    private loadPRDescriptionOverrides(): string | null {
+        try {
+            const possiblePaths = [
+                // Priority 1: .github/instructions directory
+                path.join(this.services.workspaceRoot, '.github', 'instructions', 'pr-description-overrides.instructions.md'),
+                // Priority 2: .github directory  
+                path.join(this.services.workspaceRoot, '.github', 'pr-description-overrides.instructions.md'),
+                // Priority 3: Root directory
+                path.join(this.services.workspaceRoot, 'pr-description-overrides.instructions.md'),
+                // Priority 4: .vscode directory for workspace-specific overrides
+                path.join(this.services.workspaceRoot, '.vscode', 'pr-description-overrides.instructions.md')
+            ];
+
+            for (const overridePath of possiblePaths) {
+                if (fs.existsSync(overridePath)) {
+                    const content = fs.readFileSync(overridePath, 'utf8').trim();
+                    if (content) {
+                        this.services.outputChannel.appendLine(`📋 Loading PR description overrides from: ${overridePath}`);
+                        this.services.outputChannel.appendLine(`📋 Override instructions loaded (${Math.round(content.length / 1024)}KB)`);
+                        return content;
+                    }
+                }
+            }
+
+            // No override file found - this is normal operation
+            return null;
+            
+        } catch (error) {
+            this.services.outputChannel.appendLine(`⚠️ Error loading PR description overrides: ${error}`);
+            return null;
+        }
+    }
+
+    /**
      * Send PR description to Copilot Chat with full automation
      */
     private async sendToCopilotChatAutomatic(content: string): Promise<void> {
@@ -629,7 +731,7 @@ Please provide the enhanced PR description maintaining the exact template struct
                 content,
                 this.services.outputChannel,
                 {
-                    autoSuccess: '🎉 PR description sent to Copilot Chat automatically! Check the response.',
+                    autoSuccess: '🎉 PR description prompt sent to Copilot Chat! Check the response.',
                     manualPaste: '📋 PR description ready in Copilot Chat - press Enter to submit.',
                     clipboardOnly: '📋 PR description copied to clipboard. Please open Copilot Chat and paste manually.',
                     chatOpenFailed: '⚠️ Could not open Copilot Chat. PR description copied to clipboard.'

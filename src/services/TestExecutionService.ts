@@ -44,11 +44,17 @@ export class TestExecutionService {
     private testOutputCapture: TestOutputCapture;
     private postTestActions: PostTestActionService;
     private testResultCache: TestResultCache;
-    private enablePhase2Features: boolean = true; // Can be configured
+    private enablePhase2Features: boolean; // Configurable via settings
     private enableCaching: boolean = true; // Can be configured
     private currentNxCloudUrl: string | undefined; // Store captured Nx Cloud URL
 
     constructor(private services: ServiceContainer) {
+        // Read post-test menu setting from VS Code configuration
+        // This controls whether post-test action menus appear after test execution
+        // When disabled, tests run normally but skip showing context menus, git diff capture, etc.
+        const config = vscode.workspace.getConfiguration('aiDebugContext');
+        this.enablePhase2Features = config.get('enablePostTestMenus', false); // Default to false (disabled)
+        
         this.gitDiffCapture = new GitDiffCapture({
             workspaceRoot: services.workspaceRoot,
             outputChannel: services.outputChannel

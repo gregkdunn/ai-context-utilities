@@ -79,7 +79,7 @@ export class ContextCompiler {
     /**
      * Generate context based on type (Phase 2.1 - Legacy aiDebug.zsh format)
      * 
-     * This is the core method that generates AI-optimized context files matching
+     * This is the core method that generates AI Context context files matching
      * the exact format of the legacy aiDebug.zsh script. It combines test output
      * and git diff information into a comprehensive analysis context.
      * 

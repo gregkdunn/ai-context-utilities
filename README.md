@@ -3,10 +3,10 @@
 VSCode extension with Copilot instruction and Test Result context generation for AI analysis.
 
 **Version:** 3.5.1  
-**Status:** Somewhat stable.
-**Architecture:** TypeScript  
-**Project Support:** Nx, Angular, React, Vue, TypeScript
+**Status:** Somewhat stable
 **Test Coverage:** 90%+
+**Last Updated:** Aug 5, 2025
+**License:** [MIT](https://opensource.org/licenses/MIT)
 
 ---
 
@@ -164,7 +164,7 @@ If you prefer command line tools, check out the [ZSH CLI scripts](zsh/README.md)
 
 - **`aiDebug [project]`** - Complete development workflow in one command
 - **`prepareToPush [project]`** - Code quality validation before commits
-- **`nxTest [project]`** - AI-optimized test reporting
+- **`nxTest [project]`** - AI Context test reporting
 - **`gitDiff`** - Smart git change analysis
 
 **Quick Setup**:
@@ -173,13 +173,13 @@ If you prefer command line tools, check out the [ZSH CLI scripts](zsh/README.md)
 source /path/to/ai-context-util/zsh/index.zsh
 ```
 
-The CLI tools provide the same AI-optimized context generation with additional workflow automation for terminal users.
+The CLI tools provide the same AI Context context generation with additional workflow automation for terminal users.
 
 ---
 
 
 ## 🔧 Support & Feedback
-- **Issues**: [GitHub Issues](https://github.com/gregkdunn/ai-context-util/issues)
+- **Issues**: [GitHub Issues](https://github.com/gregkdunn/ai-context-utilities/issues)
 
 
 ### Debug Information
