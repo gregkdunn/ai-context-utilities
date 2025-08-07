@@ -225,7 +225,7 @@ export class CopilotUtils {
         try {
             await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
         } catch (error) {
-            vscode.window.showInformationMessage('Please check Copilot Chat for AI analysis');
+            // Success message is shown by the calling service
         }
     }
 }

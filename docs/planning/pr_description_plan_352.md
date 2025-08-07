@@ -1,5 +1,14 @@
 # PR Description Enhancement Plan 3.5.2
 
+- Keep each section well documented with clear comments
+- Use consistent formatting and structure
+- Ensure all code is modular and reusable
+- Follow best practices for performance and maintainability
+- Prioritize user experience and ease of use
+- Implement comprehensive error handling and logging
+- Ensure compatibility with existing VSCode extension architecture
+- Maintain 90%+ test coverage for all new features
+
 ## Executive Summary
 
 This document outlines the comprehensive enhancement plan for the PR Description generation module in the AI Debug Context VSCode Extension. The current implementation has identified critical gaps in context analysis, template matching, and content generation quality. Version 3.5.2 will implement a multi-phase approach to generate accurate, contextual, and professional PR descriptions.
@@ -124,12 +133,12 @@ interface TemplateSection {
 }
 ```
 
-#### 2.2 Template Library
-- **Standard Template**: Problem/Solution/Details/QA format
-- **Feature Template**: Summary/Changes/Testing/Deployment
-- **Bugfix Template**: Bug/Root Cause/Fix/Testing  
-- **Hotfix Template**: Issue/Impact/Fix/Verification
-- **Custom Template**: User-defined or learned from history
+#### 2.2 Template Library 
+- Instead, **detect existing template** from user repository .github/PULL_REQUEST_TEMPLATE.md
+- Offer a default template if none found
+- We want to keep this simple and not have to maintain a library of templates.
+~~~
+
 
 #### 2.3 Template Learning System
 - Track user edits to generated descriptions
@@ -251,10 +260,8 @@ class ContentQualityValidator {
 - **Context Review**: Display detected context for validation
 
 #### 4.2 Template Management
-- **Template Editor**: Visual template customization
-- **Template Library**: Share and import team templates
-- **Template Versioning**: Track template changes over time
-- **Template Analytics**: Usage and success metrics
+- Don't need this for now
+
 
 #### 4.3 Learning and Adaptation
 - **Feedback Loop**: Track user edits and preferences
@@ -438,3 +445,6 @@ class PRDescriptionCacheService {
 PR Description Enhancement Plan 3.5.2 represents a comprehensive overhaul of the current PR generation system. By implementing multi-phase context analysis, intelligent template detection, and advanced content generation, we will deliver a system that produces high-quality, contextual, and actionable PR descriptions that save developers significant time while improving code review processes.
 
 The modular architecture ensures extensibility for future enhancements while maintaining high performance and reliability. Success will be measured through objective quality metrics and user satisfaction, with continuous improvement based on real-world usage and feedback.
+
+Content Generation Guidelines:
+We want to focus on simple readable content. No checklists. Keep comments short. use simple language. Avoid jargon. Be concise. Use bullet points for lists only. Avoid nested lists. Use active voice. Be specific and concrete. Avoid vague terms like "various", "multiple", "several". Focus on user impact and business value. Avoid technical deep dives unless necessary. Keep paragraphs short (1-2 sentences for the majority ot the sections.). Use examples sparingly to illustrate key points. Avoid redundancy and repetition. Prioritize clarity over completeness. Use formatting (bold, italics) sparingly for emphasis only. Avoid over-formatting.  No overuse of emojis. Maintain a professional tone. Avoid slang or colloquialisms. Be objective and neutral. Avoid subjective opinions. Focus on facts and evidence. Use data to support claims where possible. Avoid speculation or assumptions. Be transparent about limitations or uncertainties. Acknowledge potential risks or downsides. Provide balanced perspectives when relevant. Avoid bias or favoritism. Strive for fairness and impartiality. Use inclusive language that respects diversity. Avoid stereotypes or generalizations. Be mindful of potential sensitivities. Prioritize accessibility and readability for all users. Avoid jargon or technical terms that may not be widely understood. Use plain language principles to enhance comprehension. The goal is to create content that is clear, concise, and easy to understand for a broad audience. The Details section can be more technical, and use industry terms for software development practices, architectures and patterns. The goal is to communicate effectively without overwhelming the reader with complexity. This is not marketing content, so avoid hype or exaggeration. Focus on delivering value through clear, actionable information that helps users understand and apply the concepts effectively. This is not sales content, so avoid promotional language or calls to action. The goal is to inform and educate, not to persuade or sell. Use a straightforward, no-nonsense approach that respects the reader's time and intelligence. The content should be useful, practical, and relevant to the target audience's needs and interests. Avoid unnecessary embellishments or distractions that detract from the main message. Keep the focus on delivering high-quality, valuable information that meets the user's expectations and requirements. 

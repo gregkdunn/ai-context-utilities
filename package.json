@@ -1,8 +1,8 @@
 {
   "name": "ai-context-util",
   "displayName": "AI Context Util",
-  "version": "3.5.1",
-  "description": "Generate GitHub Copilot instructions from your ESLint/Prettier configs. Automatically creates framework-specific guidance with user overrides, workspace analysis, and intelligent debugging context.",
+  "version": "3.5.2",
+  "description": "AI-powered VSCode extension with enhanced PR description generation, GitHub Copilot instructions, and intelligent test context analysis. Features comprehensive git diff analysis, template detection, and quality validation.",
   "main": "./out/extension.js",
   "publisher": "ai-context-util",
   "categories": [
@@ -199,7 +199,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:ci": "jest --coverage --coverageReporters=text-lcov --passWithNoTests",
+    "test:ci": "jest --coverage --coverageReporters=lcov --coverageReporters=text --passWithNoTests",
     "test:unit": "jest --testPathPattern='__tests__/unit'",
     "test:integration": "jest --testPathPattern='__tests__/integration'",
     "dev": "npm run watch",

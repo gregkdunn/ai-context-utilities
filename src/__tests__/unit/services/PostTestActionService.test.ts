@@ -390,6 +390,14 @@ describe('PostTestActionService', () => {
 <!-- Describe how this has been tested -->
 - [ ] Unit tests pass`);
 
+            // Mock CopilotUtils.integrateWithCopilot
+            const mockIntegrateWithCopilot = jest.fn().mockResolvedValue({ method: 'auto' });
+            jest.doMock('../../../utils/CopilotUtils', () => ({
+                CopilotUtils: {
+                    integrateWithCopilot: mockIntegrateWithCopilot
+                }
+            }));
+
             const testResult: TestResult = {
                 success: true,
                 project: 'test-project',
@@ -410,18 +418,12 @@ describe('PostTestActionService', () => {
 
             await service.showPostTestActions(testResult, {});
 
-            // Phase 3.5.0: Now uses full automation with CopilotUtils
-            // The prompt could be either the default or override format
-            const clipboardCalls = (vscode.env.clipboard.writeText as jest.Mock).mock.calls;
-            const prDescriptionCall = clipboardCalls.find(call => 
-                call[0].includes('Pull Request Description') || 
-                call[0].includes('HIGH PRIORITY USER INSTRUCTIONS')
-            );
-            
-            expect(prDescriptionCall).toBeDefined();
-            expect(prDescriptionCall[0]).toContain('Test Status');
-            expect(prDescriptionCall[0]).toContain('PASSED');
-            // Note: Full automation testing requires mocking CopilotUtils.integrateWithCopilot
+            // Phase 3.5.2: Now uses enhanced PR description generation
+            // Verify that CopilotUtils.integrateWithCopilot was called with enhanced content
+            expect(mockIntegrateWithCopilot).toHaveBeenCalled();
+            const calledContent = mockIntegrateWithCopilot.mock.calls[0][0];
+            expect(calledContent).toContain('Test Results Context');
+            expect(calledContent).toContain('PASSED');
         });
 
         test('should generate PR description without template', async () => {

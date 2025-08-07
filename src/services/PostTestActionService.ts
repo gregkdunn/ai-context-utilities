@@ -193,9 +193,107 @@ export class PostTestActionService {
     }
 
     /**
-     * Handle PR description generation using template and send to Copilot Chat
+     * Handle PR description generation using enhanced AI system (Phase 3.5.2)
+     * Falls back to legacy template-based approach if enhanced system fails
      */
     async handlePRDescription(): Promise<void> {
+        try {
+            // Phase 3.5.2: Try enhanced PR description generation first
+            const enhancedResult = await this.tryEnhancedPRGeneration();
+            if (enhancedResult.success) {
+                this.services.outputChannel.appendLine('✅ Enhanced PR description generation completed');
+                return;
+            }
+
+            // Fallback to legacy system
+            this.services.outputChannel.appendLine('⚠️  Enhanced generation failed, using legacy system');
+            await this.handleLegacyPRDescription();
+
+        } catch (error) {
+            this.services.errorHandler.handleError(error as Error, { operation: 'handlePRDescription' });
+        }
+    }
+
+    /**
+     * Try enhanced PR description generation (Phase 3.5.2)
+     */
+    private async tryEnhancedPRGeneration(): Promise<{ success: boolean; error?: string }> {
+        try {
+            // Check if enhanced system is available
+            const { EnhancedPRDescriptionService } = await import('./EnhancedPRDescriptionService');
+            const enhancedService = new EnhancedPRDescriptionService(this.services);
+
+            // Validate prerequisites
+            const validation = await enhancedService.validatePrerequisites();
+            if (!validation.valid) {
+                this.services.outputChannel.appendLine('❌ Enhanced PR description not available:');
+                validation.issues.forEach(issue => {
+                    this.services.outputChannel.appendLine(`   • ${issue}`);
+                });
+                return { success: false, error: 'Prerequisites not met' };
+            }
+
+            this.services.outputChannel.appendLine('🚀 Using enhanced PR description generation...');
+
+            // Generate enhanced PR description with test context
+            const result = await enhancedService.generateEnhancedPRDescription(
+                this.lastTestResult || undefined,
+                {
+                    includeTestResults: !!this.lastTestResult,
+                    userPreferences: {
+                        tone: 'professional',
+                        detailLevel: 'detailed',
+                        includeEmojis: false
+                    },
+                    generatePromptOnly: true, // Send to Copilot for interactive editing
+                    enhancedMode: true
+                }
+            );
+
+            if (result.success) {
+                // Check if custom override instructions were used
+                const overrideInstructions = this.loadPRDescriptionOverrides();
+                if (overrideInstructions) {
+                    this.services.outputChannel.appendLine(`🎯 A custom PR Override Prompt was used:`);
+                    // Extract first few lines for preview (limit to ~200 chars for readability)
+                    const previewLines = overrideInstructions.split('\n')
+                        .filter(line => line.trim() && !line.startsWith('#'))
+                        .slice(0, 3);
+                    const preview = previewLines.join(' ').substring(0, 200);
+                    this.services.outputChannel.appendLine(`   "${preview}${preview.length === 200 ? '...' : ''}"`);
+                }
+
+                // Log success details
+                if (result.context) {
+                    this.services.outputChannel.appendLine('📊 Enhanced Analysis Results:');
+                    this.services.outputChannel.appendLine(`   • Files Changed: ${result.context.filesChanged}`);
+                    this.services.outputChannel.appendLine(`   • Feature Flags: ${result.context.featureFlags}`);
+                    this.services.outputChannel.appendLine(`   • Risk Level: ${result.context.riskLevel}`);
+                    if (result.context.jiraTickets.length > 0) {
+                        this.services.outputChannel.appendLine(`   • JIRA Tickets: ${result.context.jiraTickets.join(', ')}`);
+                    }
+                }
+
+                if (result.quality) {
+                    this.services.outputChannel.appendLine(`   • Quality Score: ${(result.quality.overall * 100).toFixed(1)}%`);
+                }
+
+                vscode.window.showInformationMessage('📝 Enhanced PR description sent to Copilot Chat!');
+                return { success: true };
+            } else {
+                return { success: false, error: result.error || 'Enhanced generation failed' };
+            }
+
+        } catch (error) {
+            this.services.outputChannel.appendLine(`❌ Enhanced PR description error: ${error}`);
+            return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+        }
+    }
+
+    /**
+     * Legacy PR description generation (fallback)
+     */
+    private async handleLegacyPRDescription(): Promise<void> {
         try {
             let prDescription = '';
 
@@ -298,8 +396,10 @@ ${changeAnalysis.additionalNotes || 'Code changes have been tested and are ready
             const templateUsed = templateContent ? 'using project template' : 'using default format';
             const flagInfo = featureFlags.length > 0 ? ` (${featureFlags.length} feature flags detected)` : '';
             
+            this.services.outputChannel.appendLine(`✅ Legacy PR description generated ${templateUsed}${flagInfo}`);
+            
         } catch (error) {
-            this.services.errorHandler.handleError(error as Error, { operation: 'handlePRDescription' });
+            this.services.errorHandler.handleError(error as Error, { operation: 'handleLegacyPRDescription' });
         }
     }
 
@@ -722,6 +822,19 @@ Please provide the enhanced PR description maintaining the exact template struct
     private async sendToCopilotChatAutomatic(content: string): Promise<void> {
         try {
             this.services.outputChannel.appendLine(`🚀 Fully automated Copilot integration for PR description generation`);
+            
+            // Check if custom override instructions were used
+            const overrideInstructions = this.loadPRDescriptionOverrides();
+            if (overrideInstructions) {
+                this.services.outputChannel.appendLine(`🎯 A custom PR Override Prompt was used:`);
+                // Extract first few lines for preview (limit to ~200 chars for readability)
+                const previewLines = overrideInstructions.split('\n')
+                    .filter(line => line.trim() && !line.startsWith('#'))
+                    .slice(0, 3);
+                const preview = previewLines.join(' ').substring(0, 200);
+                this.services.outputChannel.appendLine(`   "${preview}${preview.length === 200 ? '...' : ''}"`);  
+            }
+            
             this.services.outputChannel.appendLine(`📋 Preparing to send ${Math.round(content.length / 1024)}KB of context to Copilot Chat...`);
             
             // Import CopilotUtils dynamically to avoid startup dependencies
