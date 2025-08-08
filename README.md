@@ -3,7 +3,7 @@
 VSCode extension with Copilot instruction and Test Result context generation for AI analysis.
 
 **Version:** 3.5.2  
-**Status:** Production Ready
+**Status:** Somewhat Stable
 **Test Coverage:** 90%+
 **Last Updated:** Aug 6, 2025
 **License:** [MIT](https://opensource.org/licenses/MIT)
